@@ -1571,9 +1571,16 @@ function bdGeometry(o) {
   const yR    = yE - roofH;                                  // ridge
   const rr    = rw * (o.hipK  == null ? 0.55 : o.hipK);      // ridge half-length
   const plinth = h * (o.plinthK == null ? 0.11 : o.plinthK);
+  // Every shell has a real down-right volume, projected obliquely into the
+  // world. The older façade-only stamps had excellent surface painting but
+  // still read as theatre flats; these two values expose a second wall and
+  // roof face while keeping the simulation's top-down footprint unchanged.
+  const depth = w * (o.depthK == null ? 0.165 : o.depthK);
+  const rise = depth * (o.riseK == null ? 0.46 : o.riseK);
   return {
     w: w, h: h, bw: bw, yG: yG, wallH: wallH, yE: yE,
     over: over, rw: rw, roofH: roofH, yR: yR, rr: rr, plinth: plinth,
+    depth: depth, rise: rise,
     height: yG - yR,                                          // for shadow length
   };
 }
@@ -1587,9 +1594,9 @@ function bdShellSilhouette(G) {
     c.lineTo(-G.bw, G.yE);
     c.lineTo(-G.rw, G.yE);
     c.lineTo(-G.rr, G.yR);
-    c.lineTo(G.rr, G.yR);
-    c.lineTo(G.rw, G.yE);
-    c.lineTo(G.bw, G.yE);
+    c.lineTo(G.rr + G.depth, G.yR - G.rise);
+    c.lineTo(G.rw + G.depth, G.yE - G.rise);
+    c.lineTo(G.bw + G.depth, G.yG - G.rise);
     c.lineTo(G.bw, G.yG);
     c.closePath();
   };
@@ -1605,6 +1612,9 @@ function bdWalls(g, G, o) {
   if (o.plinth !== false) {
     const F = bdRamp(BMAT.STONE_ROUGH);
     const px = -G.bw - 1.6, pw = G.bw * 2 + 3.2;
+    bdPoly(g, [G.bw + 1.6, G.yG - G.plinth, G.bw + G.depth + 1.6, G.yG - G.plinth - G.rise,
+      G.bw + G.depth + 1.6, G.yG - G.rise, G.bw + 1.6, G.yG], F,
+    { fill: F.shade, shade: false, litW: 0.65, edge: true });
     bdRect(g, px, G.yG - G.plinth, pw, G.plinth, F, { litW: 1.1 });
     bdStoneCourses(g, function (c) { c.rect(px, G.yG - G.plinth, pw, G.plinth); },
       px, G.yG - G.plinth, pw, G.plinth, F, seed * 7 + 3, G.plinth * 0.52);
@@ -1612,6 +1622,45 @@ function bdWalls(g, G, o) {
 
   // --- wall body
   const wy = G.yE, wh = G.yG - G.plinth - G.yE;
+  const sidePath = function (c) {
+    c.moveTo(G.bw, wy);
+    c.lineTo(G.bw + G.depth, wy - G.rise);
+    c.lineTo(G.bw + G.depth, wy + wh - G.rise);
+    c.lineTo(G.bw, wy + wh);
+    c.closePath();
+  };
+  bdLitPath(g, sidePath, wall, {
+    bbox: [G.bw, wy - G.rise, G.depth, wh + G.rise],
+    fill: wall.shade, shade: false, litW: 0.7, edge: true, edgeA: 0.58,
+  });
+  // Perspective joints make the extra face read as masonry/timber instead of
+  // a single darker polygon. They are clipped and baked once, so the added
+  // architectural depth has no per-frame cost.
+  g.save();
+  g.beginPath(); sidePath(g); g.clip();
+  g.strokeStyle = bdRgba(wall.line, 0.48);
+  g.lineWidth = 0.65;
+  const course = Math.max(3.2, wh * 0.13);
+  for (let cy = wy + course; cy < wy + wh; cy += course) {
+    const t = (cy - wy) / Math.max(1, wh);
+    g.beginPath();
+    g.moveTo(G.bw, cy);
+    g.lineTo(G.bw + G.depth, cy - G.rise);
+    g.stroke();
+    if (o.material === 'stone' || o.material === 'log') {
+      const jointT = ((Math.floor(t * 20) & 1) ? 0.35 : 0.68);
+      const jx = G.bw + G.depth * jointT;
+      const jy = cy - G.rise * jointT;
+      g.beginPath(); g.moveTo(jx, jy - course); g.lineTo(jx, jy); g.stroke();
+    }
+  }
+  for (let t = 0.32; t < 0.9; t += 0.32) {
+    g.beginPath();
+    g.moveTo(G.bw + G.depth * t, wy - G.rise * t);
+    g.lineTo(G.bw + G.depth * t, wy + wh - G.rise * t);
+    g.stroke();
+  }
+  g.restore();
   bdRect(g, -G.bw, wy, G.bw * 2, wh + 1, wall, { litW: 1.5, edge: true, edgeA: 0.75 });
 
   if (o.material === 'stone') {
@@ -1664,6 +1713,32 @@ function bdRoof(g, G, o) {
   const seed = o.seed || 1;
   const rw = G.rw, rr = G.rr, yE = G.yE, yR = G.yR;
   const backH = (o.backK == null ? 0.17 : o.backK) * (yE - yR);
+
+  // Down-right roof plane of the extruded shell. Its colder, darker value and
+  // converging tile seams establish the same oblique volume as the side wall.
+  const sideRoof = [rr, yR, rr + G.depth, yR - G.rise,
+    rw + G.depth, yE - G.rise, rw, yE];
+  bdPoly(g, sideRoof, R, {
+    fill: R.shade, shade: false, litW: 0.65, edge: true, edgeA: 0.65,
+  });
+  g.save();
+  g.beginPath();
+  g.moveTo(sideRoof[0], sideRoof[1]);
+  for (let i = 2; i < sideRoof.length; i += 2) g.lineTo(sideRoof[i], sideRoof[i + 1]);
+  g.closePath(); g.clip();
+  g.strokeStyle = bdRgba(R.line, 0.58); g.lineWidth = 0.65;
+  for (let t = 0.18; t < 0.92; t += 0.18) {
+    const ax = rr + (rw - rr) * t, ay = yR + (yE - yR) * t;
+    g.beginPath(); g.moveTo(ax, ay); g.lineTo(ax + G.depth, ay - G.rise); g.stroke();
+  }
+  g.strokeStyle = bdRgba(R.edge, 0.38); g.lineWidth = 0.55;
+  for (let t = 0.25; t < 0.9; t += 0.25) {
+    g.beginPath();
+    g.moveTo(rr + G.depth * t, yR - G.rise * t);
+    g.lineTo(rw + G.depth * t, yE - G.rise * t);
+    g.stroke();
+  }
+  g.restore();
 
   // --- back slope, visible as a band above the ridge. Faces up, so LIT.
   bdPoly(g, [-rr, yR, rr, yR, rr * 0.86, yR - backH, -rr * 0.86, yR - backH],
@@ -3051,7 +3126,7 @@ function bdBoxFor(type, def) {
   // largest types and the blit cut a dead-straight line through a soft shadow.
   // bdPassGroundApron's reach is 0.707*w to the right of centre and
   // yG + 0.06h + 0.318w below it, which is what these two terms cover.
-  const sideExtra = Math.max(26, def.w * 0.22, type === 'mill' ? def.w * 0.30 : 0);
+  const sideExtra = Math.max(28, def.w * 0.28, type === 'mill' ? def.w * 0.34 : 0);
   const botExtra = Math.max(42, def.h * 0.06 + def.w * 0.32);
   const ox = -(def.w * 0.5 + sideExtra);
   const ow = def.w + sideExtra * 2;

@@ -92,6 +92,7 @@ export function startBattle(world) {
   decalCtx = decalCanvas.getContext('2d');
   setDecalCtx(decalCtx);
   buildDecalStamps(world);
+  for (const decal of world.decals || []) paintDecal(decal);
   buildParticleTextures();
   resetEffectFields();   // so a rematch does not inherit last game's powder
   sprites = [
@@ -243,7 +244,13 @@ export function draw(world, alpha, dragRect, placementPreview = null, resourceHo
 
   // flush new decals, then blit
   if (world.pendingDecals.length) {
-    for (const d of world.pendingDecals) paintDecal(d);
+    if (!world.decals) world.decals = [];
+    for (const d of world.pendingDecals) {
+      paintDecal(d);
+      world.decals.push(d);
+    }
+    // A very long artillery campaign should not grow the save indefinitely.
+    if (world.decals.length > 5000) world.decals.splice(0, world.decals.length - 5000);
     world.pendingDecals.length = 0;
   }
   ctx.drawImage(decalCanvas, 0, 0);
