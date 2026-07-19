@@ -1,10 +1,7 @@
-// Terrain subsystem — see gfx/README for the art bible this implements.
-// Converted to an ES module: all helpers are module-scoped, so none of the
-// bare names here (rnd, ramp, clamp, ...) can collide with render.js.
+// Terrain: modelled diorama board — material field, parcels, hedgerows,
+// road, stream, foliage. Baked once into frustum-culled tiles.
 import { WORLD } from '../config.js';
-
-let terrainCanvas = null;   // 0.25:1 whole-world composite (minimap + fallback)
-
+let terrainCanvas = null;
 // ===========================================================================
 //  TERRAIN SUBSYSTEM — "Kriegsspiel Table": a modelled 1:72 diorama board
 //  under a single warm gallery photoflood mounted up and to the left.
@@ -289,6 +286,28 @@ function fbm(x, y, seed, octaves, wl0, gain) {
 
 // One-dimensional wobble for road widths, rut wander, furrow waviness.
 function n1(t, seed) { return vnoise(t, seed * 0.371, seed) * 2 - 1; }
+
+// Exactly-tiling value noise: the integer lattice cell indices are wrapped
+// modulo (px, py), so the field is perfectly periodic with period px/py cells.
+// This is how a seamless noise tile should be built. The alternative — cross-
+// fading the tile against a shifted copy of itself — is only C0 continuous
+// (it leaves a slope kink at the seam) and it averages two independent samples
+// across the tile interior, which halves the noise amplitude. Wrapping the
+// lattice has neither problem and costs nothing.
+// Callers MUST choose frequencies such that tileSize * frequency is an
+// integer, or the lattice will not line up with the tile edge.
+function vnoiseTile(x, y, s, px, py) {
+  const xi = Math.floor(x), yi = Math.floor(y);
+  const xf = x - xi, yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf);
+  const v = yf * yf * (3 - 2 * yf);
+  const x0 = ((xi % px) + px) % px, x1 = ((x0 + 1) % px);
+  const y0 = ((yi % py) + py) % py, y1 = ((y0 + 1) % py);
+  const a = ihash(x0, y0, s), b = ihash(x1, y0, s);
+  const c = ihash(x0, y1, s), d = ihash(x1, y1, s);
+  const t = a + (b - a) * u;
+  return t + ((c + (d - c) * u) - t) * v;
+}
 
 // ---------------------------------------------------------------------------
 //  Geometry helpers
@@ -626,31 +645,37 @@ function paintParcel(g, p) {
 
   g.restore();
 
-  // Parcel lip: a 1.5px sunlit crest on the up-left boundary and a soft cool
+  // Parcel lip: a 1.4px sunlit crest on the up-left boundary and a soft cool
   // shadow on the down-right, so the field reads as a modelled plane with an
   // edge rather than as a painted decal.
+  //
+  // OFFSET DIRECTION — this is easy to get backwards, so state the rule once.
+  // The clip is the parcel interior; the stroked path is the SAME outline
+  // translated by u. A boundary point b survives the clip iff b + u lies
+  // INSIDE the parcel, i.e. iff u points from b back toward the interior.
+  // For the up-left boundary the inward direction is +SUN.shadow (down-right),
+  // so the sunlit crest must be offset along SUN.shadow, and the cool inner
+  // shade — which belongs on the down-right boundary — along SUN. Offsetting
+  // the crest toward the sun leaves the DOWN-RIGHT arc showing and inverts the
+  // lighting on every field on the board.
   g.save();
   smoothClosedPath(g, p.pts);
   g.clip();
   g.lineWidth = 5;
   g.strokeStyle = 'rgba(' + SUN.shadowRGB + ',0.16)';
   g.save();
-  g.translate(SUN.shadow.x * 2.6, SUN.shadow.y * 2.6);
+  g.translate(SUN.x * 2.6, SUN.y * 2.6);
   smoothClosedPath(g, p.pts);
   g.stroke();
   g.restore();
   g.restore();
 
-  // Sunlit crest on the parcel lip. Clipping to the parcel while offsetting
-  // the stroke toward the sun leaves only the up-left arc visible, which is
-  // the single-sided edge highlight the lighting model requires — a fully
-  // closed outline would read as a drawn border instead of a lit form.
   g.save();
   smoothClosedPath(g, p.pts);
   g.clip();
   g.lineWidth = 1.4;
   g.strokeStyle = rgba(T.STRAW_LIGHT, 0.22);
-  g.translate(SUN.x * 1.3, SUN.y * 1.3);
+  g.translate(SUN.shadow.x * 1.3, SUN.shadow.y * 1.3);
   smoothClosedPath(g, p.pts);
   g.stroke();
   g.restore();
@@ -832,13 +857,15 @@ function paintDirtPatches(g, count) {
     smoothClosedPath(g, inner);
     g.fill();
 
-    // Sunlit crumb rim on the up-left arc only.
+    // Sunlit crumb rim on the up-left arc only. Offset along SUN.shadow —
+    // see the note in paintParcel for why the inward direction is the one
+    // that survives the clip.
     g.save();
     smoothClosedPath(g, pts);
     g.clip();
     g.lineWidth = 2.2;
     g.strokeStyle = rgba(T.EARTH_LIGHT, 0.35);
-    g.translate(SUN.x * 1.6, SUN.y * 1.6);
+    g.translate(SUN.shadow.x * 1.6, SUN.shadow.y * 1.6);
     smoothClosedPath(g, pts);
     g.stroke();
     g.restore();
@@ -1299,7 +1326,7 @@ function paintPuddles(g, road, seed, near) {
     g.clip();
     g.strokeStyle = 'rgba(214,226,236,0.75)';
     g.lineWidth = 1.1;
-    g.translate(SUN.x * 1.1, SUN.y * 1.1);
+    g.translate(SUN.shadow.x * 1.1, SUN.shadow.y * 1.1);
     smoothClosedPath(g, pts);
     g.stroke();
     g.restore();
@@ -1313,13 +1340,24 @@ function paintPuddles(g, road, seed, near) {
 
 function buildStream() {
   const pts = [];
-  const y0 = WORLD.h * rnd(0.68, 0.76);
+  // The upper clamp is 0.70h (2240 world px), not 0.60h. The contested centre
+  // calm zone is centred at (2600, 1600) with r = 700, and calmness exceeds
+  // the 0.30 build-legibility threshold out to roughly y = 2180. A stream is
+  // impassable-looking terrain that the placement validator knows nothing
+  // about, so at 0.60h it could meander straight through the middle of the
+  // central build zone and across the central wood/gold deposits — players
+  // would be placing farms and mills on open water. 0.70h keeps the channel
+  // (and therefore the ford and bridge) clear of every build footprint while
+  // preserving the full meander range below it.
+  const pts_yMin = WORLD.h * 0.70;
+  const pts_yMax = WORLD.h * 0.90;
+  const y0 = WORLD.h * rnd(0.74, 0.80);
   let x = -40, y = y0;
   while (x < WORLD.w + 60) {
     pts.push([x, y]);
     x += rnd(70, 130);
     y += n1(x * 0.0018, 4242) * 46 + rnd(-16, 16);
-    y = clamp(y, WORLD.h * 0.60, WORLD.h * 0.90);
+    y = clamp(y, pts_yMin, pts_yMax);
   }
   return pts;
 }
@@ -2156,34 +2194,58 @@ function paintBoardAO(g, fw, fh, seed) {
 
 function paintEdgeFalloff(g) {
   const D = 240;
-  g.save();
-  g.globalCompositeOperation = 'multiply';
-  const sides = [
-    [0, 0, D, 0],                       // left   -> x+
-    [WORLD.w, 0, WORLD.w - D, 0],       // right  -> x-
-    [0, 0, 0, D],                       // top    -> y+
-    [0, WORLD.h, 0, WORLD.h - D],       // bottom -> y-
-  ];
-  const rects = [
-    [0, 0, D, WORLD.h],
-    [WORLD.w - D, 0, D, WORLD.h],
-    [0, 0, WORLD.w, D],
-    [0, WORLD.h - D, WORLD.w, D],
-  ];
-  for (let i = 0; i < 4; i++) {
-    const s = sides[i];
-    // multiply wants WHITE for "no change", so the ramp runs board-edge to
-    // white rather than board-edge to transparent.
-    const g2 = g.createLinearGradient(s[0], s[1], s[2], s[3]);
-    const e = toRGB(T.BOARD_EDGE);
-    g2.addColorStop(0, 'rgb(' + e[0] + ',' + e[1] + ',' + e[2] + ')');
-    g2.addColorStop(0.42, 'rgb(' + Math.round(lerp(e[0], 255, 0.62)) + ',' +
-      Math.round(lerp(e[1], 255, 0.62)) + ',' + Math.round(lerp(e[2], 255, 0.62)) + ')');
-    g2.addColorStop(1, '#ffffff');
-    g.fillStyle = g2;
-    g.fillRect(rects[i][0], rects[i][1], rects[i][2], rects[i][3]);
+  const STRENGTH = 0.82;   // blend toward BOARD_EDGE at the very border
+
+  // ONE analytic mask, not four overlapping gradient rects.
+  //
+  // Four separate 'multiply' fills overlap in the corners, so each corner is
+  // multiplied TWICE: the border factor of 35/255 = 0.137 becomes 0.019, i.e.
+  // effectively black over a 240x240 block in all four corners. It also makes
+  // the single-edge falloff about twice as strong as the art bible's 0.85
+  // alpha specifies. Both matter here because the north and south treelines
+  // are deliberately placed inside the top and bottom 250 world px — the
+  // overlapping version crushes the entire treeline, which is one of the
+  // board's headline features, into an unreadable black band.
+  //
+  // Computing k = min(distance to each edge) once and blitting a single
+  // upscaled mask gives a falloff that is uniform along every edge and
+  // correctly (not quadratically) deepened in the corners.
+  const MW = 260, MH = 160;                      // 20 world px per mask texel,
+                                                 // so the 240px ramp spans 12
+                                                 // texels and cannot band
+  const m = document.createElement('canvas');
+  m.width = MW; m.height = MH;
+  const mg = m.getContext('2d', { willReadFrequently: true });
+  const img = mg.createImageData(MW, MH);
+  const d = img.data;
+  const e = toRGB(T.BOARD_EDGE);
+  const sxw = WORLD.w / MW, syw = WORLD.h / MH;
+
+  for (let j = 0, p = 0; j < MH; j++) {
+    const wy = (j + 0.5) * syw;
+    for (let i = 0; i < MW; i++, p += 4) {
+      const wx = (i + 0.5) * sxw;
+      const dist = Math.min(wx, WORLD.w - wx, wy, WORLD.h - wy);
+      // 0 at the border, 1 once we are D world px in. smoothstep so the ramp
+      // has no visible start/stop line.
+      const k = smoothstep(0, D, dist);
+      const t = (1 - k) * STRENGTH;              // how far toward BOARD_EDGE
+      d[p] = lerp(255, e[0], t);
+      d[p + 1] = lerp(255, e[1], t);
+      d[p + 2] = lerp(255, e[2], t);
+      d[p + 3] = 255;
+    }
   }
+  mg.putImageData(img, 0, 0);
+
+  g.save();
+  g.imageSmoothingEnabled = true;
+  g.imageSmoothingQuality = 'high';
+  g.globalCompositeOperation = 'multiply';
+  g.drawImage(m, 0, 0, WORLD.w, WORLD.h);
   g.restore();
+
+  m.width = 1; m.height = 1;
 }
 
 // ===========================================================================
@@ -2198,16 +2260,19 @@ function makeGrainTile(size, seed, contrast) {
   const g = c.getContext('2d', { willReadFrequently: true });
   const img = g.createImageData(size, size);
   const d = img.data;
+  // Both octaves use lattice-wrapped noise so the tile is EXACTLY seamless.
+  // This matters more than it looks: the tile is repeated across the whole
+  // 5200x3200 board under an 'overlay' blend, so any discontinuity at the
+  // wrap reads as a regular grid over the entire diorama — precisely the
+  // "generated" tell L11 exists to remove.
+  // Frequencies are chosen so size * f is a whole number of lattice cells:
+  // 256 * 0.5 = 128 and 256 * 0.125 = 32.
+  const FA = 0.5, PA = Math.round(size * FA);
+  const FB = 0.125, PB = Math.round(size * FB);
   for (let j = 0, p = 0; j < size; j++) {
     for (let i = 0; i < size; i++, p += 4) {
-      // Toroidal noise so the tile is seamless: sample a wrapped lattice.
-      const a = vnoise(i * 0.5, j * 0.5, seed);
-      const b = vnoise(i * 0.13, j * 0.13, seed + 71);
-      const w = i / size, h = j / size;
-      const a2 = vnoise((i - size) * 0.5, j * 0.5, seed);
-      const b2 = vnoise(i * 0.13, (j - size) * 0.13, seed + 71);
-      const va = lerp(a, a2, w * w);
-      const vb = lerp(b, b2, h * h);
+      const va = vnoiseTile(i * FA, j * FA, seed, PA, PA);
+      const vb = vnoiseTile(i * FB, j * FB, seed + 71, PB, PB);
       let v = 0.5 + (va - 0.5) * 0.75 + (vb - 0.5) * 0.45;
       v = 0.5 + (v - 0.5) * contrast;
       const k = clamp(v, 0, 1) * 255;
@@ -2361,21 +2426,40 @@ function sliceTerrain(big, bigW, bigH, S) {
   terrainCols = Math.ceil(WORLD.w / TILE_W);
   terrainRows = Math.ceil(WORLD.h / TILE_H);
   terrainTiles = [];
-  const tpw = Math.round(TILE_W * S);
-  const tph = Math.round(TILE_H * S);
+
+  // Tile boundaries are derived by ROUNDING CUMULATIVE WORLD COORDINATES, not
+  // by multiplying a pre-rounded tile size by the column index. With
+  // TERRAIN_SCALE = 0.75, round(650 * 0.75) = 488, and 8 * 488 = 3904 device
+  // px against a bigW of round(5200 * 0.75) = 3900 — so the last column's
+  // source rect gets clamped short while its declared world width does not,
+  // leaving an ~8 world px strip of raw BOARD_EDGE fill INSIDE the right and
+  // bottom map edges. Deriving each boundary independently makes the columns
+  // partition bigW exactly at any scale.
+  const colPx = [];
+  for (let i = 0; i <= terrainCols; i++) {
+    colPx.push(Math.min(bigW, Math.round(Math.min(WORLD.w, i * TILE_W) * S)));
+  }
+  const rowPx = [];
+  for (let j = 0; j <= terrainRows; j++) {
+    rowPx.push(Math.min(bigH, Math.round(Math.min(WORLD.h, j * TILE_H) * S)));
+  }
 
   for (let j = 0; j < terrainRows; j++) {
     for (let i = 0; i < terrainCols; i++) {
+      const px0 = colPx[i], px1 = colPx[i + 1];
+      const py0 = rowPx[j], py1 = rowPx[j + 1];
+      const cw2 = (px1 - px0) + TILE_BLEED * 2;
+      const ch2 = (py1 - py0) + TILE_BLEED * 2;
+
       const c = document.createElement('canvas');
-      c.width = tpw + TILE_BLEED * 2;
-      c.height = tph + TILE_BLEED * 2;
+      c.width = cw2;
+      c.height = ch2;
       const cg = c.getContext('2d', { alpha: false });
       cg.imageSmoothingEnabled = false;
 
-      let sx = i * tpw - TILE_BLEED;
-      let sy = j * tph - TILE_BLEED;
-      let sw = tpw + TILE_BLEED * 2;
-      let sh = tph + TILE_BLEED * 2;
+      let sx = px0 - TILE_BLEED;
+      let sy = py0 - TILE_BLEED;
+      let sw = cw2, sh = ch2;
       let dx = 0, dy = 0;
       if (sx < 0) { dx = -sx; sw += sx; sx = 0; }
       if (sy < 0) { dy = -sy; sh += sy; sy = 0; }
@@ -2387,14 +2471,17 @@ function sliceTerrain(big, bigW, bigH, S) {
       cg.fillRect(0, 0, c.width, c.height);
       if (sw > 0 && sh > 0) cg.drawImage(big, sx, sy, sw, sh, dx, dy, sw, sh);
 
+      // World placement is derived from the SAME device-pixel boundaries, so
+      // the blit is exactly 1 texel per (1/S) world px with no accumulated
+      // rounding drift between the source rect and the destination rect.
       terrainTiles.push({
         c: c,
-        wx: i * TILE_W - TILE_BLEED / S,
-        wy: j * TILE_H - TILE_BLEED / S,
-        ww: (tpw + TILE_BLEED * 2) / S,
-        wh: (tph + TILE_BLEED * 2) / S,
-        x0: i * TILE_W, y0: j * TILE_H,
-        x1: i * TILE_W + TILE_W, y1: j * TILE_H + TILE_H,
+        wx: (px0 - TILE_BLEED) / S,
+        wy: (py0 - TILE_BLEED) / S,
+        ww: cw2 / S,
+        wh: ch2 / S,
+        x0: px0 / S, y0: py0 / S,
+        x1: px1 / S, y1: py1 / S,
       });
     }
   }
@@ -2484,6 +2571,5 @@ function buildMinimapTerrain(w, h) {
   g.strokeRect(3.5, 3.5, w - 7, h - 7);
   return c;
 }
-
-export { buildTerrain, drawTerrain, drawTree, drawBush, drawRock, drawScrub, buildMinimapTerrain };
+export { buildTerrain, drawTerrain, drawTree, buildMinimapTerrain };
 export function getTerrainCanvas() { return terrainCanvas; }

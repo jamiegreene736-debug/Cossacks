@@ -1,6 +1,3 @@
-// Infantry sprite painter (musketeers + pikemen) — ES module.
-// Frame box: 28 x 30 world units, anchor (14, 23.5).
-// Reads optional nat.rim (side colour) and nat.headgear ('turban').
 /* ============================================================================
    COSSACKS: LINE OF FIRE  —  INFANTRY SPRITE PAINTER
    Subsystem: drawSoldier()  (musketeers AND pikemen)
@@ -431,17 +428,37 @@ function passRecessWash(g, S) {
   c.width = src.width; c.height = src.height;
   const s = c.getContext('2d');
 
+  // BLUR THE FRAME, NOT THE SILHOUETTE. Blurring a solid silhouette and
+  // multiplying it back is a no-op in the interior: the blur of a solid region
+  // is still solid, so every pixel more than a blur-radius from the outline
+  // gets the SAME multiplier. That is not a shade wash, it is a flat ~27%
+  // darkening of the entire figure — which is precisely how a painted sprite
+  // goes muddy, and it stacks on top of the gallery-light gradient's 0.34
+  // darkening in the lower right.
+  //
+  // Blurring the frame's own COLOUR instead makes the multiplier a function of
+  // each pixel's neighbourhood: bright sun-facing planes are multiplied by
+  // something near white and barely move, while pixels sitting next to dark
+  // neighbours — under the hat brim, in the gap between arm and torso, inside
+  // the coat skirt, along the lining — are multiplied by something dark and
+  // pool. That is what a Citadel shade wash actually does.
   s.filter = 'blur(' + (S * 0.42).toFixed(2) + 'px)';
-  s.drawImage(silhouetteOf(src, '#151322'), 0, 0);
+  s.drawImage(src, 0, 0);
   s.filter = 'none';
+
+  // Lift the wash toward white so it can only pool, never crush. A bright
+  // plane ends up at ~0.94x, a deep crevice at ~0.73x.
+  s.globalCompositeOperation = 'source-atop';
+  s.fillStyle = 'rgba(255,252,244,0.42)';
+  s.fillRect(0, 0, c.width, c.height);
+
   s.globalCompositeOperation = 'destination-in';   // confine to the figure
   s.drawImage(src, 0, 0);
 
   g.save();
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.globalCompositeOperation = 'multiply';
-  g.globalAlpha = 0.30;   // higher than the unmasked version: clipping away
-                          // the outer halo removes much of the apparent effect
+  g.globalAlpha = 0.55;
   g.drawImage(c, 0, 0);
   g.restore();
 }
@@ -506,11 +523,34 @@ function passLining(g, S, tintHex) {
  * warmed or cooled toward the side hue at ~40% chroma) rather than as a
  * saturated wargame base rim, so it reads as ground, not as plastic.
  */
-function passGroundContact(g, cx, cy, rx, rimHex) {
-  const ry = rx * SUN.squash;
-  g.save();
-  g.globalCompositeOperation = 'destination-over';
+function passGroundContact(g, S, cx, cy, rx, rimHex) {
+  // COMPOSITED VIA A SCRATCH CANVAS, not painted straight onto the frame with
+  // destination-over. Every operation inside a destination-over block lands
+  // BENEATH everything already drawn in that block, so painting the scuff
+  // gradient, then the lit crescent, then the clods, then the cast shadow
+  // directly onto the frame stacks them in exactly reverse order: the crescent
+  // and clods end up buried under the 0.62-0.80-alpha scuff that was supposed
+  // to sit below them, and the cast shadow ends up under the ground it falls
+  // on. Building the whole ground plate in normal source-over order on a
+  // scratch surface and blitting it under the figure as ONE destination-over
+  // drawImage preserves the intended stacking. Bake-time only.
+  const src = g.canvas;
+  const plate = document.createElement('canvas');
+  plate.width = src.width; plate.height = src.height;
+  const gp = plate.getContext('2d');
+  gp.scale(S, S);
 
+  paintGroundPlate(gp, cx, cy, rx, rimHex);
+
+  g.save();
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalCompositeOperation = 'destination-over';
+  g.drawImage(plate, 0, 0);
+  g.restore();
+}
+
+/** The ground plate itself, painted bottom-up in normal source-over order. */
+function paintGroundPlate(g, cx, cy, rx, rimHex) {
   // --- the side-tinted trodden scuff -------------------------------------
   if (rimHex) {
     const rimRGB = parseHex(rimHex);
@@ -565,8 +605,6 @@ function passGroundContact(g, cx, cy, rx, rimHex) {
   sh.addColorStop(1.00, 'rgba(' + SUN.shadowRGB + ',0)');
   g.fillStyle = sh;
   g.beginPath(); g.arc(0, 0, R, 0, 7); g.fill();
-  g.restore();
-
   g.restore();
 }
 
@@ -652,8 +690,13 @@ function drawHelmet(g, hx, hy, tilt, steel, trim) {
   g.translate(hx, hy);
   g.rotate(tilt);
 
+  // source-atop, NOT multiply: the 6-unit-wide brim ellipse overhangs the
+  // ~4.5-unit head on both sides, and a separable blend mode over a
+  // transparent backdrop degenerates to source-over — so multiply would paint
+  // a solid dark blob into empty air beside the head, which passLining would
+  // then dilate and bake into the silhouette permanently.
   g.save();
-  g.globalCompositeOperation = 'multiply';
+  g.globalCompositeOperation = 'source-atop';
   g.fillStyle = 'rgba(30,26,34,0.30)';
   g.beginPath(); g.ellipse(0.1, 0.5, 3.0, 1.15, 0, 0, 7); g.fill();
   g.restore();
@@ -703,8 +746,9 @@ function drawTurban(g, hx, hy, tilt, cloth, trim) {
   g.translate(hx, hy);
   g.rotate(tilt);
 
+  // source-atop, not multiply — see drawHelmet.
   g.save();
-  g.globalCompositeOperation = 'multiply';
+  g.globalCompositeOperation = 'source-atop';
   g.fillStyle = 'rgba(30,26,34,0.30)';
   g.beginPath(); g.ellipse(0.1, 0.6, 3.0, 1.1, 0, 0, 7); g.fill();
   g.restore();
@@ -773,18 +817,25 @@ const GY = 23.5;      // ground contact y — equals INF_AY
 function legGeometry(phase, hipY) {
   const kneeY = hipY + 3.35;
   const ankY = GY - 0.9;
+  // The two walk frames must be genuine opposites with COMPARABLE stride
+  // length. An earlier version gave phase 1 a 6.3-unit stride and phase 2 a
+  // 4.2-unit stride, which reads as a limp rather than a march: the eye picks
+  // up the asymmetry as a hitch in the cycle even at small size.
   if (phase === 1) {
-    // Right (near) leg driving forward, left (far) leg trailing and extended.
+    // Near leg driving forward, far leg trailing and extended.
     return {
-      far:  { hip: [-0.85, hipY], knee: [-2.35, kneeY + 0.15], ank: [-3.30, ankY], toe: 1 },
+      far:  { hip: [-0.85, hipY], knee: [-2.20, kneeY + 0.15], ank: [-3.10, ankY], toe: 1.0 },
       near: { hip: [0.95, hipY], knee: [2.55, kneeY - 0.45], ank: [2.95, ankY - 0.35], toe: 1.25 },
     };
   }
   if (phase === 2) {
-    // Mirrored stride — near leg trailing, far leg forward.
+    // Opposite stride — far leg forward, near leg trailing. Its span is ~14%
+    // shorter than phase 1's, which is not the limp described above: this is
+    // a three-quarter view, so the FAR leg's swing is genuinely foreshortened
+    // relative to the near leg's. The earlier version overdid it at 33%.
     return {
-      far:  { hip: [-0.85, hipY], knee: [0.55, kneeY - 0.4], ank: [1.85, ankY - 0.3], toe: 1.2 },
-      near: { hip: [0.95, hipY], knee: [-0.75, kneeY + 0.25], ank: [-2.35, ankY], toe: 1.0 },
+      far:  { hip: [-0.85, hipY], knee: [1.15, kneeY - 0.45], ank: [2.45, ankY - 0.32], toe: 1.2 },
+      near: { hip: [0.95, hipY], knee: [-1.40, kneeY + 0.15], ank: [-2.75, ankY], toe: 1.0 },
     };
   }
   // Standing: feet planted, slight natural splay.
@@ -1073,8 +1124,18 @@ function drawSoldier(g, nat, pose, legPhase, weapon) {
      a two-frame walk reads as a sliding decal.
      Lean: the upper body pitches forward into the action; the waist follows
      at ~35% so the figure bends rather than tips.                          */
+  // BODY BOB — and this carries more of the walk than the legs do.
+  // With a symmetric stride the two walk frames are near mirror images, so in
+  // silhouette their legs occupy almost the same cells and the cycle reads as
+  // a static slide (measured: 10% frame-to-frame difference on stride alone).
+  // The vertical bounce is what the eye actually locks onto. 0.76 units of
+  // travel on a 17.5-unit figure is ~4% — pronounced for a stylised marching
+  // miniature, and it takes frame-to-frame difference back above 20%.
+  // The two frames also swap which leg occludes the other, so the dimmed far
+  // leg changes sides: a value cue the black-shape test cannot see but the
+  // player can.
   let bob = 0;
-  if (legPhase === 1) bob = -0.40;
+  if (legPhase === 1) bob = -0.58;
   else if (legPhase === 2) bob = 0.18;
 
   let lean = 0, crouch = 0, twist = 0;
@@ -1109,8 +1170,9 @@ function drawSoldier(g, nat, pose, legPhase, weapon) {
     farElb  = [BX - 2.6 + leanS, shY + 3.3];
     farHand = [9.4, 16.1];
   } else {
-    // Marching arm swing, counter-phased against the legs.
-    const sw = legPhase === 1 ? 1.35 : legPhase === 2 ? -1.15 : -0.15;
+    // Marching arm swing, counter-phased against the legs and symmetric in
+    // magnitude so the swing matches the (now symmetric) stride.
+    const sw = legPhase === 1 ? 1.35 : legPhase === 2 ? -1.35 : -0.15;
     farElb  = [BX - 2.2 + leanS - sw * 0.45, shY + 3.0];
     farHand = [BX - 2.4 + leanW - sw, hipY - 0.2];
   }
@@ -1376,10 +1438,17 @@ function drawSoldier(g, nat, pose, legPhase, weapon) {
 
   // Headgear.
   const tilt = twist + (firing ? 0.12 : thrust ? 0.16 : 0) + (legPhase === 1 ? -0.03 : legPhase === 2 ? 0.03 : 0);
-  if (nat.headgear === 'turban') {
-    drawTurban(g, hx + 0.1, hy - 1.55, tilt, ramp(mixHex(nat.trim, '#F2ECDC', 0.45)), trim);
-  } else if (isPike) {
+  // ORDER MATTERS. The pike helmet is tested FIRST, before nat.headgear.
+  // Testing headgear first gave Ottoman pikemen a turban, so within that army
+  // musketeer and pikeman shared a head shape and the primary within-army
+  // silhouette differentiator was lost for a whole faction. Both axes have to
+  // hold at once: type is separated by helmet-vs-headwear (plus the pike's
+  // 20-unit vertical), and army is separated by turban-vs-tricorn on the
+  // numerous musketeer type. Armour is armour in any nation.
+  if (isPike) {
     drawHelmet(g, hx + 0.1, hy - 1.35, tilt, armour, trim);
+  } else if (nat.headgear === 'turban') {
+    drawTurban(g, hx + 0.1, hy - 1.55, tilt, ramp(mixHex(nat.trim, '#F2ECDC', 0.45)), trim);
   } else {
     drawTricorn(g, hx + 0.15, hy - 1.5, tilt, felt, trim);
   }
@@ -1411,7 +1480,7 @@ function drawSoldier(g, nat, pose, legPhase, weapon) {
   } else {
     // Hand placed ON the carried musket's shaft (t ~= 0.2 along butt->muzzle),
     // not floating beside it.
-    const sw = legPhase === 1 ? -1.2 : legPhase === 2 ? 1.35 : 0.15;
+    const sw = legPhase === 1 ? -1.35 : legPhase === 2 ? 1.35 : 0.15;
     nearElb  = [BX + 2.9 + leanS + sw * 0.35, shY + 3.3];
     nearHand = [17.45 + sw * 0.3, 17.75];
   }
@@ -1456,7 +1525,9 @@ function drawSoldier(g, nat, pose, legPhase, weapon) {
   passLining(g, S, coat.line);
 
   const scuffR = isPike ? 5.7 : 5.2;
-  passGroundContact(g, BX + 0.15, GY + 0.35, scuffR, nat.rim || nat.coat);
+  passGroundContact(g, S, BX + 0.15, GY + 0.35, scuffR, nat.rim || nat.coat);
 }
 
+// render.js does `import { drawSoldier, INF_W, INF_H, INF_AX, INF_AY } from
+// './gfx/infantry.js'`. This file is an ES module, not a splice-in fragment.
 export { drawSoldier, INF_W, INF_H, INF_AX, INF_AY };

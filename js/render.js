@@ -9,6 +9,8 @@ import { setEffectsCamera, setEffectsView, buildParticleTextures,
          drawEffects } from './gfx/effects.js';
 import { getTerrainCanvas } from './gfx/terrain.js';
 import { getTrampleCanvas } from './gfx/decals.js';
+import { drawCavalry, drawCannon } from './gfx/mounted.js';
+import { drawWorker, VL_W, VL_H, VL_AX, VL_AY } from './gfx/villager.js';
 import { setCompositeRefs, setCompositeView, setCompositeTrampleLayer,
          buildCompositeTextures, buildMinimapBase, drawLightingPass,
          drawSelection, drawHealthBars, drawOrderFlags, drawDragRect,
@@ -92,9 +94,9 @@ export function startBattle(world) {
     buildNationSprites(world.sides[1].nation, 1),
   ];
   mmTerrain = buildMinimapTerrain(mmCanvas.width, mmCanvas.height);
-  setCompositeRefs({ mmTerrain, terrainCanvas: getTerrainCanvas() });
+  setCompositeRefs({ mmTerrain });
   setCompositeTrampleLayer(getTrampleCanvas());
-  buildMinimapBase();
+  buildMinimapBase(getTerrainCanvas());
   const townCenter = world.buildings.find(building => building.side === 0 && building.type === 'town_center');
   camera.x = townCenter?.x || 660;
   camera.y = townCenter?.y || WORLD.h / 2;
@@ -125,116 +127,8 @@ function mirror(c) {
 }
 
 
-function drawWorker(g, nat, pose, legPhase) {
-  g.fillStyle = 'rgba(0,0,0,0.22)';
-  g.beginPath(); g.ellipse(8, 17.6, 5.2, 1.7, 0, 0, 7); g.fill();
-  g.fillStyle = '#3a3024';
-  const stride = legPhase === 1 ? 0.8 : legPhase === 2 ? -0.8 : 0;
-  g.fillRect(6 + stride, 12.5, 1.5, 4.7);
-  g.fillRect(9 - stride, 12.5, 1.5, 4.7);
-  g.fillStyle = '#866942';
-  g.fillRect(5.5, 6.8, 5.6, 6.5);
-  g.fillStyle = nat.trim;
-  g.globalAlpha = 0.7;
-  g.fillRect(6.2, 8.2, 4.2, 4.8);
-  g.globalAlpha = 1;
-  g.fillStyle = nat.skin;
-  g.beginPath(); g.arc(8.3, 5, 2.05, 0, 7); g.fill();
-  g.fillStyle = '#6a4d2f';
-  g.fillRect(5.9, 3.2, 4.9, 1.1);
-  g.beginPath(); g.arc(8.3, 3.7, 2.2, Math.PI, 0); g.fill();
-  g.strokeStyle = '#5a4128';
-  g.lineWidth = 1.2;
-  if (pose === 'work') {
-    g.beginPath(); g.moveTo(9.2, 8); g.lineTo(14.8, 14.8); g.stroke();
-    g.strokeStyle = '#8b9298';
-    g.lineWidth = 1.5;
-    g.beginPath(); g.moveTo(13.4, 14); g.lineTo(16, 16.2); g.stroke();
-  } else {
-    g.beginPath(); g.moveTo(10.4, 9); g.lineTo(13.2, 16.8); g.stroke();
-  }
-}
 
-function drawCavalry(g, nat, pose, legPhase) {
-  const coat = nat.coat, skin = nat.skin;
-  g.fillStyle = 'rgba(0,0,0,0.22)';
-  g.beginPath(); g.ellipse(11, 17.7, 8, 1.9, 0, 0, 7); g.fill();
-  // horse legs
-  g.strokeStyle = '#3f2d1d'; g.lineWidth = 1.15;
-  const legsIdle = [[5.6, 0], [8.2, 0], [13.6, 0], [16.2, 0]];
-  const legsW1 = [[5.6, 1.4], [8.2, -1.1], [13.6, 1.2], [16.2, -1.4]];
-  const legsW2 = [[5.6, -1.3], [8.2, 1.2], [13.6, -1.1], [16.2, 1.4]];
-  const legs = legPhase === 1 ? legsW1 : legPhase === 2 ? legsW2 : legsIdle;
-  for (const [lx, off] of legs) {
-    g.beginPath(); g.moveTo(lx, 13.5); g.lineTo(lx + off, 18.6); g.stroke();
-  }
-  // horse body
-  g.fillStyle = '#553d28';
-  g.beginPath(); g.ellipse(11, 11.8, 7.2, 3.1, 0, 0, 7); g.fill();
-  // neck + head
-  g.beginPath();
-  g.moveTo(16.4, 10.6); g.lineTo(19.3, 6.4); g.lineTo(21, 7.4); g.lineTo(18, 12.4);
-  g.closePath(); g.fill();
-  g.beginPath(); g.ellipse(20.3, 6.9, 1.8, 1.05, -0.35, 0, 7); g.fill();
-  g.fillStyle = '#332416';
-  g.fillRect(19.6, 5.4, 0.8, 1.2); // ear
-  g.strokeStyle = '#332416'; g.lineWidth = 0.9;
-  g.beginPath(); g.moveTo(16.8, 10.4); g.lineTo(19.5, 6.6); g.stroke(); // mane
-  // tail
-  g.beginPath(); g.moveTo(4, 10.6); g.lineTo(2.2, 15.4); g.stroke();
-  // rider
-  g.fillStyle = coat;
-  g.fillRect(9.7, 3.5, 4.4, 6.2);
-  g.fillStyle = nat.trim;
-  g.fillRect(9.7, 3.5, 0.8, 1);
-  g.fillStyle = skin;
-  g.beginPath(); g.arc(11.9, 2.2, 1.85, 0, 7); g.fill();
-  g.fillStyle = '#241e14';
-  g.fillRect(9.8, 0.7, 4.2, 1.25);
-  // sabre
-  g.strokeStyle = '#c9cdd4'; g.lineWidth = 1;
-  if (pose === 'attack') {
-    g.beginPath(); g.moveTo(13.8, 6.2); g.lineTo(19.8, 4.6); g.stroke();
-  } else {
-    g.beginPath(); g.moveTo(13.6, 5.6); g.lineTo(16.6, 2.2); g.stroke();
-  }
-}
 
-function drawCannon(g, nat, pose) {
-  g.fillStyle = 'rgba(0,0,0,0.22)';
-  g.beginPath(); g.ellipse(13, 18.2, 9.5, 2.1, 0, 0, 7); g.fill();
-  const recoil = pose === 'fire' ? -1.3 : 0;
-  // carriage
-  g.fillStyle = '#6b5238';
-  g.beginPath();
-  g.moveTo(6.5 + recoil, 16.5); g.lineTo(10.5 + recoil, 12);
-  g.lineTo(20 + recoil, 14.5); g.lineTo(17.5 + recoil, 17.5);
-  g.closePath(); g.fill();
-  // barrel
-  g.strokeStyle = '#3c4148'; g.lineWidth = 2.7;
-  g.beginPath(); g.moveTo(8 + recoil, 14); g.lineTo(21 + recoil, 9.6); g.stroke();
-  g.strokeStyle = '#596069'; g.lineWidth = 1;
-  g.beginPath(); g.moveTo(19.2 + recoil, 10.5); g.lineTo(21.2 + recoil, 9.8); g.stroke();
-  // wheel
-  g.strokeStyle = '#4f3b26'; g.lineWidth = 1.5;
-  g.beginPath(); g.arc(12 + recoil, 14.6, 4.2, 0, 7); g.stroke();
-  g.beginPath(); g.moveTo(12 + recoil, 10.4); g.lineTo(12 + recoil, 18.8); g.stroke();
-  g.beginPath(); g.moveTo(7.8 + recoil, 14.6); g.lineTo(16.2 + recoil, 14.6); g.stroke();
-  g.fillStyle = '#4f3b26';
-  g.beginPath(); g.arc(12 + recoil, 14.6, 1.1, 0, 7); g.fill();
-  // two crewmen
-  for (const cx of [2.6, 24]) {
-    g.fillStyle = '#2b261e';
-    g.fillRect(cx - 0.6, 13.8, 1, 3);
-    g.fillRect(cx + 0.8, 13.8, 1, 3);
-    g.fillStyle = nat.coat;
-    g.fillRect(cx - 1, 9.4, 3.2, 4.8);
-    g.fillStyle = nat.skin;
-    g.beginPath(); g.arc(cx + 0.6, 8.2, 1.5, 0, 7); g.fill();
-    g.fillStyle = '#241e14';
-    g.fillRect(cx - 1, 6.9, 3.2, 1);
-  }
-}
 
 function buildNationSprites(nationKey, side = 0) {
   // The painters read an optional `rim` (side colour) and `headgear` off nat.
@@ -242,7 +136,7 @@ function buildNationSprites(nationKey, side = 0) {
   const out = {};
 
   const defs = {
-    villager: { w: 18, h: 20, ax: 8, ay: 17.6, frames: [
+    villager: { w: VL_W, h: VL_H, ax: VL_AX, ay: VL_AY, frames: [
       ['idle', 0], ['idle', 1], ['idle', 2], ['work', 0],
     ], painter: (g, pose, leg) => drawWorker(g, nat, pose, leg) },
     musk: { w: INF_W, h: INF_H, ax: INF_AX, ay: INF_AY, frames: [
@@ -251,12 +145,16 @@ function buildNationSprites(nationKey, side = 0) {
     pike: { w: INF_W, h: INF_H, ax: INF_AX, ay: INF_AY, frames: [
       ['idle', 0], ['idle', 1], ['idle', 2], ['attack', 0],
     ], painter: (g, pose, leg) => drawSoldier(g, nat, pose, leg, 'pike') },
-    cav: { w: 23, h: 20, ax: 11, ay: 17.7, frames: [
+    // Boxes come from the mounted bounds audit: the painted geometry reaches
+    // x=30.19 and x=39.54, so the old 23/27-wide boxes clipped the horse's
+    // head and the gun's far crewman outright. Anchor is exactly w/2 so the
+    // mirrored facing lines up.
+    cav: { w: 33, h: 29, ax: 16.5, ay: 23.4, frames: [
       ['idle', 0], ['idle', 1], ['idle', 2], ['attack', 0],
-    ], painter: (g, pose, leg) => drawCavalry(g, nat, pose, leg) },
-    gun: { w: 27, h: 21, ax: 13, ay: 18.2, frames: [
+    ], painter: (g, pose, leg) => drawCavalry(g, nat, pose, leg, side) },
+    gun: { w: 41, h: 29, ax: 20.5, ay: 23.4, frames: [
       ['idle', 0], ['fire', 0],
-    ], painter: (g, pose) => drawCannon(g, nat, pose) },
+    ], painter: (g, pose) => drawCannon(g, nat, pose, side) },
   };
 
   for (const [type, def] of Object.entries(defs)) {

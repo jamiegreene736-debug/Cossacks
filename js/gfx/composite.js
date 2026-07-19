@@ -1,25 +1,15 @@
-// Frame composition: aerial haze, warm/cool grade, vignette, selection
-// rings, health bars, order flags, drag box and the tactical minimap.
-// The whole lighting treatment is a handful of full-screen blits, so its
-// cost is independent of how many units are on the field.
+// Frame composition: haze, grade, vignette, selection, HUD marks, minimap.
 import { WORLD } from '../config.js';
-
-// render.js owns the camera, viewport and minimap canvas. They are injected
-// rather than imported so this module has no cycle back to render.js.
 let camera = { x: 0, y: 0, zoom: 1 };
 let cw = 0, ch = 0, dpr = 1;
 let mmCanvas = null, mmCtx = null, mmTerrain = null;
-// The whole-world terrain composite, used as the minimap base layer.
-let terrainCanvas = null;
 function setCompositeRefs(refs) {
   if (refs.camera) camera = refs.camera;
   if (refs.mmCanvas) mmCanvas = refs.mmCanvas;
   if (refs.mmCtx) mmCtx = refs.mmCtx;
   if (refs.mmTerrain !== undefined) mmTerrain = refs.mmTerrain;
-  if (refs.terrainCanvas !== undefined) terrainCanvas = refs.terrainCanvas;
 }
 function setCompositeView(w, h, d) { cw = w; ch = h; dpr = d; }
-
 // ============================================================================
 //  COMPOSITE SUBSYSTEM — "Kriegsspiel Table" frame composition
 // ----------------------------------------------------------------------------
@@ -41,6 +31,48 @@ function setCompositeView(w, h, d) { cw = w; ch = h; dpr = d; }
 //  NAMING: everything here is prefixed `c` / `C_` / `cmp` so this fragment can
 //  be pasted into render.js without colliding with existing module-level
 //  identifiers (rnd, SCALE, SUN, drawMinimap, mmTerrain, ...).
+//
+//  ---------------------------------------------------------------------------
+//  ADAPTED for the settlement-economy render.js.
+//  ---------------------------------------------------------------------------
+//  This fragment was written against a draw() that knew only about terrain,
+//  decals and units. The economy PR added eleven building types, four resource
+//  node types, construction foundations, farm parcels, a training queue and a
+//  build-placement ghost. Five things changed here as a result:
+//
+//  1. PALETTE UNIFICATION. The file now owns every selection ring and every bar
+//     in the game. Before, five unrelated palettes coexisted — unit rings
+//     rgba(140,235,140,0.85), building rings rgba(145,235,145,0.9), the drag box
+//     rgba(140,235,140,0.9), unit HP #7fd67f/#e0c34a/#d65f4a and building HP
+//     #6ec36e/#d3674e/#d1b454 — three greens and two ramps that meant the same
+//     thing. All of them now derive from C_UI plus two ramp functions.
+//
+//  2. BUILDINGS GET THEIR OWN VOCABULARY, not a scaled-up unit's. A town centre
+//     has radius 70 against a musketeer's 5, so drawBuildingSelection() uses a
+//     dashed surveyor's plot mark rather than a 14x-magnified creature ring,
+//     and drawBuildingBars() proportions its bar to the footprint with a
+//     screen-space floor.
+//
+//  3. PROGRESS IS NOT HEALTH. A foundation starts at 8% hp (economy.js
+//     makeBuilding), so feeding construction progress through the health ramp
+//     showed every new building as critically wounded. There are now two baked
+//     bar atlases: health (green->ochre->oxide) and progress (parchment->gold),
+//     and construction and the training queue both use the latter.
+//
+//  4. THE PLACEMENT GHOST BECAME REAL UI. drawPlacementPreview() replaces the
+//     flat translucent rectangle and, critically, draws the clearance circle at
+//     def.radius + 35 that economy.js validatePlacement() actually enforces —
+//     so a refused placement now shows the player WHY.
+//
+//  5. THE MINIMAP ANSWERS THE ECONOMY. Resource nodes are sized by radius and
+//     dimmed by depletion; buildings are separated by SILHOUETTE (diamond /
+//     chevron / bar / square) rather than by a side hue that is indistinguish-
+//     able at 5 px; and the wear layer now works with the shipped codebase via
+//     a battle-heat accumulator fed from the existing decal stream, instead of
+//     silently doing nothing until decals.js lands.
+//
+//  See the block comment on drawLightingPass() for the in-canvas-UI ordering
+//  rule, which is what keeps the grade from eating the health bars.
 // ============================================================================
 
 // ---------------------------------------------------------------------------
@@ -1172,6 +1204,195 @@ function cBracketPath(ctx, x0, y0, x1, y1, a) {
 }
 
 /**
+ * Building footprint rings, world space, drawn UNDER the building pass.
+ *
+ * Replaces the inline ellipse at render.js drawBuilding() — which used a THIRD
+ * green, rgba(145,235,145,0.9), unrelated to both the unit ring and the drag
+ * box, and rebuilt its path with a lineWidth = 2 / camera.zoom compensation on
+ * every selected building on every frame.
+ *
+ * One drawImage per selected building. Buildings are few (tens, not thousands),
+ * so this pass is not a hot loop — but it does have to be a SEPARATE pass from
+ * the building painters, because drawBuilding() runs inside its own
+ * translate(), and a ring drawn there would be occluded by the next building
+ * in the y-sort. Drawn as a batch first, every ring is under every building.
+ */
+function drawBuildingSelection(ctx, buildings) {
+  if (!cmp.bRings) return;
+  for (let i = 0; i < buildings.length; i++) {
+    const b = buildings[i];
+    if (!b.alive || !b.selected) continue;
+    const g = cBuildingRingFor(b.radius);
+    // Footprint rings sit ON the ground, so they are anchored slightly below
+    // the entity origin, matching the contact shadow the building painters use.
+    ctx.drawImage(g.c, b.x - g.ax, b.y + 5 - g.ay, g.w, g.h);
+  }
+}
+
+/**
+ * Building placement ghost, world space, drawn after the buildings.
+ *
+ * `preview` is render.js's placementPreview: { type, x, y, valid }.
+ * `def` is BUILDING_TYPES[preview.type] — passed in so this fragment does not
+ * need the config import.
+ *
+ * Three pieces of information, none of which the old flat rectangle carried:
+ *   1. the FOOTPRINT, hatched, so it reads as a survey chalked on the ground
+ *      rather than as a coloured pane of glass floating above it;
+ *   2. the CLEARANCE circle at def.radius + 35 — the actual rule
+ *      economy.js validatePlacement() enforces. Without it an invalid placement
+ *      turns the box red and gives the player no reason, which is the single
+ *      most common "why won't it let me build" complaint in the genre;
+ *   3. a CENTRE MARK, so the player can line the plot up on a resource node.
+ *
+ * At most one preview exists at a time, so the path work here is free. The only
+ * per-frame allocation risk — createPattern — is cached on cmp.
+ */
+const C_PLACE_CLEARANCE = 35;   // mirrors economy.js validatePlacement()
+
+function drawPlacementPreview(ctx, preview, def) {
+  if (!preview || !def || !cmp.hatchOk) return;
+  const z = camera.zoom;
+  const ok = preview.valid !== false;
+  const x = preview.x, y = preview.y;
+  const w = def.w, h = def.h;
+
+  // ---- cached hatch pattern -----------------------------------------------
+  let pat = ok ? cmp.patOk : cmp.patBad;
+  if (!pat) {
+    pat = ctx.createPattern(ok ? cmp.hatchOk : cmp.hatchBad, 'repeat');
+    if (ok) cmp.patOk = pat; else cmp.patBad = pat;
+  }
+
+  const ink = ok ? C_UI.gold : '#C0563F';
+  const inkLit = ok ? C_UI.goldBright : '#E8846A';
+
+  // ---- 1. clearance circle -------------------------------------------------
+  // Drawn FIRST and faintest: it is the rule, not the object.
+  const cr = (def.radius || Math.max(w, h) * 0.5) + C_PLACE_CLEARANCE;
+  ctx.lineWidth = 1.4 / z;
+  ctx.strokeStyle = ok ? 'rgba(232,220,168,0.34)' : 'rgba(200,90,70,0.52)';
+  ctx.setLineDash([6 / z, 6 / z]);
+  ctx.beginPath();
+  ctx.ellipse(x, y + 5, cr, cr * 0.50, 0, 0, 6.2832);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // ---- 2. footprint --------------------------------------------------------
+  const x0 = x - w / 2, y0 = y - h / 2;
+  ctx.save();
+  ctx.translate(x0, y0);
+  ctx.fillStyle = pat;
+  ctx.fillRect(0, 0, w, h);
+  ctx.restore();
+
+  // dark lining under the gold rule, so the plot survives over straw and road
+  ctx.lineWidth = 3 / z;
+  ctx.strokeStyle = 'rgba(14,12,8,0.45)';
+  ctx.strokeRect(x0, y0, w, h);
+  ctx.lineWidth = 1.3 / z;
+  ctx.strokeStyle = ink;
+  ctx.strokeRect(x0, y0, w, h);
+
+  // solid corner brackets — the extent stays unambiguous through the hatch
+  const arm = Math.min(w * 0.26, h * 0.26, 22);
+  ctx.lineWidth = 2.6 / z;
+  ctx.strokeStyle = inkLit;
+  cBracketPath(ctx, x0, y0, x0 + w, y0 + h, arm);
+  ctx.stroke();
+
+  // ---- 3. centre mark ------------------------------------------------------
+  const t = 7;
+  ctx.lineWidth = 1.2 / z;
+  ctx.strokeStyle = inkLit;
+  ctx.beginPath();
+  ctx.moveTo(x - t, y); ctx.lineTo(x + t, y);
+  ctx.moveTo(x, y - t); ctx.lineTo(x, y + t);
+  ctx.stroke();
+
+  // ---- 4. refusal slash ----------------------------------------------------
+  // An invalid plot gets an unmistakable graphic NO, not merely a hue change:
+  // ~8% of players cannot reliably separate this red from this gold.
+  if (!ok) {
+    ctx.lineWidth = 4.5 / z;
+    ctx.strokeStyle = 'rgba(14,12,8,0.42)';
+    ctx.beginPath();
+    ctx.moveTo(x0, y0); ctx.lineTo(x0 + w, y0 + h);
+    ctx.moveTo(x0 + w, y0); ctx.lineTo(x0, y0 + h);
+    ctx.stroke();
+    ctx.lineWidth = 2.2 / z;
+    ctx.strokeStyle = inkLit;
+    ctx.stroke();
+  }
+}
+
+/**
+ * Building health / construction / training bars, world space.
+ *
+ * MUST be drawn AFTER drawLightingPass has re-established the world transform
+ * (see the note on drawLightingPass): these are instruments, not scenery, and
+ * a vignette that drops a corner to 0.5 multiply must not be allowed to eat
+ * them.
+ *
+ * Replaces render.js drawBuilding()'s inline bar, which used a fourth colour
+ * ramp (#6ec36e / #d3674e / #d1b454) and a fifth for the training queue.
+ * Both now come out of the two baked atlases, so a bar reads identically
+ * whether it is over a musketeer or over an artillery foundry.
+ */
+function drawBuildingBars(ctx, buildings) {
+  if (!cmp.hp) return;
+  const z = camera.zoom;
+  if (z < C_HP_MIN_ZOOM * 0.62) return;   // buildings are big: show bars lower
+
+  for (let i = 0; i < buildings.length; i++) {
+    const b = buildings[i];
+    if (!b.alive) continue;
+    const damaged = b.hp < b.maxHp;
+    const building = !b.complete;
+    const queued = b.queue !== undefined && b.queue.length > 0;
+    if (!b.selected && !damaged && !building && !queued) continue;
+
+    // The bar is proportioned to the footprint but floored in SCREEN px, so a
+    // 52 px watch tower is still readable when the camera is pulled back.
+    let bw = b.w * 0.62;
+    const floor = 52 / z;
+    if (bw < floor) bw = floor;
+    if (bw > 132) bw = 132;
+    const bh = bw * (C_BAR_H / C_BAR_W);
+    let top = b.y - b.h * 0.82 - 10 - bh;
+
+    if (building) {
+      // Under construction: progress, in the gold ramp. Never the health ramp —
+      // a fresh foundation is at 8% hp and would otherwise show solid red.
+      let step = (b.progress * C_HP_STEPS + 0.5) | 0;
+      if (step < 0) step = 0; else if (step > C_HP_STEPS) step = C_HP_STEPS;
+      ctx.drawImage(cmp.prog, 0, step * C_HP_ROW, C_HP_COL, C_HP_ROW,
+        b.x - bw * 0.5, top, bw, bh);
+      top -= bh * 0.92;
+    } else if (b.selected || damaged) {
+      let step = (b.hp / b.maxHp * C_HP_STEPS + 0.5) | 0;
+      if (step < 0) step = 0; else if (step > C_HP_STEPS) step = C_HP_STEPS;
+      ctx.drawImage(cmp.hp, 0, step * C_HP_ROW, C_HP_COL, C_HP_ROW,
+        b.x - bw * 0.5, top, bw, bh);
+      top -= bh * 0.92;
+    }
+
+    // Training queue: same instrument, gold ramp, stacked directly above the
+    // health bar so the two read as one panel rather than as two unrelated
+    // widgets at opposite ends of the building.
+    if (queued) {
+      const q = b.queue[0];
+      const frac = q.total > 0 ? 1 - q.remaining / q.total : 0;
+      let step = (frac * C_HP_STEPS + 0.5) | 0;
+      if (step < 0) step = 0; else if (step > C_HP_STEPS) step = C_HP_STEPS;
+      const qw = bw * 0.78, qh = bh * 0.8;
+      ctx.drawImage(cmp.prog, 0, step * C_HP_ROW, C_HP_COL, C_HP_ROW,
+        b.x - qw * 0.5, top, qw, qh);
+    }
+  }
+}
+
+/**
  * Health bars + rout marks, drawn ABOVE the unit sprites, in world space.
  * One 9-argument drawImage per bar out of a single baked atlas. The bar is
  * sized 1/zoom so it stays a constant, readable size on screen, and it is
@@ -1267,6 +1488,31 @@ function drawOrderFlags(ctx, world) {
  * Must be called with the transform already reset to screen space:
  *   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
  * (it re-asserts that itself, defensively).
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT THIS PASS MAY AND MAY NOT TOUCH  (read before reordering draw())
+ * ---------------------------------------------------------------------------
+ * PASS 2 is a multiply whose corners reach #7E8175 — a ~0.5 multiply — and
+ * PASS 3 is a soft-light. Anything drawn BEFORE this call is graded by them.
+ * That is exactly right for SCENERY and exactly wrong for INSTRUMENTS, so
+ * draw() splits the in-canvas UI in two:
+ *
+ *   BEFORE (graded — these are painted ON the board and must sit in its light)
+ *     cloud shadow, unit selection rings, building footprint rings,
+ *     the placement ghost, order flags
+ *
+ *   AFTER (ungraded — these are read, not looked at)
+ *     unit health bars + rout marks, building health / progress / queue bars,
+ *     the drag-select box
+ *
+ * The "after" group is world-space but must outlive the grade, so draw() simply
+ * re-asserts the world transform once after this call, draws them, and resets
+ * to screen space for the drag box. That is two extra setTransform calls per
+ * frame — free — and it is the whole fix for "the composite pass washes out
+ * the HUD".
+ *
+ * The DOM HUD (#hud-top, #panel, #minimap in index.html) is unaffected either
+ * way: it lives outside this canvas entirely. Only in-canvas UI is at risk.
  */
 function drawLightingPass(ctx, viewW, viewH, devicePR) {
   if (!cmp.grade) return;
@@ -1286,10 +1532,10 @@ function drawLightingPass(ctx, viewW, viewH, devicePR) {
   // alpha the last caller happened to leave behind. The old 1.35 ceiling was
   // out of range for every zoom below ~0.88, which is most of the game.
   // Full strength now lives in the baked gradient instead.
-  // ATMOS_STRENGTH scales the whole aerial-perspective pass. At the value the
-  // subsystem shipped with (1.0) the haze washed the board to a flat pale
-  // olive and buried the terrain texture it sits on top of, so it is dialled
-  // back to a film of air rather than a fog bank.
+  // ATMOS_STRENGTH scales the whole aerial-perspective pass. At full strength
+  // the haze washed the board to a flat pale olive and buried the terrain
+  // texture underneath it, so it is dialled back to a film of air rather than
+  // a fog bank. Tuned by eye against the baked terrain.
   const ATMOS_STRENGTH = 0.34;
   const hazeMul = ATMOS_STRENGTH * cClamp(1.55 - z * 0.62, 0.42, 1)
     // ...and less haze when the camera is already at the north edge, because
@@ -1308,18 +1554,13 @@ function drawLightingPass(ctx, viewW, viewH, devicePR) {
 
   // --- PASS 3 : warm key / cool fill split. Gives the frame a single tonal
   // identity instead of "whatever each fillStyle happened to be".
-  // At full strength the saturated warm stops pulled the pasture toward khaki
-  // and flattened the green the terrain bake works hard to produce, so the
-  // wash is held at partial alpha: a tint, not a repaint.
   ctx.globalCompositeOperation = 'soft-light';
-  ctx.globalAlpha = 0.42;
   ctx.drawImage(cmp.warm, 0, 0, viewW, viewH);
-  ctx.globalAlpha = 1;
 
   // --- PASS 4 : table haze. Flat and tiny, but it lifts the blacks off pure
   // and adds the film of air that ties the image together.
   ctx.globalCompositeOperation = 'source-over';
-  ctx.fillStyle = z < 0.7 ? 'rgba(202,196,170,0.026)' : 'rgba(202,196,170,0.015)';
+  ctx.fillStyle = z < 0.7 ? 'rgba(202,196,170,0.058)' : 'rgba(202,196,170,0.034)';
   ctx.fillRect(0, 0, viewW, viewH);
 }
 
@@ -1381,7 +1622,7 @@ function drawDragRect(ctx, dragRect) {
  * a map that says "wood / field / plough / road / stream" at a glance and is
  * completely independent of how the terrain subsystem happens to be built.
  */
-function buildMinimapBase() {
+function buildMinimapBase(sourceCanvas) {
   const W = mmCanvas.width, H = mmCanvas.height;
   const inset = 0;                 // map is full-bleed; see C_MM_FRAME
   const iw = W, ih = H;
@@ -1390,9 +1631,20 @@ function buildMinimapBase() {
   C_MM_DH = Math.max(8, ih >> 1);
 
   // --- scratch: downscale the world board ---------------------------------
-  const [sc, sg] = cCanvas(iw, ih, false);
+  // `sourceCanvas` defaults to render.js's module-level terrainCanvas, but is
+  // accepted explicitly so this works whatever the terrain subsystem produces:
+  // the current half-res 2600x1600 sheet, a 0.25-res fallback composite, or a
+  // purpose-built minimap sheet. Only the ASPECT has to match the world; the
+  // resolution is irrelevant because we are posterizing, not photographing.
+  const src = sourceCanvas || (typeof terrainCanvas !== 'undefined' ? terrainCanvas : null);
+  const sc = document.createElement('canvas');
+  sc.width = iw; sc.height = ih;
+  // willReadFrequently: the posterize pass below is a getImageData round-trip,
+  // and without the hint Chrome keeps this on the GPU and stalls on the read.
+  const sg = sc.getContext('2d', { willReadFrequently: true });
+  sg.imageSmoothingEnabled = true;
   sg.imageSmoothingQuality = 'high';
-  if (terrainCanvas) sg.drawImage(terrainCanvas, 0, 0, iw, ih);
+  if (src && src.width) sg.drawImage(src, 0, 0, iw, ih);
   else { sg.fillStyle = '#55613A'; sg.fillRect(0, 0, iw, ih); }
 
   // --- posterize into the tactical palette --------------------------------
@@ -1496,6 +1748,46 @@ function buildMinimapBase() {
   cmp.mmImg = ug.createImageData(C_MM_DW, C_MM_DH);
   cmp.mmD0 = new Int16Array(C_MM_DW * C_MM_DH);
   cmp.mmD1 = new Int16Array(C_MM_DW * C_MM_DH);
+
+  // --- wear / battle-heat buffers -----------------------------------------
+  // Accumulated by mmNoteEvent (which effects.js fxNoteDecal drives from the
+  // existing pendingDecals flush). Rebuilt here, so a rematch starts clean.
+  const [hc, hg] = cCanvas(C_MM_DW, C_MM_DH, false);
+  cmp.mmHeatCv = hc;
+  cmp.mmHeatCtx = hg;
+  cmp.mmHeatImg = hg.createImageData(C_MM_DW, C_MM_DH);
+  cmp.mmHeat = new Float32Array(C_MM_DW * C_MM_DH);
+  cmp.mmHeatDirty = true;
+}
+
+/**
+ * Rasterise the battle-heat grid. Only runs when mmNoteEvent has actually
+ * added something since the last redraw, so a quiet minute costs nothing.
+ *
+ * The stain is a churned-earth brown drawn under the unit layer at 'multiply',
+ * i.e. it DARKENS AND WARMS the map where men have died rather than painting a
+ * coloured overlay on top of it — the same reasoning that makes blood pools
+ * multiply onto the ground in the decal spec instead of sitting over it.
+ */
+function cRasterHeat() {
+  const heat = cmp.mmHeat;
+  if (!heat || !cmp.mmHeatDirty) return;
+  cmp.mmHeatDirty = false;
+  const img = cmp.mmHeatImg, d = img.data;
+  const n = heat.length;
+  for (let i = 0; i < n; i++) {
+    const v = heat[i];
+    const p = i << 2;
+    if (v <= 0) { d[p + 3] = 0; continue; }
+    // saturating response: heavy early return, then a long slow deepening, so
+    // a skirmish still registers and a five-minute grind does not clip flat
+    const t = 1 - Math.exp(-v * 0.085);
+    d[p] = 96 - 34 * t;          // warm umber, never neutral grey
+    d[p + 1] = 78 - 30 * t;
+    d[p + 2] = 58 - 24 * t;
+    d[p + 3] = (30 + 150 * t) | 0;
+  }
+  cmp.mmHeatCtx.putImageData(img, 0, 0);
 }
 
 let cMmT = 0;
@@ -1527,12 +1819,31 @@ function drawMinimap(world) {
   g.globalAlpha = 1;
   g.drawImage(cmp.mmBase, 0, 0);
 
-  // ---- 2. wear / trample layer: where the fighting has already been -------
-  if (cTrampleRef) {
+  // ---- 2. wear layer: where the fighting has already been -----------------
+  // TWO independent sources, both optional, both 'multiply' so they stain the
+  // board rather than sitting on it:
+  //
+  //   (a) the decal subsystem's real trample canvas, if one has been injected
+  //       via setCompositeTrampleLayer(getTrampleCanvas()).
+  //   (b) the battle-heat grid, which works with the SHIPPED codebase because
+  //       it is fed by mmNoteEvent from the pendingDecals flush. Without this
+  //       the wear layer is simply absent until decals.js lands, and "where has
+  //       the fighting been" — the one question a minimap answers that the main
+  //       view cannot — goes unanswered.
+  g.globalCompositeOperation = 'multiply';
+  if (cTrampleRef && cTrampleRef.width) {
     g.globalAlpha = 0.40;
     g.drawImage(cTrampleRef, inset, inset, iw, ih);
-    g.globalAlpha = 1;
   }
+  if (cmp.mmHeatCv) {
+    cRasterHeat();
+    g.globalAlpha = 0.85;
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(cmp.mmHeatCv, inset, inset, iw, ih);
+  }
+  g.globalAlpha = 1;
+  g.globalCompositeOperation = 'source-over';
 
   // ---- 3. dim the ground outside the camera viewport ----------------------
   // (before units, so off-screen threats stay at full brightness)
@@ -1547,15 +1858,41 @@ function drawMinimap(world) {
   g.fillRect(r, t, Math.max(0, inset + iw - r), Math.max(0, b - t));
 
   // ---- 4. resources: muted, they are terrain not threat -------------------
+  // Sized by the node's actual radius (economy.js seeds clusters at r 38-72,
+  // so a great forest genuinely reads bigger than a berry patch) and DIMMED as
+  // it depletes, which is the only strategic fact about a node that changes.
+  // A worked-out mine that still plots at full strength is worse than no mark.
   const res = world.resources;
   for (let i = 0; i < res.length; i++) {
     const rn = res[i];
     if (!rn.alive || rn.amount <= 0) continue;
+    const frac = rn.maxAmount > 0 ? rn.amount / rn.maxAmount : 1;
+    const rx = Math.max(1.6, rn.radius * sx * 0.85);
+    const ry = Math.max(1.2, rn.radius * sy * 0.85);
+    const px = inset + rn.x * sx, py = inset + rn.y * sy;
+
+    // a dark seat under the mark so it reads against pale straw parcels
+    g.globalAlpha = 0.34 + 0.30 * frac;
+    g.fillStyle = '#1B2016';
+    g.beginPath(); g.ellipse(px + 0.5, py + 0.5, rx + 0.8, ry + 0.8, 0, 0, 6.2832); g.fill();
+
+    g.globalAlpha = 0.30 + 0.70 * frac;
     g.fillStyle = rn.type === 'wood' ? '#33512F'
       : rn.type === 'food' ? '#8A6E3A'
         : rn.type === 'gold' ? '#B2933A' : '#7E8079';
-    g.fillRect(inset + rn.x * sx - 1, inset + rn.y * sy - 1, 2.5, 2.5);
+    g.beginPath(); g.ellipse(px, py, rx, ry, 0, 0, 6.2832); g.fill();
+
+    // key-lit crescent on the up-left, so even the map obeys C_SUN
+    g.globalAlpha = (0.30 + 0.70 * frac) * 0.55;
+    g.fillStyle = rn.type === 'gold' ? '#E8CF7A'
+      : rn.type === 'stone' ? '#B8B9B0'
+        : rn.type === 'wood' ? '#4E7345' : '#C2A268';
+    g.beginPath();
+    g.ellipse(px + C_SUN.x * rx * 0.30, py + C_SUN.y * ry * 0.30,
+      rx * 0.58, ry * 0.58, 0, 0, 6.2832);
+    g.fill();
   }
+  g.globalAlpha = 1;
 
   // ---- 5. units by density accumulation ----------------------------------
   const DW = C_MM_DW, DH = C_MM_DH;
@@ -1602,28 +1939,75 @@ function drawMinimap(world) {
   g.imageSmoothingQuality = 'high';
   g.drawImage(cmp.mmUnits, inset, inset, iw, ih);
 
-  // ---- 6. buildings: distinct shapes, never merged into the unit blur -----
+  // ---- 6. buildings: distinct SHAPES, never merged into the unit blur -----
+  //
+  // Four glyphs, chosen so the map answers the four questions a commander
+  // actually asks of a settlement, by silhouette rather than by colour — at
+  // 4-7 px, two side hues plus eleven building types cannot be separated by
+  // hue alone, and one in twelve male players cannot separate the two side
+  // hues at all:
+  //
+  //   DIAMOND  town centre — the objective. Never mistakeable for a house.
+  //   CHEVRON  watch tower — a threat that shoots back; points at the enemy.
+  //   BAR      farm        — flat on the ground, occupies area, not a structure.
+  //   SQUARE   everything else.
+  //
+  // Incomplete buildings are drawn as an OUTLINE in parchment rather than a
+  // filled side colour: a foundation is a commitment, not yet an asset, and it
+  // is the thing a raiding cavalry wing most wants to find.
   const bs = world.buildings;
   for (let i = 0; i < bs.length; i++) {
     const bd = bs[i];
     if (!bd.alive) continue;
     const bx = inset + bd.x * sx, by = inset + bd.y * sy;
-    const big = bd.type === 'town_center';
-    const sz = big ? 7 : bd.type === 'tower' ? 3.5 : 4.5;
-    g.fillStyle = 'rgba(12,14,9,0.8)';
-    g.fillRect(bx - sz / 2 - 1, by - sz / 2 - 1, sz + 2, sz + 2);
-    g.fillStyle = bd.complete
-      ? (bd.side === 0 ? C_SIDE_RIM_LIT[0] : C_SIDE_RIM_LIT[1])
-      : 'rgba(190,178,140,0.85)';
+    const type = bd.type;
+    const big = type === 'town_center';
+    const sz = big ? 7.5 : type === 'tower' ? 4.5 : type === 'farm' ? 5 : 4.5;
+    const fill = bd.side === 0 ? C_SIDE_RIM_LIT[0] : C_SIDE_RIM_LIT[1];
+
+    // dark seat: every glyph gets one, so all of them read on any tone
+    g.fillStyle = 'rgba(12,14,9,0.82)';
+    if (type === 'farm') g.fillRect(bx - sz - 1, by - sz * 0.42 - 1, sz * 2 + 2, sz * 0.84 + 2);
+    else g.fillRect(bx - sz / 2 - 1.2, by - sz / 2 - 1.2, sz + 2.4, sz + 2.4);
+
+    if (!bd.complete) {
+      // under construction — hollow, so it never reads as a working asset
+      g.strokeStyle = 'rgba(214,202,158,0.92)';
+      g.lineWidth = 1.2;
+      g.strokeRect(bx - sz / 2 + 0.5, by - sz / 2 + 0.5, sz - 1, sz - 1);
+      continue;
+    }
+
+    g.fillStyle = fill;
     if (big) {
-      // the objective gets a diamond, so it is never mistaken for a house
       g.beginPath();
       g.moveTo(bx, by - sz * 0.72); g.lineTo(bx + sz * 0.72, by);
       g.lineTo(bx, by + sz * 0.72); g.lineTo(bx - sz * 0.72, by);
       g.closePath(); g.fill();
       g.strokeStyle = C_UI.goldBright; g.lineWidth = 1; g.stroke();
+    } else if (type === 'tower') {
+      // chevron pointing across the map at the opposing base, so a defended
+      // approach is legible as an arc of arrowheads rather than a row of dots
+      const dir = bd.side === 0 ? 1 : -1;
+      g.beginPath();
+      g.moveTo(bx + dir * sz * 0.70, by);
+      g.lineTo(bx - dir * sz * 0.42, by - sz * 0.62);
+      g.lineTo(bx - dir * sz * 0.12, by);
+      g.lineTo(bx - dir * sz * 0.42, by + sz * 0.62);
+      g.closePath(); g.fill();
+      g.strokeStyle = 'rgba(255,246,222,0.72)'; g.lineWidth = 0.8; g.stroke();
+    } else if (type === 'farm') {
+      // a low bar: a farm is a worked parcel, not a building with a roof
+      g.fillRect(bx - sz, by - sz * 0.42, sz * 2, sz * 0.84);
+      g.strokeStyle = 'rgba(20,24,14,0.55)'; g.lineWidth = 0.8;
+      g.beginPath();
+      g.moveTo(bx - sz, by); g.lineTo(bx + sz, by);
+      g.stroke();
     } else {
       g.fillRect(bx - sz / 2, by - sz / 2, sz, sz);
+      // up-left key facet, matching C_SUN, so the map is lit like the field
+      g.fillStyle = 'rgba(255,246,222,0.30)';
+      g.fillRect(bx - sz / 2, by - sz / 2, sz, sz * 0.34);
     }
   }
 
@@ -1667,8 +2051,7 @@ function drawMinimap(world) {
   // ---- 9. frame last, so nothing bleeds over the border -------------------
   g.drawImage(cmp.mmFrame, 0, 0);
 }
-
 export { setCompositeRefs, setCompositeView, setCompositeTrampleLayer,
-         buildCompositeTextures, buildMinimapBase, mmNoteEvent,
-         drawLightingPass, drawSelection, drawHealthBars, drawOrderFlags,
-         drawDragRect, drawMinimap };
+         buildCompositeTextures, buildMinimapBase, drawLightingPass,
+         drawSelection, drawHealthBars, drawOrderFlags, drawDragRect,
+         drawMinimap };

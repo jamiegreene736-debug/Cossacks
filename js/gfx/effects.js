@@ -1,16 +1,9 @@
-// Battle effects: powder smoke, muzzle flash, cannonballs, blood, dust.
-// Puff/flash/blood textures are baked once at battle start; each particle
-// is then a single drawImage, so the per-frame cost stays flat.
+// Powder smoke, muzzle flash, projectiles, blood, dust.
 import { WORLD } from '../config.js';
-
-// render.js owns the camera and viewport; it injects them so this module
-// can cull to the visible area without importing render.js (which would
-// create an import cycle).
 let camera = { x: 0, y: 0, zoom: 1 };
 let cw = 0, ch = 0;
 function setEffectsCamera(c) { camera = c; }
 function setEffectsView(w, h) { cw = w; ch = h; }
-
 // =============================================================================
 //  EFFECTS  —  black-powder smoke, muzzle flash, shot, impact, blood, dust
 // =============================================================================
@@ -1656,5 +1649,4 @@ function drawEffects(ctx, world, alpha) {
   ctx.globalCompositeOperation = 'source-over';
   ctx.globalAlpha = 1;
 }
-
 export { setEffectsCamera, setEffectsView, buildParticleTextures, drawEffects };

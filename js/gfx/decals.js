@@ -1,12 +1,3 @@
-// Persistent battlefield aftermath: corpses, craters, wrecks, ruins, trample.
-// Stamps are baked once per battle; each decal is then one blit onto the
-// world-sized decal canvas, so a long battle's litter costs nothing per frame.
-import { WORLD, NATIONS, BUILDING_TYPES } from '../config.js';
-
-// render.js owns the decal canvas; it hands us the context at battle start.
-let decalCtx = null;
-function setDecalCtx(g) { decalCtx = g; }
-
 // ============================================================================
 //  DECALS — persistent battlefield aftermath
 //  "Kriegsspiel Table" art bible: painted miniatures under one warm gallery
@@ -38,13 +29,24 @@ function setDecalCtx(g) { decalCtx = g; }
 //    DEC_OS x oversampling and blit down to 1:1 world px, so every edge is
 //    box-filtered rather than aliased.
 //
-//  This file is a fragment spliced into render.js. It references the existing
-//  module-level `decalCtx`, `WORLD`, `NATIONS`, `BUILDING_TYPES`. Every symbol
-//  it declares is prefixed `dec`/`DEC_` (or is one of the four exported-by-name
-//  entry points) so nothing collides with render.js's own top-level bindings —
-//  ES modules make duplicate top-level declarations a SyntaxError, so no name
-//  may be reused.
+//  This is a real ES module, not a splice fragment. render.js already imports
+//  { setDecalCtx, buildDecalStamps, paintDecal } from './gfx/decals.js', so the
+//  bindings below must exist as genuine imports/exports — free references to
+//  WORLD / NATIONS / BUILDING_TYPES / decalCtx would be ReferenceErrors under
+//  module scope, and the missing export would fail the import outright.
 // ============================================================================
+
+import { WORLD, NATIONS, BUILDING_TYPES } from '../config.js';
+
+// render.js owns the decal canvas; it hands us the context at battle start.
+let decalCtx = null;
+function setDecalCtx(g) {
+  decalCtx = g;
+  // Stamps are baked at DEC_OS oversampling and blitted down 3:1. Chrome's
+  // default 'low' smoothing aliases badly on a 3x minification, which would
+  // throw away exactly the edge quality the oversampling was paid for.
+  if (g) g.imageSmoothingQuality = 'high';
+}
 
 const DEC_TAU = Math.PI * 2;
 const DEC_OS = 3;              // stamp oversampling (bake px per world px)
@@ -279,12 +281,19 @@ function decApplyHalo(c, colour, px, alpha) {
   const g = c.getContext('2d');
   const sil = decSilhouette(c, colour);
   const o = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
+  // Dilate FIRST into a scratch, then blur ONCE on the way in. The obvious
+  // version (set ctx.filter, then eight drawImages) pays for a full blur
+  // pipeline eight times per object; across ~110 baked stamps that was several
+  // hundred filtered blits and by far the largest single term in the bake.
+  // Same result, one eighth the filter work.
+  const [ring, rg] = decCanvas(c.width, c.height);
+  for (let i = 0; i < 8; i++) rg.drawImage(sil, o[i][0] * px, o[i][1] * px);
   g.save();
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.globalCompositeOperation = 'destination-over';
   g.globalAlpha = alpha;
   g.filter = 'blur(1.1px)';
-  for (let i = 0; i < 8; i++) g.drawImage(sil, o[i][0] * px, o[i][1] * px);
+  g.drawImage(ring, 0, 0);
   g.filter = 'none';
   g.restore();
 }
@@ -364,7 +373,12 @@ function decFinish(c, opts) {
   decRecessWash(c, o.wash === undefined ? 0.18 : o.wash, o.washBlur === undefined ? 1.5 : o.washBlur);
   decMatteVarnish(c, o.varnish === undefined ? 0.045 : o.varnish);
   if (o.lineColour !== null) {
-    const lpx = o.linePx === undefined ? 2 : o.linePx;
+    // linePx is in DEVICE px on a DEC_OS-oversampled stamp, so the lining the
+    // player actually sees is linePx/DEC_OS world px. At the old default of 2
+    // that is 0.67 world px — under a screen pixel at any zoom below 1.5x, i.e.
+    // the silhouette guarantee quietly evaporated exactly where it was needed.
+    // DEC_OS gives a true 1 world px lining.
+    const lpx = o.linePx === undefined ? DEC_OS : o.linePx;
     // destination-over stacks downward, so each call lands under the previous:
     // artwork / dark lining / warm halo / contact shadow.
     decApplyLining(c, o.lineColour || '#141118', lpx, o.lineAlpha === undefined ? 1 : o.lineAlpha);
@@ -532,6 +546,10 @@ function decWheel(g, cx, cy, r, pal, rng, broken, squash) {
   g.save();
   g.translate(cx, cy);
   g.scale(1, sq);
+  // Inside a non-uniformly scaled frame an angle is no longer the angle you
+  // see: DEC_L.ang used raw put the wheel's rim highlight up to ~17 degrees off
+  // the sun at sq=0.45. Pre-distort so the lit arc still faces the photoflood.
+  const sunA = Math.atan2(DEC_L.y / sq, DEC_L.x);
   g.strokeStyle = pal.base;
   g.lineWidth = thick;
   g.beginPath();
@@ -547,12 +565,12 @@ function decWheel(g, cx, cy, r, pal, rng, broken, squash) {
   g.strokeStyle = pal.light;
   g.lineWidth = thick * 0.34;
   g.beginPath();
-  g.arc(0, 0, r - thick * 0.22, DEC_L.ang - 1.2, DEC_L.ang + 1.2);
+  g.arc(0, 0, r - thick * 0.22, sunA - 1.2, sunA + 1.2);
   g.stroke();
   g.strokeStyle = decRgba(DEC_PAL.ROCK_LIGHT, 0.45);
   g.lineWidth = thick * 0.18;
   g.beginPath();
-  g.arc(0, 0, r + thick * 0.34, DEC_L.ang - 0.8, DEC_L.ang + 0.8);
+  g.arc(0, 0, r + thick * 0.34, sunA - 0.8, sunA + 0.8);
   g.stroke();
   const spokes = 10;
   for (let i = 0; i < spokes; i++) {
@@ -1311,7 +1329,7 @@ function decBakeCorpse(kit, type, pose, heading, seed) {
   decFinish(figC, {
     light: 1, wash: 0.20, washBlur: 1.6, varnish: 0.045,
     lineColour: decMix(decRamp(kit.coat).line, '#141118', 0.45),
-    linePx: 2, lineAlpha: 1,
+    linePx: DEC_OS, lineAlpha: 1,   // a true 1 world px painted lining
     aoPx: type === 'cav' ? 6 : 4, aoAlpha: 0.5,
   });
 
@@ -1341,7 +1359,12 @@ function decBakeCorpse(kit, type, pose, heading, seed) {
 // and you have drawn a dome. Two stacked dark ellipses (the current code) read
 // as a stain, which is exactly the reported defect.
 function decBakeCrater(seed) {
-  const W = 70, H = 58;
+  // The box must contain the EJECTA, not just the bowl. Rays reach R*2.75 and
+  // scorch tongues R*2.1 with R up to 19, i.e. 52 world px in x and 39 in y.
+  // At the original 70x58 every ray and tongue was sliced off dead straight by
+  // the canvas edge, stamping a hard rectangle around every shell hole — the
+  // exact "analytic edge" the rest of this file works to avoid.
+  const W = 124, H = 96;
   const rng = decRng(seed);
   const [c, g] = decStampCanvas(W, H);
   decSetRot(0);
@@ -1678,7 +1701,7 @@ function decBakeWreck(kit, heading, seed) {
   decFinish(c, {
     light: 1, wash: 0.20, washBlur: 1.6, varnish: 0.045,
     lineColour: decMix(decRamp(DEC_PAL.WOOD).line, '#141118', 0.4),
-    linePx: 2, lineAlpha: 1, aoPx: 5, aoAlpha: 0.5,
+    linePx: DEC_OS, lineAlpha: 1, aoPx: 5, aoAlpha: 0.5,
   });
   decSetRot(0);
 
@@ -1747,7 +1770,7 @@ function decBakeRubbleChunk(seed) {
   }
   decFinish(c, {
     light: 0.7, wash: 0.16, washBlur: 1.2, varnish: 0.04,
-    lineColour: decMix(pal.line, '#161219', 0.4), linePx: 1, lineAlpha: 0.95,
+    lineColour: decMix(pal.line, '#161219', 0.4), linePx: 2, lineAlpha: 0.95,
     aoPx: 3, aoAlpha: 0.5,
   });
   c._wWorld = W;
@@ -1771,7 +1794,11 @@ function decBakeSplat(seed) {
 // Painted in TRAMPLE space (WORLD/4), so 1 canvas px = 4 world px.
 function decBakeWearBlob(seed, sizeWorld) {
   const rng = decRng(seed);
-  const S = 32;
+  // Lobes reach sizeWorld*(0.45+0.7) from centre, so the canvas must be at
+  // least 2.3*sizeWorld across plus slack. The old fixed S=32 clipped every
+  // blob above size 13 into a hard-edged square — visible as rectangular mud
+  // patches wherever deaths clustered.
+  const S = Math.max(24, Math.ceil(sizeWorld * 2.6) + 2);
   const [c, g] = decCanvas(S, S);
   const cx = S / 2, cy = S / 2;
   const lobes = 4 + ((rng() * 4) | 0);
@@ -1877,7 +1904,12 @@ function buildDecalStamps(world) {
     decBakeWearBlob(11, 4), decBakeWearBlob(23, 5),
     decBakeWearBlob(37, 7), decBakeWearBlob(53, 9),
   ];
-  const wearBig = [decBakeWearBlob(71, 13), decBakeWearBlob(89, 16)];
+  // Trample space is WORLD/4, so these radii are in units of 4 world px. The
+  // previous 13/16 produced death scuffs ~130 world px across — after a few
+  // hundred casualties that blankets the board in mud instead of tracing where
+  // the fighting was. 8/10 gives a ~35-45 world px scuff, close to the spec's
+  // 14x14 trample-space stamp.
+  const wearBig = [decBakeWearBlob(71, 8), decBakeWearBlob(89, 10)];
 
   const n0 = decNationOf(nations[0]), n1 = decNationOf(nations[1]);
   decStamps = {
@@ -1946,7 +1978,14 @@ function drainTrample(world) {
   }
 }
 
-function getTrampleCanvas() { return trampleCanvas; }
+// Never returns null: the documented integration is a bare
+// ctx.drawImage(getTrampleCanvas(), ...) in draw(), and drawImage(null) throws
+// a TypeError that would kill the frame — so a caller that runs before
+// buildDecalStamps must still get a valid (empty) surface.
+function getTrampleCanvas() {
+  if (!trampleCanvas) decInitTrample();
+  return trampleCanvas;
+}
 
 // ============================================================================
 //  paintDecal — the ONLY entry point render.js calls per decal.
@@ -2145,4 +2184,10 @@ function decPaintRuin(g, d, rng) {
   stampTrample(d.x + w * 0.25, d.y - h * 0.10, 1, 0.22);
 }
 
-export { setDecalCtx, buildDecalStamps, paintDecal, stampTrample, getTrampleCanvas };
+// drainTrample is exported deliberately: the integration notes instruct render.js
+// to call it every frame, and the shipped export list omitted it — the wear
+// layer would have accumulated deaths only and never a single footfall.
+export {
+  setDecalCtx, buildDecalStamps, paintDecal,
+  stampTrample, drainTrample, getTrampleCanvas,
+};
