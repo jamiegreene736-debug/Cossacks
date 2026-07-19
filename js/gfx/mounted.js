@@ -241,9 +241,12 @@ const MOUNT_TAU = Math.PI * 2;
 let MOUNT_FLIP = 1;
 function mSunX() { return MOUNT_SUN.x * MOUNT_FLIP; }
 
-// Snap to a device-pixel boundary so baked edges are not smeared into a 2px
-// antialiased mush. Used on structural straight edges (carriage, barrel bands).
-function mSnap(v) { const s = mScale(); return Math.round(v * s) / s; }
+// NOTE: there is deliberately no mSnap() helper here. One used to exist, with a
+// comment claiming it was applied to "structural straight edges (carriage,
+// barrel bands)". It had zero call sites. The art bible's SPRITE SPEC rule that
+// every painter coordinate be snapped to 0.25 sprite units is genuinely NOT
+// implemented in this file — see the review notes. Rather than leave a dead
+// helper implying otherwise, the gap is stated plainly.
 
 // Quadratic-through-midpoints: an organic curve from a point list.
 function mCurve(g, pts, move) {
@@ -423,7 +426,7 @@ function mFinishFigure(g, opts) {
   const o = opts || {};
   const c = g.canvas;
   const W = c.width, H = c.height;
-  const linePx = o.linePx || 1;
+  const S = mScale();
 
   g.save();
   g.setTransform(1, 0, 0, 1, 0, 0);
@@ -432,8 +435,19 @@ function mFinishFigure(g, opts) {
   // --- A. UNIFYING GALLERY LIGHT ------------------------------------------
   // source-atop clips to painted pixels, so one gradient shades horse, rider,
   // tack, hat and weapon consistently — a single lit object, not a collage.
+  //
+  // The gradient axis is the SUN SHADOW VECTOR, not the frame diagonal. It has
+  // to be: infantry.js:passGalleryLight and villager.js both run
+  // createLinearGradient(0, 0, L*SUN.shadow.x, L*SUN.shadow.y), and a
+  // box-aspect-derived axis (the old W*0.55, H) pointed a different way in the
+  // cav frame (0.53, 0.85) than in the gun frame (0.61, 0.79) than in an
+  // infantry frame (0.64, 0.77). Three units standing in the same rank, each
+  // lit from a slightly different angle, and a fourth angle appearing the
+  // moment anyone changes a frame width. That is exactly the failure the art
+  // bible names as the worst possible outcome.
+  const L = W * Math.abs(MOUNT_SUN.shadow.x) + H * Math.abs(MOUNT_SUN.shadow.y);
   g.globalCompositeOperation = 'source-atop';
-  const lg = g.createLinearGradient(0, 0, W * 0.55, H);
+  const lg = g.createLinearGradient(0, 0, L * MOUNT_SUN.shadow.x, L * MOUNT_SUN.shadow.y);
   lg.addColorStop(0.00, 'rgba(255,236,190,0.26)');
   lg.addColorStop(0.42, 'rgba(255,236,190,0)');
   lg.addColorStop(0.62, 'rgba(24,20,42,0)');
@@ -442,18 +456,44 @@ function mFinishFigure(g, opts) {
   g.fillRect(0, 0, W, H);
   g.globalCompositeOperation = 'source-over';
 
-  const sil = mSilhouette(c, '#141118');
-
   // --- B. RECESS WASH ------------------------------------------------------
-  // A blurred multiply of the figure's own silhouette pools darkness in
-  // interior crevices exactly as a Citadel shade wash does. filter is legal
-  // here: this is bake-time code and runs once per battle.
+  // BLUR THE FRAME, NOT THE SILHOUETTE. Multiplying a blurred SOLID silhouette
+  // back over the figure is a no-op in the interior — the blur of a solid
+  // region is still solid, so every pixel more than a blur radius from the
+  // outline receives the SAME multiplier. Measured, a solid #141118 at alpha
+  // 0.18 is a flat 0.832x on every interior pixel: no crevice pooling at all,
+  // and a uniform ~17% darkening that made every horse and every gun read
+  // muddier than the infantry beside them, on top of the gallery gradient's
+  // own 0.34 darkening in the lower right.
+  //
+  // Blurring the frame's own COLOUR instead makes the multiplier a function of
+  // each pixel's neighbourhood: sun-facing planes are multiplied by something
+  // near white and barely move, while pixels next to dark neighbours — under
+  // the hat brim, between the barrel and the carriage cheek, in the gap
+  // between the horse's near and far legs — are multiplied by something dark
+  // and pool. This is infantry.js:passRecessWash verbatim, so the two lineages
+  // now shade identically.
   if (mSupportsFilter(g)) {
+    const wc = document.createElement('canvas');
+    wc.width = W; wc.height = H;
+    const wg = wc.getContext('2d');
+    wg.filter = 'blur(' + (S * 0.42).toFixed(2) + 'px)';
+    wg.drawImage(c, 0, 0);
+    wg.filter = 'none';
+    // Lift toward white so the wash can only pool, never crush.
+    wg.globalCompositeOperation = 'source-atop';
+    wg.fillStyle = 'rgba(255,252,244,0.42)';
+    wg.fillRect(0, 0, W, H);
+    // Confine to the figure. Without this the blur halo extends past the
+    // silhouette, and multiply-over-transparent degenerates to source-over —
+    // the figure would acquire a dark smudge ring that the lining pass then
+    // bakes in permanently.
+    wg.globalCompositeOperation = 'destination-in';
+    wg.drawImage(c, 0, 0);
+
     g.globalCompositeOperation = 'multiply';
-    g.globalAlpha = 0.18;
-    g.filter = 'blur(' + (1.4 * mScale() / 3).toFixed(2) + 'px)';
-    g.drawImage(sil, 0, 0);
-    g.filter = 'none';
+    g.globalAlpha = 0.55;
+    g.drawImage(wc, 0, 0);
     g.globalAlpha = 1;
     g.globalCompositeOperation = 'source-over';
   }
@@ -467,16 +507,44 @@ function mFinishFigure(g, opts) {
   g.globalCompositeOperation = 'source-over';
 
   // --- D. LINING -----------------------------------------------------------
-  // Uniform 1-device-px painted outline dilated beneath the artwork. This is
-  // how a sixty-man block stays reading as sixty men. Zero runtime cost.
+  // Painted outline dilated beneath the artwork. This is how a sixty-man block
+  // stays reading as sixty men. Zero runtime cost.
+  //
+  // Tint: the MATERIAL-TINTED, luminance-force-clamped lining from the coat
+  // ramp, matching infantry.js:passLining(g, S, coat.line). The whole
+  // mClampLine / MOUNT_LINE_MAX_RELLUM palette-law apparatus above exists to
+  // produce this value; before this it was computed for eighteen materials per
+  // nation and then thrown away in favour of a hardcoded '#141118', so mounted
+  // units carried a colder, bluer outline than the infantry they rode past.
+  const sil = mSilhouette(c, o.tint || '#141118');
+
+  // Width: max(1, round(S*0.60)) device px — infantry's figure, so the two
+  // lineages carry the same line weight. At SCALE 4 that is 2 device px
+  // (0.5 sprite units); the old fixed 1 px was half the infantry's outline.
+  const d = Math.max(1, Math.round(S * 0.60));
   g.globalCompositeOperation = 'destination-over';
   for (let i = 0; i < MOUNT_OFF8.length; i++) {
-    g.drawImage(sil, MOUNT_OFF8[i][0] * linePx, MOUNT_OFF8[i][1] * linePx);
+    g.drawImage(sil, MOUNT_OFF8[i][0] * d, MOUNT_OFF8[i][1] * d);
   }
-  // A second, heavier asymmetric lining along the sun-shadow axis: the ambient
-  // occlusion that lifts the figure off the ground instead of pasting it on.
-  g.globalAlpha = 0.45;
-  g.drawImage(sil, MOUNT_SUN.shadow.x * 2 * linePx, MOUNT_SUN.shadow.y * 2 * linePx);
+
+  // A second, asymmetric ring along the sun-shadow axis: the ambient occlusion
+  // that lifts the figure off the ground instead of pasting it on.
+  //
+  // Offsets are ROUNDED to whole device pixels. The old code offset by
+  // shadow*2 = (1.28, 1.54) px, and a fractional-offset drawImage of a
+  // hard-edged silhouette resamples it — the AO ring arrived as a soft
+  // half-alpha ghost rather than a crisp band.
+  //
+  // Infantry also runs a third ring at d*3.2 alpha 0.20. It is deliberately
+  // NOT ported: the bounds gate measures the tightest margins in these frames
+  // at R 0.96 and B 0.99 sprite units (3.84 / 3.96 device px at SCALE 4), and
+  // a third ring would land at (4.1, 4.9) px — outside the box on both axes,
+  // so it would be sliced off by a hard straight frame edge. Two rings fit
+  // with room to spare: worst-case spill is 0.75 units right and bottom,
+  // 0.5 units top and left, against margins of 0.96 / 0.99 / 0.54 / 0.80.
+  g.globalAlpha = 0.42;
+  const d2 = d * 2;
+  g.drawImage(sil, Math.round(MOUNT_SUN.shadow.x * d2), Math.round(MOUNT_SUN.shadow.y * d2));
   g.globalAlpha = 1;
   g.globalCompositeOperation = 'source-over';
 
@@ -1437,7 +1505,7 @@ function drawCavalry(g, nat, pose, legPhase, side) {
   g.restore();
 
   // ---- 9. WHOLE-FIGURE PASSES + LINING -----------------------------------
-  mFinishFigure(g, { linePx: 1 });
+  mFinishFigure(g, { tint: M.coat.line });
 
   // ---- 10. BAKED CONTACT SHADOW (goes underneath everything) -------------
   const sh = st.shadow;
@@ -1975,9 +2043,12 @@ function mCrewman(g, M, x, role, flip, dim) {
   g.fillStyle = mA(coat.deep, 0.28);
   g.fillRect(-3, 14.4, 6, 1.6);
   g.restore();
-  // skirt flare edge
+  // skirt flare edge — an edge light, so it belongs on the up-left boundary in
+  // WORLD space. ex() flips the authored x for the mirrored crewman; without
+  // it this landed on the near crewman's down-right side, lighting him from
+  // the opposite quarter to everything else in the frame.
   g.strokeStyle = mA(coat.edge, 0.5); g.lineWidth = 0.2;
-  g.beginPath(); g.moveTo(-2.35, 14.2); g.lineTo(-1.9, 12.0); g.stroke();
+  g.beginPath(); g.moveTo(ex(-2.35), 14.2); g.lineTo(ex(-1.9), 12.0); g.stroke();
   // lapel + cuffs in trim
   mPoly(g, [[1.75, 8.5], [2.05, 12.2], [1.05, 12.1], [0.95, 8.4]]);
   g.fillStyle = trim.base; g.fill();
@@ -1986,8 +2057,12 @@ function mCrewman(g, M, x, role, flip, dim) {
   // crossbelts
   g.strokeStyle = buff.base; g.lineWidth = 0.68;
   g.beginPath(); g.moveTo(-1.5, 8.5); g.lineTo(1.9, 13.4); g.stroke();
+  // Belt highlight: the base strap offset toward the light. The x component of
+  // that offset has to flip with the figure (see the skirt edge above), or the
+  // near crewman's crossbelt catches the sun on its down-right face.
+  const beltEx = ex(-0.18);
   g.strokeStyle = mA(buff.edge, 0.8); g.lineWidth = 0.2;
-  g.beginPath(); g.moveTo(-1.68, 8.6); g.lineTo(1.72, 13.5); g.stroke();
+  g.beginPath(); g.moveTo(-1.5 + beltEx, 8.6); g.lineTo(1.9 + beltEx, 13.5); g.stroke();
   // faction shoulder knot
   g.fillStyle = M.side;
   mPoly(g, [[-1.9, 8.2], [-0.5, 7.9], [-0.35, 8.8], [-1.85, 9.1]]); g.fill();
@@ -2220,7 +2295,10 @@ function drawCannon(g, nat, pose, side) {
   mCrewman(g, M, 7.3, firing ? 'brace' : 'handspike', true, 0);
 
   // ---- Whole-figure passes + lining --------------------------------------
-  mFinishFigure(g, { linePx: 1 });
+  // Tinted from the carriage rather than the coat: a gun is mostly painted
+  // timber and bronze, so a coat-tinted outline would read as belonging to the
+  // two crewmen rather than to the piece.
+  mFinishFigure(g, { tint: M.carriage.line });
 
   // ---- Baked contact shadows (underneath everything) ---------------------
   // A long shadow under the whole piece, plus tighter pools under each wheel
