@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cossacks: Line of Fire</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <canvas id="game"></canvas>
+
+    <div id="hud-top" class="hud hidden">
+      <div class="army-badge" id="badge-player">
+        <span class="dot dot-blue"></span>
+        <span id="hud-player-nation">Russia</span>
+        <span id="hud-player-count">0</span>
+      </div>
+      <div id="hud-center">
+        <span id="hud-timer">0:00</span>
+        <button id="btn-pause" title="Pause (P)">&#10074;&#10074;</button>
+        <button id="btn-speed" title="Toggle speed">1&times;</button>
+      </div>
+      <div class="army-badge" id="badge-enemy">
+        <span id="hud-enemy-count">0</span>
+        <span id="hud-enemy-nation">Sweden</span>
+        <span class="dot dot-red"></span>
+      </div>
+    </div>
+
+    <div id="panel" class="hud hidden">
+      <div id="sel-info">No troops selected</div>
+      <div id="formation-buttons">
+        <button data-formation="line" title="Line — wide firing front (L)">Line</button>
+        <button data-formation="column" title="Column — fast march (C)">Column</button>
+        <button data-formation="square" title="Square — repels cavalry (B)">Square</button>
+        <button id="btn-halt" title="Halt (H)">Halt</button>
+      </div>
+    </div>
+
+    <canvas id="minimap" class="hidden" width="220" height="132"></canvas>
+
+    <div id="hint-bar" class="hud hidden">
+      Drag: select &nbsp;&bull;&nbsp; Right-click: move / attack &nbsp;&bull;&nbsp;
+      WASD / edge: pan &nbsp;&bull;&nbsp; Wheel: zoom &nbsp;&bull;&nbsp;
+      Ctrl+1&ndash;9: group &nbsp;&bull;&nbsp; F: select all
+    </div>
+
+    <div id="overlay-start" class="overlay">
+      <div class="menu-card">
+        <h1>Cossacks<span class="subtitle">Line of Fire</span></h1>
+        <p class="tagline">Massed battles of the early 1700s &mdash; in your browser.</p>
+
+        <div class="menu-row">
+          <label>Your nation
+            <select id="sel-player-nation"></select>
+          </label>
+          <label>Enemy nation
+            <select id="sel-enemy-nation"></select>
+          </label>
+        </div>
+
+        <div class="menu-row">
+          <label class="wide">Battle size
+            <div id="size-buttons"></div>
+          </label>
+        </div>
+
+        <div class="menu-row">
+          <label class="wide">Enemy strength
+            <div id="strength-buttons"></div>
+          </label>
+        </div>
+
+        <button id="btn-start">To Battle!</button>
+
+        <div class="how-to">
+          <h3>How to fight</h3>
+          <ul>
+            <li><b>Drag</b> a box to select troops, <b>right-click</b> to march or attack.</li>
+            <li>Musketeers halt and volley when the enemy is in range. Reloading takes time!</li>
+            <li><b>Pikemen</b> shred cavalry. <b>Hussars</b> charge hardest at full gallop.</li>
+            <li>Cannon fire arcs over the field and doesn't care whose side you're on.</li>
+            <li>Break the enemy's morale &mdash; routed soldiers flee the field.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div id="overlay-end" class="overlay hidden">
+      <div class="menu-card">
+        <h1 id="end-title">Victory</h1>
+        <p id="end-verdict" class="tagline"></p>
+        <div id="end-stats"></div>
+        <button id="btn-again">New Battle</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

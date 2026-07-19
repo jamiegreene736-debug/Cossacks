@@ -1,0 +1,9 @@
+{
+  "name": "cossacks-line-of-fire",
+  "version": "1.0.0",
+  "description": "Browser RTS: massed 1700s battles inspired by Cossacks: European Wars",
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 8000"
+  }
+}
