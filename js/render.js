@@ -2,14 +2,20 @@
 // corpse-decal offscreen canvases, camera transform, effects, minimap.
 
 import { WORLD, NATIONS, BUILDING_TYPES } from './config.js';
+import { buildTerrain, drawTerrain, drawTree, buildMinimapTerrain } from './gfx/terrain.js';
+import { drawSoldier, INF_W, INF_H, INF_AX, INF_AY } from './gfx/infantry.js';
+import { setDecalCtx, buildDecalStamps, paintDecal } from './gfx/decals.js';
 
-const SCALE = 3; // sprite atlas oversampling
+const SCALE = 4; // sprite atlas oversampling — 4 keeps figures crisp at 2.4x zoom
+
+// Reserved side colours. These appear nowhere else in the world, so side
+// identity survives even a mirror matchup (England vs England).
+const SIDE_RIM = ['#3E78B8', '#B8483E'];
 
 export const camera = { x: 660, y: WORLD.h / 2, zoom: 0.9 };
 
 let canvas, ctx, mmCanvas, mmCtx;
 let cw = 0, ch = 0, dpr = 1;
-let terrainCanvas = null;
 let decalCanvas = null, decalCtx = null;
 let mmTerrain = null;
 let sprites = null; // sprites[side][type] = {frames: [dir][frame], w,h,ax,ay}
@@ -65,14 +71,13 @@ export function startBattle(world) {
   decalCanvas.width = WORLD.w;
   decalCanvas.height = WORLD.h;
   decalCtx = decalCanvas.getContext('2d');
+  setDecalCtx(decalCtx);
+  buildDecalStamps(world);
   sprites = [
-    buildNationSprites(world.sides[0].nation),
-    buildNationSprites(world.sides[1].nation),
+    buildNationSprites(world.sides[0].nation, 0),
+    buildNationSprites(world.sides[1].nation, 1),
   ];
-  mmTerrain = document.createElement('canvas');
-  mmTerrain.width = mmCanvas.width;
-  mmTerrain.height = mmCanvas.height;
-  mmTerrain.getContext('2d').drawImage(terrainCanvas, 0, 0, mmCanvas.width, mmCanvas.height);
+  mmTerrain = buildMinimapTerrain(mmCanvas.width, mmCanvas.height);
   const townCenter = world.buildings.find(building => building.side === 0 && building.type === 'town_center');
   camera.x = townCenter?.x || 660;
   camera.y = townCenter?.y || WORLD.h / 2;
@@ -80,74 +85,6 @@ export function startBattle(world) {
   clampCamera();
 }
 
-// ---------- Terrain ----------
-
-function rnd(a, b) { return a + Math.random() * (b - a); }
-
-function buildTerrain() {
-  terrainCanvas = document.createElement('canvas');
-  terrainCanvas.width = WORLD.w / 2;
-  terrainCanvas.height = WORLD.h / 2;
-  const g = terrainCanvas.getContext('2d');
-  g.scale(0.5, 0.5);
-
-  const grad = g.createLinearGradient(0, 0, 0, WORLD.h);
-  grad.addColorStop(0, '#66854b');
-  grad.addColorStop(0.5, '#6f8f50');
-  grad.addColorStop(1, '#5f7c45');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, WORLD.w, WORLD.h);
-
-  // Soft tonal patches
-  for (let i = 0; i < 70; i++) {
-    g.fillStyle = `rgba(40, 55, 25, ${rnd(0.04, 0.09)})`;
-    g.beginPath();
-    g.ellipse(rnd(0, WORLD.w), rnd(0, WORLD.h), rnd(80, 320), rnd(50, 180), rnd(0, 3), 0, 7);
-    g.fill();
-  }
-  for (let i = 0; i < 40; i++) {
-    g.fillStyle = `rgba(200, 210, 140, ${rnd(0.03, 0.07)})`;
-    g.beginPath();
-    g.ellipse(rnd(0, WORLD.w), rnd(0, WORLD.h), rnd(60, 220), rnd(40, 120), rnd(0, 3), 0, 7);
-    g.fill();
-  }
-  // Grass specks
-  for (let i = 0; i < 2600; i++) {
-    const shade = Math.random() < 0.5 ? 'rgba(35,50,22,0.35)' : 'rgba(190,205,130,0.3)';
-    g.fillStyle = shade;
-    g.fillRect(rnd(0, WORLD.w), rnd(0, WORLD.h), rnd(2, 4), 2);
-  }
-  // A rutted country road across the field
-  g.strokeStyle = 'rgba(120, 100, 60, 0.35)';
-  g.lineWidth = 26;
-  g.beginPath();
-  g.moveTo(0, WORLD.h * 0.42);
-  g.bezierCurveTo(WORLD.w * 0.3, WORLD.h * 0.36, WORLD.w * 0.6, WORLD.h * 0.5, WORLD.w, WORLD.h * 0.46);
-  g.stroke();
-
-  // Tree lines along the north and south edges
-  for (let i = 0; i < 150; i++) {
-    const top = Math.random() < 0.5;
-    const x = rnd(0, WORLD.w);
-    const y = top ? rnd(20, 140) : rnd(WORLD.h - 140, WORLD.h - 20);
-    drawTree(g, x, y, rnd(9, 16));
-  }
-  // Scattered copses and bushes
-  for (let i = 0; i < 26; i++) {
-    const x = rnd(100, WORLD.w - 100);
-    const y = Math.random() < 0.5 ? rnd(180, 620) : rnd(WORLD.h - 620, WORLD.h - 180);
-    drawTree(g, x, y, rnd(4, 8));
-  }
-}
-
-function drawTree(g, x, y, r) {
-  g.fillStyle = 'rgba(0,0,0,0.18)';
-  g.beginPath(); g.ellipse(x + r * 0.3, y + r * 0.5, r, r * 0.4, 0, 0, 7); g.fill();
-  g.fillStyle = '#31502c';
-  g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
-  g.fillStyle = '#41653a';
-  g.beginPath(); g.arc(x - r * 0.25, y - r * 0.3, r * 0.62, 0, 7); g.fill();
-}
 
 // ---------- Sprite atlases ----------
 
@@ -170,69 +107,6 @@ function mirror(c) {
   return m;
 }
 
-function drawSoldier(g, nat, pose, legPhase, weapon) {
-  const coat = nat.coat, trim = nat.trim, skin = nat.skin;
-  // shadow
-  g.fillStyle = 'rgba(0,0,0,0.22)';
-  g.beginPath(); g.ellipse(8, 17.6, 5, 1.7, 0, 0, 7); g.fill();
-  // legs
-  g.fillStyle = '#2b261e';
-  if (legPhase === 1) {
-    g.fillRect(5.9, 12.5, 1.4, 4.6);
-    g.fillRect(9.5, 12.5, 1.4, 4.1);
-  } else if (legPhase === 2) {
-    g.fillRect(6.7, 12.5, 1.4, 4.1);
-    g.fillRect(8.7, 12.5, 1.4, 4.6);
-  } else {
-    g.fillRect(6.5, 12.5, 1.4, 4.5);
-    g.fillRect(8.9, 12.5, 1.4, 4.5);
-  }
-  // coat
-  g.fillStyle = coat;
-  g.fillRect(5.7, 6.4, 5.1, 6.8);
-  g.fillRect(5.3, 11.5, 5.9, 1.7); // skirt flare
-  // trim: cuffs + facing stripe
-  g.fillStyle = trim;
-  g.fillRect(9.9, 6.8, 0.9, 3.2);
-  g.fillRect(5.7, 6.4, 0.7, 1.1);
-  // crossbelt
-  g.strokeStyle = 'rgba(235,230,215,0.9)';
-  g.lineWidth = 0.8;
-  g.beginPath(); g.moveTo(6.3, 7.4); g.lineTo(10.2, 12.2); g.stroke();
-  // head + tricorn
-  g.fillStyle = skin;
-  g.beginPath(); g.arc(8.3, 4.7, 2.05, 0, 7); g.fill();
-  g.fillStyle = '#241e14';
-  g.fillRect(5.9, 3, 5, 1.4);
-  g.fillRect(6.3, 2.2, 1.2, 1);
-  g.fillRect(9.3, 2.2, 1.2, 1);
-  // weapon
-  if (weapon === 'musk') {
-    if (pose === 'fire') {
-      g.strokeStyle = '#4a3823'; g.lineWidth = 1.2;
-      g.beginPath(); g.moveTo(9.2, 8.4); g.lineTo(13.2, 8.1); g.stroke();
-      g.strokeStyle = '#8d939b'; g.lineWidth = 0.9;
-      g.beginPath(); g.moveTo(13, 8.1); g.lineTo(15.9, 7.9); g.stroke();
-      g.fillStyle = skin; g.fillRect(10.2, 7.7, 1.3, 1.3); // forward hand
-    } else {
-      g.strokeStyle = '#4a3823'; g.lineWidth = 1.2;
-      g.beginPath(); g.moveTo(10.4, 13.6); g.lineTo(12.6, 6.8); g.stroke();
-      g.strokeStyle = '#8d939b'; g.lineWidth = 0.9;
-      g.beginPath(); g.moveTo(12.6, 6.8); g.lineTo(13.5, 4.2); g.stroke();
-    }
-  } else if (weapon === 'pike') {
-    g.strokeStyle = '#5d4b32'; g.lineWidth = 1;
-    if (pose === 'attack') {
-      g.beginPath(); g.moveTo(7.5, 10.8); g.lineTo(16.8, 9.6); g.stroke();
-      g.strokeStyle = '#b9bec6'; g.lineWidth = 1.2;
-      g.beginPath(); g.moveTo(16.5, 9.6); g.lineTo(18.6, 9.35); g.stroke();
-    } else {
-      g.beginPath(); g.moveTo(11.2, 15); g.lineTo(11.2, 0.8); g.stroke();
-      g.strokeStyle = '#b9bec6'; g.lineWidth = 1.2;
-      g.beginPath(); g.moveTo(11.2, 1.2); g.lineTo(11.2, -0.8); g.stroke();
-    }
-  }
-}
 
 function drawWorker(g, nat, pose, legPhase) {
   g.fillStyle = 'rgba(0,0,0,0.22)';
@@ -345,18 +219,19 @@ function drawCannon(g, nat, pose) {
   }
 }
 
-function buildNationSprites(nationKey) {
-  const nat = NATIONS[nationKey];
+function buildNationSprites(nationKey, side = 0) {
+  // The painters read an optional `rim` (side colour) and `headgear` off nat.
+  const nat = { ...NATIONS[nationKey], rim: SIDE_RIM[side] };
   const out = {};
 
   const defs = {
     villager: { w: 18, h: 20, ax: 8, ay: 17.6, frames: [
       ['idle', 0], ['idle', 1], ['idle', 2], ['work', 0],
     ], painter: (g, pose, leg) => drawWorker(g, nat, pose, leg) },
-    musk: { w: 18, h: 20, ax: 8, ay: 17.6, frames: [
+    musk: { w: INF_W, h: INF_H, ax: INF_AX, ay: INF_AY, frames: [
       ['idle', 0], ['idle', 1], ['idle', 2], ['fire', 0],
     ], painter: (g, pose, leg) => drawSoldier(g, nat, pose, leg, 'musk') },
-    pike: { w: 20, h: 20, ax: 8, ay: 17.6, frames: [
+    pike: { w: INF_W, h: INF_H, ax: INF_AX, ay: INF_AY, frames: [
       ['idle', 0], ['idle', 1], ['idle', 2], ['attack', 0],
     ], painter: (g, pose, leg) => drawSoldier(g, nat, pose, leg, 'pike') },
     cav: { w: 23, h: 20, ax: 11, ay: 17.7, frames: [
@@ -382,48 +257,6 @@ function buildNationSprites(nationKey) {
 
 // ---------- Decals ----------
 
-function paintDecal(d) {
-  const g = decalCtx;
-  g.save();
-  g.translate(d.x, d.y);
-  if (d.kind === 'crater') {
-    g.fillStyle = 'rgba(45, 35, 22, 0.55)';
-    g.beginPath(); g.ellipse(0, 0, 7, 4.5, 0, 0, 7); g.fill();
-    g.fillStyle = 'rgba(25, 20, 12, 0.5)';
-    g.beginPath(); g.ellipse(0, 0, 3.5, 2.2, 0, 0, 7); g.fill();
-  } else if (d.kind === 'ruin') {
-    g.fillStyle = 'rgba(43, 34, 24, 0.7)';
-    g.beginPath(); g.ellipse(0, 5, 42, 21, 0, 0, 7); g.fill();
-    g.fillStyle = '#625545';
-    for (let i = 0; i < 14; i++) {
-      const x = Math.sin(i * 19.7) * 34;
-      const y = Math.cos(i * 12.3) * 15;
-      g.fillRect(x - 4, y - 3, 8, 6);
-    }
-  } else if (d.kind === 'wreck') {
-    g.rotate(d.ang);
-    g.strokeStyle = '#4a3826'; g.lineWidth = 1.5;
-    g.beginPath(); g.arc(0, 0, 4, 0, 7); g.stroke();
-    g.beginPath(); g.moveTo(-6, 3); g.lineTo(7, -2); g.stroke();
-    g.strokeStyle = '#3c4148'; g.lineWidth = 2.5;
-    g.beginPath(); g.moveTo(-4, -3); g.lineTo(8, 2); g.stroke();
-  } else {
-    g.rotate(d.ang + (Math.random() < 0.5 ? Math.PI / 2 : -Math.PI / 2));
-    g.fillStyle = 'rgba(70, 30, 22, 0.4)';
-    g.beginPath(); g.ellipse(1, 1, 5.5, 3.5, 0, 0, 7); g.fill();
-    g.fillStyle = d.coat;
-    g.globalAlpha = 0.85;
-    g.fillRect(-4, -1.8, 7, 3.6);
-    g.globalAlpha = 1;
-    g.fillStyle = '#d9a877';
-    g.beginPath(); g.arc(4.3, 0, 1.6, 0, 7); g.fill();
-    if (d.type === 'cav') {
-      g.fillStyle = 'rgba(60, 42, 26, 0.9)';
-      g.beginPath(); g.ellipse(-6, 1, 6, 3, 0.3, 0, 7); g.fill();
-    }
-  }
-  g.restore();
-}
 
 // ---------- Settlement art ----------
 
@@ -682,7 +515,7 @@ export function draw(world, alpha, dragRect, placementPreview = null) {
   ctx.setTransform(dpr * z, 0, 0, dpr * z,
     dpr * (cw / 2 - camera.x * z), dpr * (ch / 2 - camera.y * z));
 
-  ctx.drawImage(terrainCanvas, 0, 0, WORLD.w, WORLD.h);
+  drawTerrain(ctx, camera.x, camera.y, cw / z, ch / z);
 
   // flush new decals, then blit
   if (world.pendingDecals.length) {
