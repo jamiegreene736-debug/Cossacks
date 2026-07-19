@@ -13,6 +13,10 @@ function freshResources() {
   return Object.fromEntries(RESOURCE_KEYS.map(key => [key, STARTING_RESOURCES[key] || 0]));
 }
 
+function freshRates() {
+  return Object.fromEntries(RESOURCE_KEYS.map(key => [key, 0]));
+}
+
 export function formatCost(cost = {}) {
   return RESOURCE_KEYS.filter(key => cost[key]).map(key => `${cost[key]} ${key}`).join(' · ');
 }
@@ -90,6 +94,9 @@ export function initializeEconomy(world) {
   for (const sideIndex of [0, 1]) {
     const side = world.sides[sideIndex];
     side.resources = freshResources();
+    side.incomePerHour = freshRates();
+    side.incomeSample = freshRates();
+    side.incomeSampleTime = 0;
     side.population = 0;
     side.queuedPopulation = 0;
     side.popCap = BUILDING_TYPES.town_center.popCap;
@@ -272,21 +279,122 @@ function completeBuilding(world, building) {
   world.events.push({ side: building.side, text: `${def.label} completed.`, tone: 'good' });
 }
 
-function gatherBoost(world, worker, resourceType) {
-  let mult = 1;
-  const nation = NATIONS[world.sides[worker.side].nation];
-  const target = worker.job && findTarget(world, worker.job.targetId);
-  if (resourceType === 'food' && target?.type === 'farm') mult *= nation.mults.farmRate || 1;
+function resourceMatchesBoost(boost, resourceType) {
+  return boost === resourceType
+    || (boost === 'mineral' && (resourceType === 'gold' || resourceType === 'stone'));
+}
+
+function findGatherBoostBuilding(world, worker, resourceType, x, y) {
   for (const building of world.buildings) {
     if (!building.alive || !building.complete || building.side !== worker.side) continue;
-    if (Math.hypot(worker.x - building.x, worker.y - building.y) > 280) continue;
-    const boost = BUILDING_TYPES[building.type].boost;
-    if (boost === resourceType || (boost === 'mineral' && (resourceType === 'gold' || resourceType === 'stone'))) {
-      mult *= 1.2;
-      break;
-    }
+    if (Math.hypot(x - building.x, y - building.y) > 280) continue;
+    if (resourceMatchesBoost(BUILDING_TYPES[building.type].boost, resourceType)) return building;
   }
-  return mult;
+  return null;
+}
+
+function gatherProfileAt(world, worker, target, x, y) {
+  const resourceType = target?.resourceType;
+  if (!resourceType || !GATHER_RATES[resourceType]) return null;
+  let mult = 1;
+  const nation = NATIONS[world.sides[worker.side].nation];
+  if (resourceType === 'food' && target?.type === 'farm') mult *= nation.mults.farmRate || 1;
+  const beforeBuildingBoost = mult;
+  const boostBuilding = findGatherBoostBuilding(world, worker, resourceType, x, y);
+  if (boostBuilding) mult *= 1.2;
+  const basePerHour = GATHER_RATES[resourceType] * 3600;
+  return {
+    resourceType,
+    target,
+    worker,
+    multiplier: mult,
+    basePerHour,
+    projectedPerHour: basePerHour * mult,
+    boostBuildingId: boostBuilding?.id ?? null,
+    boostBonusPerHour: boostBuilding ? basePerHour * beforeBuildingBoost * 0.2 : 0,
+  };
+}
+
+function gatherProfile(world, worker) {
+  if (worker.job?.kind !== 'gather') return null;
+  const target = findTarget(world, worker.job.targetId);
+  if (!target?.alive || target.amount <= 0) return null;
+  if (target.entityKind === 'building' && (!target.complete || target.side !== worker.side)) return null;
+  return gatherProfileAt(world, worker, target, target.x, target.y);
+}
+
+export function getEconomyBreakdown(world, sideIndex, workers = null) {
+  const result = Object.fromEntries(RESOURCE_KEYS.map(resourceType => [resourceType, {
+    resourceType,
+    workers: 0,
+    projectedPerHour: 0,
+    actualPerHour: world.sides[sideIndex].incomePerHour?.[resourceType] || 0,
+    boostPerHour: 0,
+  }]));
+  const candidates = workers || world.units.filter(unit => unit.alive
+    && unit.side === sideIndex && unit.type === 'villager');
+  for (const worker of candidates) {
+    if (!worker.alive || worker.side !== sideIndex || worker.type !== 'villager') continue;
+    const profile = gatherProfile(world, worker);
+    if (!profile) continue;
+    const row = result[profile.resourceType];
+    row.workers++;
+    row.projectedPerHour += profile.projectedPerHour;
+    row.boostPerHour += profile.boostBonusPerHour;
+  }
+  return result;
+}
+
+export function getGatherAssignmentStats(world, workers, target) {
+  if (!target?.alive || target.amount <= 0 || !target.resourceType) return null;
+  const validWorkers = workers.filter(worker => worker.alive && worker.type === 'villager'
+    && (target.entityKind !== 'building' || target.side === worker.side));
+  let projectedPerHour = 0;
+  for (const worker of validWorkers) {
+    const profile = gatherProfileAt(world, worker, target, target.x, target.y);
+    projectedPerHour += profile?.projectedPerHour || 0;
+  }
+  return {
+    resourceType: target.resourceType,
+    workers: validWorkers.length,
+    projectedPerHour,
+    amount: target.amount,
+    assignedWorkers: world.units.filter(worker => worker.alive && worker.type === 'villager'
+      && worker.job?.kind === 'gather' && worker.job.targetId === target.id).length,
+  };
+}
+
+export function getBuildingEconomyStats(world, building) {
+  if (!building?.alive || !building.complete) return null;
+  const def = BUILDING_TYPES[building.type];
+  if (!building.resourceType && !def.boost) return null;
+  const resources = Object.fromEntries(RESOURCE_KEYS.map(resourceType => [resourceType, {
+    resourceType, workers: 0, projectedPerHour: 0, bonusPerHour: 0,
+  }]));
+  for (const worker of world.units) {
+    if (!worker.alive || worker.side !== building.side || worker.type !== 'villager') continue;
+    const profile = gatherProfile(world, worker);
+    if (!profile) continue;
+    const belongsToFarm = building.resourceType && profile.target.id === building.id;
+    const boostedHere = def.boost && profile.boostBuildingId === building.id;
+    if (!belongsToFarm && !boostedHere) continue;
+    const row = resources[profile.resourceType];
+    row.workers++;
+    row.projectedPerHour += profile.projectedPerHour;
+    row.bonusPerHour += boostedHere ? profile.boostBonusPerHour : 0;
+  }
+  const activeResources = RESOURCE_KEYS.map(key => resources[key])
+    .filter(row => row.workers > 0 || row.resourceType === building.resourceType
+      || resourceMatchesBoost(def.boost, row.resourceType));
+  return {
+    buildingId: building.id,
+    radius: def.boost ? 280 : 0,
+    remaining: building.resourceType ? building.amount : null,
+    resources: activeResources,
+    workers: activeResources.reduce((sum, row) => sum + row.workers, 0),
+    projectedPerHour: activeResources.reduce((sum, row) => sum + row.projectedPerHour, 0),
+    bonusPerHour: activeResources.reduce((sum, row) => sum + row.bonusPerHour, 0),
+  };
 }
 
 function updateWorkers(world, dt) {
@@ -327,15 +435,31 @@ function updateWorkers(world, dt) {
         worker.job = null;
         continue;
       }
-      const gathered = Math.min(target.amount, GATHER_RATES[resourceType] * gatherBoost(world, worker, resourceType) * dt);
+      const profile = gatherProfileAt(world, worker, target, worker.x, worker.y);
+      const gathered = Math.min(target.amount, GATHER_RATES[resourceType] * (profile?.multiplier || 1) * dt);
       target.amount -= gathered;
-      world.sides[worker.side].resources[resourceType] += gathered;
+      const side = world.sides[worker.side];
+      side.resources[resourceType] += gathered;
+      side.incomeSample[resourceType] += gathered;
       if (target.amount <= 0) {
         target.amount = 0;
         if (target.entityKind === 'resource') target.alive = false;
         worker.job = null;
       }
     }
+  }
+}
+
+function updateIncomeTelemetry(world, dt) {
+  for (const side of world.sides) {
+    side.incomeSampleTime += dt;
+    if (side.incomeSampleTime < 0.75) continue;
+    for (const resourceType of RESOURCE_KEYS) {
+      side.incomePerHour[resourceType] = side.incomeSample[resourceType]
+        / side.incomeSampleTime * 3600;
+      side.incomeSample[resourceType] = 0;
+    }
+    side.incomeSampleTime = 0;
   }
 }
 
@@ -394,6 +518,7 @@ function updateTowers(world, dt) {
 
 export function stepEconomy(world, dt) {
   updateWorkers(world, dt);
+  updateIncomeTelemetry(world, dt);
   updateQueues(world, dt);
   updateTowers(world, dt);
 }

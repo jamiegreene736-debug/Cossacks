@@ -6,7 +6,7 @@ import { buildTerrain, drawTerrain, drawTree, buildMinimapTerrain } from './gfx/
 import { drawSoldier, INF_W, INF_H, INF_AX, INF_AY } from './gfx/infantry.js';
 import { setDecalCtx, buildDecalStamps, paintDecal } from './gfx/decals.js';
 import { setEffectsCamera, setEffectsView, buildParticleTextures,
-         drawEffects } from './gfx/effects.js';
+         resetEffectFields, drawSmokeUnder, drawEffects } from './gfx/effects.js';
 import { getTerrainCanvas } from './gfx/terrain.js';
 import { getTrampleCanvas } from './gfx/decals.js';
 import { drawCavalry, drawCannon } from './gfx/mounted.js';
@@ -93,6 +93,7 @@ export function startBattle(world) {
   setDecalCtx(decalCtx);
   buildDecalStamps(world);
   buildParticleTextures();
+  resetEffectFields();   // so a rematch does not inherit last game's powder
   sprites = [
     buildNationSprites(world.sides[0].nation, 0),
     buildNationSprites(world.sides[1].nation, 1),
@@ -189,7 +190,46 @@ function buildNationSprites(nationKey, side = 0) {
 
 const sortBuf = [];
 
-export function draw(world, alpha, dragRect, placementPreview = null) {
+function drawResourceHover(target, zoom) {
+  if (!target?.alive || target.amount <= 0) return;
+  const colors = {
+    food: ['#f4d58a', '#9fc96b'],
+    wood: ['#d7e8a8', '#6fa455'],
+    gold: ['#fff0a4', '#d0a23d'],
+    stone: ['#e5e7df', '#9fa8a6'],
+  };
+  const [light, base] = colors[target.resourceType] || colors.food;
+  const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.006);
+  const rx = target.radius + 11 + pulse * 3;
+  const ry = Math.max(15, target.radius * 0.48 + pulse * 2);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(16, 20, 12, 0.72)';
+  ctx.lineWidth = 5 / zoom;
+  ctx.beginPath();
+  ctx.ellipse(target.x, target.y + target.radius * 0.28, rx, ry, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = light;
+  ctx.lineWidth = 2 / zoom;
+  ctx.setLineDash([8 / zoom, 5 / zoom]);
+  ctx.lineDashOffset = -performance.now() * 0.012 / zoom;
+  ctx.beginPath();
+  ctx.ellipse(target.x, target.y + target.radius * 0.28, rx, ry, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = base;
+  ctx.strokeStyle = light;
+  ctx.lineWidth = 1.2 / zoom;
+  ctx.beginPath();
+  ctx.moveTo(target.x, target.y - target.radius - 13 - pulse * 3);
+  ctx.lineTo(target.x - 6, target.y - target.radius - 22 - pulse * 3);
+  ctx.lineTo(target.x + 6, target.y - target.radius - 22 - pulse * 3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+export function draw(world, alpha, dragRect, placementPreview = null, resourceHover = null) {
   // margins outside the world
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#1a2112';
@@ -208,6 +248,13 @@ export function draw(world, alpha, dragRect, placementPreview = null) {
   }
   ctx.drawImage(decalCanvas, 0, 0);
 
+  // Ground-hugging powder bank, blood and debris litter, and projectile ground
+  // shadows. These lie flat on the board, so they are drawn before anything
+  // that stands on it and can therefore be occluded by it. Also runs the
+  // effect-field decay and drift for the frame; cost is independent of unit
+  // count.
+  drawSmokeUnder(ctx, world, alpha);
+
   for (const resource of world.resources) {
     if (resource.alive && resource.amount > 0) drawResourceNode(resource);
   }
@@ -215,6 +262,8 @@ export function draw(world, alpha, dragRect, placementPreview = null) {
   const visibleBuildings = world.buildings.filter(building => building.alive)
     .sort((a, b) => a.y - b.y);
   for (const building of visibleBuildings) drawBuilding(building, world);
+
+  drawResourceHover(resourceHover, z);
 
   if (placementPreview) {
     const def = BUILDING_TYPES[placementPreview.type];
@@ -283,4 +332,3 @@ export function draw(world, alpha, dragRect, placementPreview = null) {
 }
 
 let mmT = 0;
-

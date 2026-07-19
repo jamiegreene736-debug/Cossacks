@@ -20,11 +20,11 @@
       </div>
 
       <div id="resource-bar">
-        <span class="resource food" title="Food"><i>●</i><b id="res-food">0</b><small>Food</small></span>
-        <span class="resource wood" title="Wood"><i>▥</i><b id="res-wood">0</b><small>Wood</small></span>
-        <span class="resource gold" title="Gold"><i>◆</i><b id="res-gold">0</b><small>Gold</small></span>
-        <span class="resource stone" title="Stone"><i>⬟</i><b id="res-stone">0</b><small>Stone</small></span>
-        <span class="resource population" title="Population"><i>♟</i><b id="res-pop">0 / 40</b><small>Population</small></span>
+        <span class="resource food" title="Food"><i>●</i><small>Food</small><b id="res-food">0</b><em id="rate-food">+0/hr</em></span>
+        <span class="resource wood" title="Wood"><i>▥</i><small>Wood</small><b id="res-wood">0</b><em id="rate-wood">+0/hr</em></span>
+        <span class="resource gold" title="Gold"><i>◆</i><small>Gold</small><b id="res-gold">0</b><em id="rate-gold">+0/hr</em></span>
+        <span class="resource stone" title="Stone"><i>⬟</i><small>Stone</small><b id="res-stone">0</b><em id="rate-stone">+0/hr</em></span>
+        <span class="resource population" title="Population"><i>♟</i><small>Population</small><b id="res-pop">0 / 40</b><em>Housing limit</em></span>
       </div>
 
       <div class="nation-badge enemy-badge">
@@ -67,9 +67,10 @@
     <canvas id="minimap" class="hidden" width="244" height="150"></canvas>
 
     <div id="hint-bar" class="hud hidden">
-      Drag to select · Right-click to move, gather, build, attack, or set a rally point · WASD to pan · Wheel to zoom
+      Select villagers, then hover and click a resource to gather · Right-click to move, attack, build, or rally · WASD to pan · Wheel to zoom
     </div>
     <div id="placement-tip" class="hud hidden">Move to place · Click to build · Shift-click for another · Right-click or Esc to cancel</div>
+    <div id="resource-tooltip" class="hidden" role="status" aria-live="polite"></div>
     <div id="toast" class="hidden"></div>
 
     <div id="overlay-start" class="overlay">
@@ -94,7 +95,7 @@
           <h3>The road to empire</h3>
           <ol>
             <li><b>Begin with only a Town Center.</b> Your first villager emerges automatically.</li>
-            <li><b>Gather food, wood, gold, and stone</b> by selecting villagers and right-clicking deposits.</li>
+            <li><b>Gather food, wood, gold, and stone</b> by selecting villagers, then hovering and clicking a deposit.</li>
             <li><b>Build farms and a settlement,</b> then raise barracks, stables, and an artillery foundry.</li>
             <li><b>Train in batches of 5 or 20.</b> The population ceiling is 1,200, built for enormous battles.</li>
             <li><b>Destroy the rival Town Center</b> while defending your own.</li>

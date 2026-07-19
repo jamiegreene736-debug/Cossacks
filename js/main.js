@@ -6,7 +6,7 @@ import { Commander } from './ai.js';
 import { initRender, startBattle as startBattleRender, draw,
          camera, clampCamera } from './render.js';
 import { initInput, updateInput, getSelection, getDragRect,
-         getPlacementPreview, beginPlacement, setFormation,
+         getPlacementPreview, getResourceHoverTarget, beginPlacement, setFormation,
          haltSelection, resetForBattle } from './input.js';
 import { placeBuilding, queueUnit, validatePlacement } from './economy.js';
 import * as ui from './ui.js';
@@ -27,6 +27,7 @@ initInput(canvas, minimap, () => world, {
   onValidatePlacement: (type, x, y) => validatePlacement(world, 0, type, x, y),
   onPlaceBuilding: (type, x, y, workers) => placeBuilding(world, 0, type, x, y, workers),
   onPlacement: placement => ui.setPlacement(Boolean(placement), placement ? BUILDING_TYPES[placement.type].label : ''),
+  onResourceHover: hover => ui.setResourceHover(world, hover),
   onToast: ui.toast,
 });
 
@@ -105,7 +106,7 @@ function frame(now) {
   }
 
   updateInput(dt);
-  draw(world, Math.min(1, acc / SIM_STEP), getDragRect(), getPlacementPreview());
+  draw(world, Math.min(1, acc / SIM_STEP), getDragRect(), getPlacementPreview(), getResourceHoverTarget());
   ui.updateHud(world, getSelection());
 
   if (world.state === 'ended' && !endShown) {
@@ -124,7 +125,7 @@ window.__tick = (secs = 1) => {
     step(world, SIM_STEP);
     commander.update(SIM_STEP);
   }
-  draw(world, 1, null, getPlacementPreview());
+  draw(world, 1, null, getPlacementPreview(), getResourceHoverTarget());
   ui.updateHud(world, getSelection());
   if (world.state === 'ended' && !endShown) {
     endShown = true;
@@ -138,7 +139,7 @@ window.__view = (x, y, zoom) => {
   if (!world) return 'no battle running';
   camera.x = x; camera.y = y; camera.zoom = zoom;
   clampCamera();
-  draw(world, 1, null, getPlacementPreview());
+  draw(world, 1, null, getPlacementPreview(), getResourceHoverTarget());
   return `cam=(${camera.x | 0},${camera.y | 0}) zoom=${camera.zoom}`;
 };
 
@@ -154,5 +155,6 @@ window.__state = () => {
     population: world.sides.map(side => side.population),
     buildings: world.sides.map((_, side) => world.buildings.filter(b => b.alive && b.side === side).length),
     resources: world.sides.map(side => Object.fromEntries(Object.entries(side.resources).map(([key, value]) => [key, Math.floor(value)]))),
+    incomePerHour: world.sides.map(side => Object.fromEntries(Object.entries(side.incomePerHour).map(([key, value]) => [key, Math.round(value)]))),
   };
 };

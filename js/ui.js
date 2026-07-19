@@ -1,7 +1,10 @@
 // DOM HUD and contextual command cards.
 
 import { NATIONS, UNIT_TYPES, BUILDING_TYPES, RESOURCE_KEYS } from './config.js';
-import { formatCost } from './economy.js';
+import {
+  formatCost, getBuildingEconomyStats, getEconomyBreakdown,
+  getGatherAssignmentStats,
+} from './economy.js';
 
 const $ = id => document.getElementById(id);
 let callbacks = {};
@@ -88,6 +91,13 @@ function countMilitary(world, side) {
   return world.units.filter(unit => unit.alive && unit.side === side && unit.type !== 'villager').length;
 }
 
+function formatHourly(value) {
+  const amount = Math.max(0, Number(value) || 0);
+  if (amount >= 1_000_000) return `+${(amount / 1_000_000).toFixed(amount >= 10_000_000 ? 0 : 1)}m/hr`;
+  if (amount >= 1000) return `+${(amount / 1000).toFixed(amount >= 100_000 ? 0 : 1)}k/hr`;
+  return `+${Math.round(amount).toLocaleString()}/hr`;
+}
+
 let hudTime = 0;
 export function updateHud(world, selection) {
   const now = performance.now();
@@ -96,7 +106,12 @@ export function updateHud(world, selection) {
   const player = world.sides[0];
   $('hud-player-count').textContent = countMilitary(world, 0).toLocaleString();
   $('hud-enemy-count').textContent = countMilitary(world, 1).toLocaleString();
-  for (const key of RESOURCE_KEYS) $(`res-${key}`).textContent = Math.floor(player.resources[key]).toLocaleString();
+  for (const key of RESOURCE_KEYS) {
+    $(`res-${key}`).textContent = Math.floor(player.resources[key]).toLocaleString();
+    const rate = $(`rate-${key}`);
+    rate.textContent = formatHourly(player.incomePerHour[key]);
+    rate.classList.toggle('active', player.incomePerHour[key] > 0.5);
+  }
   $('res-pop').textContent = `${player.population + player.queuedPopulation} / ${player.popCap}`;
   const seconds = world.time | 0;
   $('hud-timer').textContent = `${(seconds / 60) | 0}:${String(seconds % 60).padStart(2, '0')}`;
@@ -109,7 +124,10 @@ export function updateHud(world, selection) {
   const key = selection.map(entity => `${entity.entityKind || 'unit'}:${entity.id}:${entity.queue?.length || 0}:${entity.complete ?? ''}`)
     .join('|');
   // Queue progress and construction percentages still refresh periodically.
-  if (key !== lastSelectionKey || selection.some(entity => entity.queue?.length || entity.complete === false || entity.type === 'villager')) {
+  const hasLiveEconomy = selection.length === 0 || selection.some(entity => entity.type === 'villager'
+    || (entity.entityKind === 'building' && (entity.resourceType || BUILDING_TYPES[entity.type].boost)));
+  if (key !== lastSelectionKey || hasLiveEconomy
+    || selection.some(entity => entity.queue?.length || entity.complete === false)) {
     renderSelection(world, selection);
     lastSelectionKey = key;
   }
@@ -127,21 +145,35 @@ function renderSelection(world, selection) {
   formations.classList.add('hidden');
 
   if (selection.length === 0) {
+    const economy = getEconomyBreakdown(world, 0);
+    const gathering = RESOURCE_KEYS.reduce((sum, resourceType) => sum + economy[resourceType].workers, 0);
     title.textContent = 'Settlement';
-    info.textContent = 'Select a villager or building for commands.';
-    detail.textContent = `${world.units.filter(unit => unit.alive && unit.side === 0 && unit.type === 'villager').length} villagers · ${world.buildings.filter(b => b.alive && b.side === 0).length} buildings`;
-    context.textContent = 'Select a unit or building';
+    info.textContent = 'Live economy overview';
+    detail.textContent = `${world.units.filter(unit => unit.alive && unit.side === 0 && unit.type === 'villager').length} villagers · ${gathering} assigned to resources · ${world.buildings.filter(b => b.alive && b.side === 0).length} buildings`;
+    context.textContent = 'Assigned output / actual income per hour';
+    for (const resourceType of RESOURCE_KEYS) addEconomyMetric(grid, economy[resourceType], { showActual: true });
     return;
   }
 
   const building = selection.length === 1 && selection[0].entityKind === 'building' ? selection[0] : null;
   if (building) {
     const def = BUILDING_TYPES[building.type];
+    const economy = getBuildingEconomyStats(world, building);
     title.textContent = def.label;
     info.textContent = building.complete ? def.description : `Under construction — ${Math.floor(building.progress * 100)}%`;
-    detail.textContent = `${Math.ceil(building.hp).toLocaleString()} / ${building.maxHp.toLocaleString()} integrity`;
-    context.textContent = building.complete ? 'Production' : 'Construction';
+    detail.textContent = economy
+      ? `${Math.ceil(building.hp).toLocaleString()} / ${building.maxHp.toLocaleString()} integrity · ${economy.workers} assigned · ${formatHourly(economy.projectedPerHour)} projected`
+      : `${Math.ceil(building.hp).toLocaleString()} / ${building.maxHp.toLocaleString()} integrity`;
+    context.textContent = building.complete ? (economy ? 'Building output per hour' : 'Production') : 'Construction';
     if (!building.complete) return;
+    if (economy) {
+      for (const row of economy.resources) {
+        addEconomyMetric(grid, row, {
+          bonusPerHour: row.bonusPerHour,
+          remaining: building.resourceType === row.resourceType ? economy.remaining : null,
+        });
+      }
+    }
     for (const unitType of def.trains || []) {
       const counts = unitType === 'villager' ? [1, 5] : [1, 5, 20];
       for (const count of counts) addCommand(grid, {
@@ -165,11 +197,19 @@ function renderSelection(world, selection) {
   const units = selection.filter(entity => entity.entityKind !== 'building');
   const villagers = units.filter(unit => unit.type === 'villager');
   if (villagers.length) {
+    const economy = getEconomyBreakdown(world, 0, villagers);
+    const gatherers = RESOURCE_KEYS.reduce((sum, resourceType) => sum + economy[resourceType].workers, 0);
+    const projected = RESOURCE_KEYS.reduce((sum, resourceType) => sum + economy[resourceType].projectedPerHour, 0);
     title.textContent = `${villagers.length} Villager${villagers.length === 1 ? '' : 's'}`;
     const working = villagers.filter(worker => worker.job).length;
     info.textContent = `${working} working · ${villagers.length - working} ready for orders`;
-    detail.textContent = 'Right-click a deposit to gather or a foundation to construct.';
-    context.textContent = 'Construct a building';
+    detail.textContent = gatherers
+      ? `${gatherers} gathering · ${formatHourly(projected)} assigned · hover and click another resource to redirect`
+      : 'Hover a mine, forest, food source, or farm and click to start gathering.';
+    context.textContent = gatherers ? 'Selected output and construction' : 'Construct a building';
+    for (const resourceType of RESOURCE_KEYS) {
+      if (economy[resourceType].workers) addEconomyMetric(grid, economy[resourceType]);
+    }
     for (const [type, def] of Object.entries(BUILDING_TYPES)) {
       if (type === 'town_center') continue;
       addCommand(grid, {
@@ -187,6 +227,33 @@ function renderSelection(world, selection) {
   detail.textContent = 'Right-click ground to march or an enemy to focus the attack.';
   context.textContent = 'Formation and movement';
   formations.classList.remove('hidden');
+}
+
+function addEconomyMetric(grid, row, options = {}) {
+  const labels = { food: 'Food', wood: 'Wood', gold: 'Gold', stone: 'Stone' };
+  const icons = { food: '●', wood: '▥', gold: '◆', stone: '⬟' };
+  const card = document.createElement('div');
+  card.className = `economy-card ${row.resourceType}`;
+  const icon = document.createElement('span');
+  icon.className = 'economy-icon';
+  icon.textContent = icons[row.resourceType];
+  const copy = document.createElement('span');
+  copy.className = 'economy-copy';
+  const label = document.createElement('b');
+  label.textContent = labels[row.resourceType];
+  const output = document.createElement('strong');
+  output.textContent = formatHourly(row.projectedPerHour);
+  const meta = document.createElement('small');
+  const parts = [`${row.workers} worker${row.workers === 1 ? '' : 's'}`];
+  if (options.showActual) parts.push(`${formatHourly(row.actualPerHour)} actual`);
+  if (options.bonusPerHour > 0.5) parts.push(`${formatHourly(options.bonusPerHour)} building bonus`);
+  if (options.remaining !== null && options.remaining !== undefined) {
+    parts.push(`${Math.floor(options.remaining).toLocaleString()} remaining`);
+  }
+  meta.textContent = parts.join(' · ');
+  copy.append(label, output, meta);
+  card.append(icon, copy);
+  grid.appendChild(card);
 }
 
 function addCommand(grid, command) {
@@ -235,7 +302,7 @@ function updateObjective(world) {
     body = 'Your Town Center is preparing a free first villager.';
   } else if (!hasFarm && !villagers.some(worker => worker.job?.kind === 'gather')) {
     titleText = 'Stock the storehouses';
-    body = 'Select your villager and right-click berries or a forest to gather.';
+    body = 'Select your villager, hover berries or a forest, then click to gather.';
   } else if (!hasFarm) {
     titleText = 'Secure the food supply';
     body = 'Select a villager, choose Farm, then place and construct it.';
@@ -256,6 +323,30 @@ function updateObjective(world) {
 export function setPlacement(active, label = '') {
   $('placement-tip').classList.toggle('hidden', !active);
   if (active && label) $('placement-tip').textContent = `${label}: move to place · Click to build · Shift-click for another · Right-click or Esc to cancel`;
+}
+
+export function setResourceHover(world, hover) {
+  const tooltip = $('resource-tooltip');
+  const stats = world && hover?.target
+    ? getGatherAssignmentStats(world, hover.workers || [], hover.target) : null;
+  if (!stats || stats.workers === 0) {
+    tooltip.classList.add('hidden');
+    return;
+  }
+  const labels = {
+    food: hover.target.type === 'farm' ? 'Farm' : 'Food source',
+    wood: 'Forest', gold: 'Gold deposit', stone: 'Stone deposit',
+  };
+  const title = document.createElement('strong');
+  title.textContent = labels[stats.resourceType] || 'Resource';
+  const output = document.createElement('span');
+  output.textContent = `${stats.workers} selected · ${formatHourly(stats.projectedPerHour)}`;
+  const instruction = document.createElement('small');
+  instruction.textContent = `Click to gather · ${Math.floor(stats.amount).toLocaleString()} remaining · ${stats.assignedWorkers} already assigned`;
+  tooltip.replaceChildren(title, output, instruction);
+  tooltip.style.left = `${Math.max(12, Math.min(window.innerWidth - 294, hover.screenX + 18))}px`;
+  tooltip.style.top = `${Math.max(90, Math.min(window.innerHeight - 235, hover.screenY + 18))}px`;
+  tooltip.classList.remove('hidden');
 }
 
 export function toast(message, tone = '') {
