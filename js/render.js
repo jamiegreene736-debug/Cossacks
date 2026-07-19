@@ -5,6 +5,14 @@ import { WORLD, NATIONS, BUILDING_TYPES } from './config.js';
 import { buildTerrain, drawTerrain, drawTree, buildMinimapTerrain } from './gfx/terrain.js';
 import { drawSoldier, INF_W, INF_H, INF_AX, INF_AY } from './gfx/infantry.js';
 import { setDecalCtx, buildDecalStamps, paintDecal } from './gfx/decals.js';
+import { setEffectsCamera, setEffectsView, buildParticleTextures,
+         drawEffects } from './gfx/effects.js';
+import { getTerrainCanvas } from './gfx/terrain.js';
+import { getTrampleCanvas } from './gfx/decals.js';
+import { setCompositeRefs, setCompositeView, setCompositeTrampleLayer,
+         buildCompositeTextures, buildMinimapBase, drawLightingPass,
+         drawSelection, drawHealthBars, drawOrderFlags, drawDragRect,
+         drawMinimap } from './gfx/composite.js';
 
 const SCALE = 4; // sprite atlas oversampling — 4 keeps figures crisp at 2.4x zoom
 
@@ -27,6 +35,8 @@ export function initRender(gameCanvas, minimapCanvas) {
   ctx = canvas.getContext('2d');
   mmCanvas = minimapCanvas;
   mmCtx = mmCanvas.getContext('2d');
+  setEffectsCamera(camera);
+  setCompositeRefs({ camera, mmCanvas, mmCtx });
   resize();
   window.addEventListener('resize', resize);
 }
@@ -39,6 +49,9 @@ function resize() {
   canvas.height = Math.round(ch * dpr);
   canvas.style.width = cw + 'px';
   canvas.style.height = ch + 'px';
+  setEffectsView(cw, ch);
+  setCompositeView(cw, ch, dpr);
+  buildCompositeTextures();   // grade/vignette gradients are viewport-sized
 }
 
 export function getViewSize() { return { w: cw, h: ch }; }
@@ -73,11 +86,15 @@ export function startBattle(world) {
   decalCtx = decalCanvas.getContext('2d');
   setDecalCtx(decalCtx);
   buildDecalStamps(world);
+  buildParticleTextures();
   sprites = [
     buildNationSprites(world.sides[0].nation, 0),
     buildNationSprites(world.sides[1].nation, 1),
   ];
   mmTerrain = buildMinimapTerrain(mmCanvas.width, mmCanvas.height);
+  setCompositeRefs({ mmTerrain, terrainCanvas: getTerrainCanvas() });
+  setCompositeTrampleLayer(getTrampleCanvas());
+  buildMinimapBase();
   const townCenter = world.buildings.find(building => building.side === 0 && building.type === 'town_center');
   camera.x = townCenter?.x || 660;
   camera.y = townCenter?.y || WORLD.h / 2;
@@ -547,19 +564,7 @@ export function draw(world, alpha, dragRect, placementPreview = null) {
     }
   }
 
-  // order flags
-  for (const f of world.flags) {
-    const a = Math.max(0, f.life / f.max);
-    ctx.globalAlpha = a * 0.9;
-    ctx.strokeStyle = '#e8e2d0';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(f.x, f.y - 14); ctx.stroke();
-    ctx.fillStyle = f.attack ? '#c03a30' : f.gather ? '#d1b454' : f.rally ? '#5aa3dc' : '#ece4cb';
-    ctx.beginPath();
-    ctx.moveTo(f.x, f.y - 14); ctx.lineTo(f.x + 9, f.y - 11.5); ctx.lineTo(f.x, f.y - 9);
-    ctx.closePath(); ctx.fill();
-    ctx.globalAlpha = 1;
-  }
+  drawOrderFlags(ctx, world);
 
   // visible-unit list, sorted by y for correct overlap
   const viewHalfW = cw / 2 / z + 40, viewHalfH = ch / 2 / z + 40;
@@ -571,17 +576,8 @@ export function draw(world, alpha, dragRect, placementPreview = null) {
   }
   sortBuf.sort((a, b) => a.y - b.y);
 
-  // selection rings under sprites
-  ctx.strokeStyle = 'rgba(140, 235, 140, 0.85)';
-  ctx.lineWidth = 1.2 / z;
-  for (const u of sortBuf) {
-    if (!u.selected) continue;
-    const ix = u.px + (u.x - u.px) * alpha;
-    const iy = u.py + (u.y - u.py) * alpha;
-    ctx.beginPath();
-    ctx.ellipse(ix, iy, u.radius + 3.5, (u.radius + 3.5) * 0.5, 0, 0, 7);
-    ctx.stroke();
-  }
+  // Selection rings go under the sprites so they read as marks on the ground.
+  drawSelection(ctx, sortBuf, alpha);
 
   for (const u of sortBuf) {
     const sp = sprites[u.side][u.type];
@@ -601,82 +597,23 @@ export function draw(world, alpha, dragRect, placementPreview = null) {
     }
     const dir = u.facing >= 0 ? 0 : 1;
     ctx.drawImage(sp.frames[dir][frame], ix - sp.ax, iy - sp.ay, sp.w, sp.h);
-    if (u.selected && u.hp < u.maxHp) {
-      const w = 10, frac = u.hp / u.maxHp;
-      ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fillRect(ix - w / 2, iy - sp.ay - 3, w, 1.6);
-      ctx.fillStyle = frac > 0.5 ? '#7fd67f' : frac > 0.25 ? '#e0c34a' : '#d65f4a';
-      ctx.fillRect(ix - w / 2, iy - sp.ay - 3, w * frac, 1.6);
-    }
   }
 
-  // cannonballs
-  for (const p of world.projectiles) {
-    const ix = p.px + (p.x - p.px) * alpha;
-    const iy = p.py + (p.y - p.py) * alpha;
-    const k = Math.min(1, p.t / p.dur);
-    const gx = p.sx + (p.tx - p.sx) * k;
-    const gy = p.sy + (p.ty - p.sy) * k;
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.beginPath(); ctx.ellipse(gx, gy, 2.2, 1.1, 0, 0, 7); ctx.fill();
-    ctx.fillStyle = p.kind === 'tower' ? '#b6ad92' : '#1c1c1e';
-    ctx.beginPath(); ctx.arc(ix, iy, 2.3, 0, 7); ctx.fill();
-  }
+  // Projectiles, powder smoke, muzzle flash, blood and dust.
+  drawEffects(ctx, world, alpha);
 
-  // particles
-  for (const p of world.particles) {
-    const lifeFrac = 1 - p.life / p.max;
-    if (p.kind === 'smoke') {
-      ctx.fillStyle = `rgba(225, 223, 212, ${0.35 * lifeFrac})`;
-      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, 7); ctx.fill();
-    } else {
-      ctx.fillStyle = `rgba(255, 214, 110, ${0.9 * lifeFrac})`;
-      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, 7); ctx.fill();
-    }
-  }
+  // Health bars sit above the sprites, still in world space.
+  drawHealthBars(ctx, sortBuf, alpha, sprites);
 
-  // selection drag box (screen space)
+  // Atmosphere: aerial haze, warm/cool grade, vignette. Screen space, and its
+  // cost does not scale with the number of units.
+  drawLightingPass(ctx, cw, ch, dpr);
+
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  if (dragRect) {
-    ctx.strokeStyle = 'rgba(140, 235, 140, 0.9)';
-    ctx.fillStyle = 'rgba(140, 235, 140, 0.08)';
-    ctx.lineWidth = 1;
-    ctx.fillRect(dragRect.x, dragRect.y, dragRect.w, dragRect.h);
-    ctx.strokeRect(dragRect.x, dragRect.y, dragRect.w, dragRect.h);
-  }
+  drawDragRect(ctx, dragRect);
 
   drawMinimap(world);
 }
 
 let mmT = 0;
 
-function drawMinimap(world) {
-  const now = performance.now();
-  if (now - mmT < 90) return;
-  mmT = now;
-  const w = mmCanvas.width, h = mmCanvas.height;
-  mmCtx.drawImage(mmTerrain, 0, 0);
-  const sx = w / WORLD.w, sy = h / WORLD.h;
-  for (const resource of world.resources) {
-    if (!resource.alive || resource.amount <= 0) continue;
-    mmCtx.fillStyle = resource.type === 'wood' ? '#315d35'
-      : resource.type === 'food' ? '#9a7337'
-        : resource.type === 'gold' ? '#d2ad42' : '#94968f';
-    mmCtx.fillRect(resource.x * sx - 1.5, resource.y * sy - 1.5, 3, 3);
-  }
-  for (const building of world.buildings) {
-    if (!building.alive) continue;
-    mmCtx.fillStyle = building.side === 0 ? '#72b8f2' : '#f07868';
-    const size = building.type === 'town_center' ? 5 : 3;
-    mmCtx.fillRect(building.x * sx - size / 2, building.y * sy - size / 2, size, size);
-  }
-  for (const u of world.units) {
-    if (!u.alive) continue;
-    mmCtx.fillStyle = u.side === 0 ? '#63b0ff' : '#ff6a5e';
-    mmCtx.fillRect(u.x * sx - 0.75, u.y * sy - 0.75, 1.5, 1.5);
-  }
-  mmCtx.strokeStyle = 'rgba(255,255,255,0.85)';
-  mmCtx.lineWidth = 1;
-  const vw = cw / camera.zoom * sx, vh = ch / camera.zoom * sy;
-  mmCtx.strokeRect(camera.x * sx - vw / 2, camera.y * sy - vh / 2, vw, vh);
-}
