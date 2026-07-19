@@ -8,9 +8,42 @@ import { BUILDING_TYPES, NATIONS } from '../config.js';
 
 let ctx = null;
 let camera = { zoom: 1 };
+const BD_ENGLISH_TOWN_CENTER_URL = new URL(
+  '../../assets/buildings/english-town-center.png', import.meta.url,
+).href;
+let bdEnglishTownCenterImage = null;
+let bdBuildingAssetPromise = null;
+
 function setBuildingRefs(refs) {
   if (refs.ctx) ctx = refs.ctx;
   if (refs.camera) camera = refs.camera;
+}
+
+/**
+ * Load production building art before a battle is created. A load failure is
+ * deliberately non-fatal: the procedural painter remains a complete fallback
+ * for offline copies with a missing asset, while the checked-in sprite is the
+ * normal rendering path.
+ */
+function preloadBuildingAssets() {
+  if (bdEnglishTownCenterImage) return Promise.resolve(true);
+  if (bdBuildingAssetPromise) return bdBuildingAssetPromise;
+  if (typeof Image === 'undefined') return Promise.resolve(false);
+
+  bdBuildingAssetPromise = new Promise(resolve => {
+    const image = new Image();
+    image.decoding = 'async';
+    image.onload = () => {
+      bdEnglishTownCenterImage = image;
+      resolve(true);
+    };
+    image.onerror = () => {
+      console.warn('British Town Center art could not be loaded; using the procedural fallback.');
+      resolve(false);
+    };
+    image.src = BD_ENGLISH_TOWN_CENTER_URL;
+  });
+  return bdBuildingAssetPromise;
 }
 
 /* ============================================================================
@@ -3338,12 +3371,81 @@ const BD_PAINTERS = {
   stable: bdPaintStable, foundry: bdPaintFoundry, tower: bdPaintTower,
 };
 
+/**
+ * The British civic hall uses a pre-rendered source rather than the general
+ * material-lining pipeline. Passing this art through bdPassLining or the hard
+ * gallery-light bands would destroy the sub-pixel masonry, glazing and carved
+ * stone detail that the production asset supplies.
+ */
+function bdEnglishTownCenterSprite(def, damageStage, seed) {
+  const imageH = 252;
+  const imageW = imageH * bdEnglishTownCenterImage.naturalWidth
+    / bdEnglishTownCenterImage.naturalHeight;
+  const bottom = def.h * 0.48 + 8;
+  const left = -imageW / 2;
+  const top = bottom - imageH;
+  const box = [left - 24, top - 18, imageW + 48, imageH + 78];
+
+  return bdBake(box, BD_SCALE, function (g) {
+    g.drawImage(bdEnglishTownCenterImage, left, top, imageW, imageH);
+
+    // Damage remains cached with the sprite. Low-opacity soot and hairline
+    // fractures preserve the pre-rendered material response instead of
+    // replacing it with the procedural renderer's broad damage marks.
+    if (damageStage) {
+      const rr = bdRnd(seed ^ (damageStage * 0x45d9f3b));
+      g.save();
+      g.globalCompositeOperation = 'source-atop';
+      for (let i = 0; i < damageStage + 1; i++) {
+        const x = rr(left + imageW * 0.14, left + imageW * 0.86);
+        const y = rr(top + imageH * 0.22, top + imageH * 0.76);
+        const radius = rr(9, 18) * damageStage;
+        const soot = g.createRadialGradient(x, y, 0, x, y, radius);
+        soot.addColorStop(0, `rgba(27,24,26,${damageStage === 1 ? 0.24 : 0.42})`);
+        soot.addColorStop(1, 'rgba(27,24,26,0)');
+        g.fillStyle = soot;
+        g.beginPath();
+        g.ellipse(x, y, radius, radius * 0.62, rr(-0.35, 0.35), 0, BD_TAU);
+        g.fill();
+      }
+      g.strokeStyle = bdShadow(damageStage === 1 ? 0.48 : 0.68);
+      g.lineWidth = damageStage === 1 ? 0.48 : 0.72;
+      for (let i = 0; i < damageStage * 3; i++) {
+        let x = rr(left + imageW * 0.20, left + imageW * 0.80);
+        let y = rr(top + imageH * 0.48, top + imageH * 0.82);
+        g.beginPath();
+        g.moveTo(x, y);
+        for (let k = 0; k < 4; k++) {
+          x += rr(-3.2, 3.2);
+          y += rr(2.0, 5.0);
+          g.lineTo(x, y);
+        }
+        g.stroke();
+      }
+      g.restore();
+    }
+
+    // A soft, cool ambient bed ties the isolated sprite to the terrain. It is
+    // destination-over so no shadow pigment can muddy the stone stair or base.
+    g.save();
+    g.globalCompositeOperation = 'destination-over';
+    bdContactShadow(g, 0, bottom - 8, def.w * 0.58, def.h * 0.54, 0.74);
+    g.restore();
+  });
+}
+
 function bdBuildingSprite(type, def, side, nation, natRoof, variant, damageStage, animFrame) {
   const frame = type === 'mill' ? (animFrame || 0) : 0;
   const damage = damageStage || 0;
   const key = type + '|' + side + '|' + nation + '|' + variant + '|' + damage + '|' + frame;
   let s = bdBuildingCache.get(key);
   if (s) return s;
+
+  if (type === 'town_center' && nation === 'england' && bdEnglishTownCenterImage) {
+    s = bdEnglishTownCenterSprite(def, damage, variant * 7919 + side * 104729 + 1);
+    bdBuildingCache.set(key, s);
+    return s;
+  }
 
   const painter = BD_PAINTERS[type];
   if (!painter) return null;
@@ -3850,7 +3952,7 @@ function drawBuilding(building, world) {
    ------------------------------------------------------------------------ */
 
 export {
-  setBuildingRefs, bdResetCaches,
+  setBuildingRefs, preloadBuildingAssets, bdResetCaches,
   drawResourceNode, drawFarm, drawFoundation,
   drawCompleteBuilding, drawBuilding,
 };
