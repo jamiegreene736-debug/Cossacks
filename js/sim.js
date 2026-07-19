@@ -6,9 +6,10 @@
 //  - Target acquisition is staggered (each unit re-scans every ~0.5s)
 //  - Collision separation only runs for units that moved this tick
 
-import { WORLD, NATIONS, UNIT_TYPES, ARMY_SIZES,
+import { WORLD, NATIONS, UNIT_TYPES,
          PIKE_VS_CAV, CAV_CHARGE_BONUS, SQUARE_VS_CAV } from './config.js';
 import { sfx } from './audio.js';
+import { initializeEconomy, stepEconomy, onUnitKilled, onBuildingDestroyed } from './economy.js';
 
 const PARTICLE_CAP = 900;
 
@@ -98,6 +99,7 @@ function makeUnit(side, nationKey, type, x, y) {
     facing: side === 0 ? 1 : -1,
     moving: false, animT: Math.random() * 10, fireT: 0,
     fleeYDrift: 0,
+    job: null,
   };
 }
 
@@ -106,87 +108,35 @@ function clampPos(u) {
   if (u.y < 30) u.y = 30; else if (u.y > WORLD.h - 30) u.y = WORLD.h - 30;
 }
 
-// ---------- Deployment ----------
-
-function deployBlock(units, cx, cy, dir, ranks, sAcross, sDeep) {
-  if (units.length === 0) return 0;
-  const files = Math.ceil(units.length / ranks);
-  for (let i = 0; i < units.length; i++) {
-    const rank = (i / files) | 0;
-    const file = i % files;
-    const u = units[i];
-    u.x = cx - dir * rank * sDeep;
-    u.y = cy + (file - (files - 1) / 2) * sAcross;
-    clampPos(u);
-    u.px = u.x; u.py = u.y;
-  }
-  return files * sAcross; // block height
-}
-
-function deploySide(world, side, nationKey, comp) {
-  const dir = side === 0 ? 1 : -1;
-  const frontX = side === 0 ? 1150 : WORLD.w - 1150;
-  const cy = WORLD.h / 2;
-  const groups = { musk: [], pike: [], cav: [], gun: [] };
-
-  for (const type of Object.keys(groups)) {
-    for (let i = 0; i < comp[type]; i++) {
-      const u = makeUnit(side, nationKey, type, 0, 0);
-      groups[type].push(u);
-      world.units.push(u);
-    }
-  }
-
-  const mRanks = Math.min(7, Math.max(3, Math.ceil(comp.musk / 140)));
-  const muskH = deployBlock(groups.musk, frontX, cy, dir, mRanks, 12, 15);
-
-  const pRanks = Math.min(5, Math.max(2, Math.ceil(comp.pike / 90)));
-  deployBlock(groups.pike, frontX - dir * 130, cy, dir, pRanks, 12, 15);
-
-  const half = Math.ceil(groups.cav.length / 2);
-  const wingOff = Math.min(muskH / 2 + 200, WORLD.h / 2 - 220);
-  deployBlock(groups.cav.slice(0, half), frontX - dir * 50, cy - wingOff, dir, 4, 15, 18);
-  deployBlock(groups.cav.slice(half), frontX - dir * 50, cy + wingOff, dir, 4, 15, 18);
-
-  const guns = groups.gun;
-  const gSpacing = Math.min(110, Math.max(48, muskH / Math.max(1, guns.length)));
-  for (let i = 0; i < guns.length; i++) {
-    const u = guns[i];
-    u.x = frontX - dir * 190;
-    u.y = cy + (i - (guns.length - 1) / 2) * gSpacing;
-    clampPos(u);
-    u.px = u.x; u.py = u.y;
-  }
-}
-
 export function createWorld(opts) {
-  const size = ARMY_SIZES.find(s => s.id === opts.sizeId) || ARMY_SIZES[0];
-  const mult = opts.enemyMult || 1;
-  const enemyComp = {};
-  for (const [type, n] of Object.entries(size.comp)) {
-    enemyComp[type] = Math.round(n * mult);
-  }
   const world = {
     units: [], active: [],
     projectiles: [], particles: [], flags: [],
     pendingDecals: [],
     time: 0, state: 'running', winner: -1, checkT: 1,
     speed: 1, killLog: {},
-    sizeId: size.id,
     sepGrid: new FlatGrid(20, WORLD.w, WORLD.h),
     tgtGrid: new FlatGrid(64, WORLD.w, WORLD.h),
     sides: [
-      { nation: opts.playerNation, start: 0, alive: 0, kills: 0, losses: 0 },
-      { nation: opts.enemyNation, start: 0, alive: 0, kills: 0, losses: 0 },
+      { nation: opts.playerNation || 'england', start: 0, alive: 0, kills: 0, losses: 0 },
+      { nation: opts.enemyNation || 'ottoman', start: 0, alive: 0, kills: 0, losses: 0 },
     ],
   };
-  deploySide(world, 0, opts.playerNation, size.comp);
-  deploySide(world, 1, opts.enemyNation, enemyComp);
-  for (const s of world.sides) {
-    s.start = world.units.filter(u => u.side === world.sides.indexOf(s)).length;
-    s.alive = s.start;
-  }
+  world.spawnUnit = (side, type, x, y) => spawnUnit(world, side, type, x, y);
+  world.damage = (victim, amount, attacker) => damage(world, victim, amount, attacker);
+  initializeEconomy(world);
   return world;
+}
+
+export function spawnUnit(world, sideIndex, type, x, y) {
+  const side = world.sides[sideIndex];
+  const unit = makeUnit(sideIndex, side.nation, type, x, y);
+  world.units.push(unit);
+  side.alive++;
+  side.start++;
+  side.unitsCreated++;
+  side.population += UNIT_TYPES[type].pop || 1;
+  return unit;
 }
 
 // ---------- Particles ----------
@@ -236,24 +186,38 @@ function maybeBreak(world, u) {
 export function damage(world, victim, amount, attacker) {
   if (!victim.alive) return;
   victim.hp -= amount;
-  victim.morale -= amount * 0.25;
-  if (victim.morale < 0) victim.morale = 0;
+  if (victim.entityKind !== 'building') {
+    victim.morale -= amount * 0.25;
+    if (victim.morale < 0) victim.morale = 0;
+  }
   if (victim.hp <= 0) {
     const cause = attacker ? attacker.type : 'shell';
     world.killLog[cause] = (world.killLog[cause] || 0) + 1;
     kill(world, victim, attacker);
-  } else {
+  } else if (victim.entityKind !== 'building') {
     maybeBreak(world, victim);
   }
 }
 
-function kill(world, u) {
-  u.alive = false;
-  u.hp = 0;
-  u.state = 'dead';
-  u.selected = false;
-  const s = world.sides[u.side];
+function kill(world, entity) {
+  entity.alive = false;
+  entity.hp = 0;
+  entity.state = 'dead';
+  entity.selected = false;
+  const s = world.sides[entity.side];
+  if (entity.entityKind === 'building') {
+    onBuildingDestroyed(world, entity);
+    world.pendingDecals.push({ kind: 'ruin', x: entity.x, y: entity.y, type: entity.type });
+    world.events.push({
+      side: entity.side,
+      text: `${entity.side === 0 ? 'Your' : 'Enemy'} ${entity.type.replaceAll('_', ' ')} was destroyed.`,
+      tone: 'danger',
+    });
+    return;
+  }
+  const u = entity;
   s.alive--; s.losses++;
+  onUnitKilled(world, u);
   world.sides[1 - u.side].kills++;
   world.pendingDecals.push({
     kind: u.type === 'gun' ? 'wreck' : 'corpse',
@@ -323,7 +287,7 @@ function fireCannon(world, u, t, d) {
     tx, ty, t: 0,
     dur: Math.min(2.0, Math.max(0.5, flightD / 320)),
     arc: Math.min(90, Math.max(18, flightD * 0.16)),
-    dmg: u.dmg, splash: u.splash,
+    dmg: u.dmg, splash: u.splash, target: t,
   });
   smokePuff(world, u.x + nx * 18, u.y + ny * 18 - 5, true);
   flash(world, u.x + nx * 14, u.y + ny * 14 - 4, true);
@@ -336,6 +300,10 @@ function explodeShell(world, p) {
   smokePuff(world, p.tx + 5, p.ty - 6, false);
   flash(world, p.tx, p.ty - 2, true);
   sfx.cannon();
+  if (p.target?.alive && p.target.entityKind === 'building') {
+    const d = Math.hypot(p.target.x - p.tx, p.target.y - p.ty);
+    if (d <= p.target.radius + p.splash) damage(world, p.target, p.dmg, null);
+  }
   const active = world.active;
   world.tgtGrid.forEach(p.tx, p.ty, p.splash, (i) => {
     const v = active[i];
@@ -375,7 +343,7 @@ function updateUnit(world, u, dt) {
   if (u.target && !u.target.alive) u.target = null;
   if (u.orderTarget && !u.orderTarget.alive) u.orderTarget = null;
   u.acquireT -= dt;
-  if (u.acquireT <= 0) {
+  if (u.acquire > 0 && u.acquireT <= 0) {
     u.acquireT = 0.35 + Math.random() * 0.35;
     if (u.orderTarget) {
       u.target = u.orderTarget;
@@ -393,6 +361,15 @@ function updateUnit(world, u, dt) {
         const d = Math.sqrt(dx * dx + dy * dy);
         if (d < bestD && d <= u.acquire) { bestD = d; best = v; }
       });
+      // Buildings are few, so checking them only after the spatial unit scan
+      // remains cheap and lets idle soldiers finish an exposed settlement.
+      if (!best) {
+        for (const building of world.buildings) {
+          if (!building.alive || building.side === u.side) continue;
+          const d = Math.hypot(building.x - u.x, building.y - u.y) - building.radius;
+          if (d < bestD && d <= u.acquire) { bestD = d; best = building; }
+        }
+      }
       u.target = best;
     }
   }
@@ -510,6 +487,8 @@ export function step(world, dt) {
   world.sepGrid.build(active);
   world.tgtGrid.build(active);
 
+  stepEconomy(world, dt);
+
   for (let i = 0; i < active.length; i++) {
     const u = active[i];
     if (u.alive) updateUnit(world, u, dt);
@@ -549,7 +528,8 @@ export function step(world, dt) {
     p.x = p.sx + (p.tx - p.sx) * k;
     p.y = p.sy + (p.ty - p.sy) * k - Math.sin(Math.PI * k) * p.arc;
     if (p.t >= p.dur) {
-      explodeShell(world, p);
+      if (p.kind === 'tower') flash(world, p.tx, p.ty, false);
+      else explodeShell(world, p);
       world.projectiles.splice(i, 1);
     }
   }
@@ -572,13 +552,13 @@ export function step(world, dt) {
 
   sfx.update(dt);
 
-  // Victory check
+  // A settlement survives as long as its Town Center does. This keeps the
+  // objective legible even with hundreds of units and many outlying farms.
   world.checkT -= dt;
   if (world.checkT <= 0) {
     world.checkT = 0.5;
-    const [a, b] = world.sides;
-    const aDone = a.alive <= Math.max(2, a.start * 0.08);
-    const bDone = b.alive <= Math.max(2, b.start * 0.08);
+    const aDone = !world.buildings.some(b => b.alive && b.id === world.sides[0].townCenterId);
+    const bDone = !world.buildings.some(b => b.alive && b.id === world.sides[1].townCenterId);
     if (aDone || bDone) {
       world.state = 'ended';
       world.winner = aDone && bDone ? -2 : aDone ? 1 : 0;

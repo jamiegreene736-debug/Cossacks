@@ -3,96 +3,113 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cossacks: Line of Fire</title>
+  <meta name="description" content="Build an 18th-century settlement and command armies at Cossacks scale.">
+  <title>Empires: 1700</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2210%22 fill=%22%232f3825%22/><path d=%22M14 49V29l18-15 18 15v20H38V36H26v13z%22 fill=%22%23d1b454%22/></svg>">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <div id="app">
     <canvas id="game"></canvas>
 
-    <div id="hud-top" class="hud hidden">
-      <div class="army-badge" id="badge-player">
-        <span class="dot dot-blue"></span>
-        <span id="hud-player-nation">Russia</span>
-        <span id="hud-player-count">0</span>
+    <header id="hud-top" class="hud hidden">
+      <div class="nation-badge player-badge">
+        <span class="crest" id="player-crest">E</span>
+        <span><small>Your realm</small><b id="hud-player-nation">England</b></span>
+        <span class="army-total"><b id="hud-player-count">0</b><small>soldiers</small></span>
       </div>
-      <div id="hud-center">
-        <span id="hud-timer">0:00</span>
-        <button id="btn-pause" title="Pause (P)">&#10074;&#10074;</button>
-        <button id="btn-speed" title="Toggle speed">1&times;</button>
+
+      <div id="resource-bar">
+        <span class="resource food" title="Food"><i>●</i><b id="res-food">0</b><small>Food</small></span>
+        <span class="resource wood" title="Wood"><i>▥</i><b id="res-wood">0</b><small>Wood</small></span>
+        <span class="resource gold" title="Gold"><i>◆</i><b id="res-gold">0</b><small>Gold</small></span>
+        <span class="resource stone" title="Stone"><i>⬟</i><b id="res-stone">0</b><small>Stone</small></span>
+        <span class="resource population" title="Population"><i>♟</i><b id="res-pop">0 / 40</b><small>Population</small></span>
       </div>
-      <div class="army-badge" id="badge-enemy">
-        <span id="hud-enemy-count">0</span>
-        <span id="hud-enemy-nation">Sweden</span>
-        <span class="dot dot-red"></span>
+
+      <div class="nation-badge enemy-badge">
+        <span class="army-total"><b id="hud-enemy-count">0</b><small>enemy</small></span>
+        <span><small>Rival realm</small><b id="hud-enemy-nation">Ottoman Empire</b></span>
+        <span class="crest enemy" id="enemy-crest">O</span>
       </div>
+    </header>
+
+    <div id="time-controls" class="hud hidden">
+      <span id="hud-timer">0:00</span>
+      <button id="btn-pause" title="Pause (P)">&#10074;&#10074;</button>
+      <button id="btn-speed" title="Toggle game speed">1&times;</button>
     </div>
 
-    <div id="panel" class="hud hidden">
-      <div id="sel-info">No troops selected</div>
-      <div id="formation-buttons">
-        <button data-formation="line" title="Line — wide firing front (L)">Line</button>
-        <button data-formation="column" title="Column — fast march (C)">Column</button>
-        <button data-formation="square" title="Square — repels cavalry (B)">Square</button>
-        <button id="btn-halt" title="Halt (H)">Halt</button>
+    <section id="panel" class="hud hidden">
+      <div id="selection-card">
+        <small class="eyebrow">Selection</small>
+        <h2 id="sel-title">Settlement</h2>
+        <p id="sel-info">Select your Town Center to begin.</p>
+        <div id="sel-detail"></div>
+        <div id="formation-buttons" class="hidden">
+          <button data-formation="line" title="Line formation (L)">Line</button>
+          <button data-formation="column" title="Column formation (C)">Column</button>
+          <button data-formation="square" title="Square formation (B)">Square</button>
+          <button id="btn-halt" title="Halt (H)">Halt</button>
+        </div>
       </div>
-    </div>
+      <div id="command-area">
+        <div class="command-heading"><small class="eyebrow">Orders</small><span id="command-context">Select a unit or building</span></div>
+        <div id="command-grid"></div>
+      </div>
+      <div id="objective-panel">
+        <small class="eyebrow">Campaign objective</small>
+        <h3 id="objective-title">Found a settlement</h3>
+        <p id="objective-text">Your first villager is preparing inside the Town Center.</p>
+      </div>
+    </section>
 
-    <canvas id="minimap" class="hidden" width="220" height="132"></canvas>
+    <canvas id="minimap" class="hidden" width="244" height="150"></canvas>
 
     <div id="hint-bar" class="hud hidden">
-      Drag: select &nbsp;&bull;&nbsp; Right-click: move / attack &nbsp;&bull;&nbsp;
-      WASD / edge: pan &nbsp;&bull;&nbsp; Wheel: zoom &nbsp;&bull;&nbsp;
-      Ctrl+1&ndash;9: group &nbsp;&bull;&nbsp; F: select all
+      Drag to select · Right-click to move, gather, build, attack, or set a rally point · WASD to pan · Wheel to zoom
     </div>
+    <div id="placement-tip" class="hud hidden">Move to place · Click to build · Shift-click for another · Right-click or Esc to cancel</div>
+    <div id="toast" class="hidden"></div>
 
     <div id="overlay-start" class="overlay">
-      <div class="menu-card">
-        <h1>Cossacks<span class="subtitle">Line of Fire</span></h1>
-        <p class="tagline">Massed battles of the early 1700s &mdash; in your browser.</p>
+      <div class="menu-card start-card">
+        <div class="menu-kicker">An original mass-scale historical RTS</div>
+        <h1>Empires<span class="subtitle">Seventeen Hundred</span></h1>
+        <p class="tagline">From one Town Center to an army of thousands.</p>
 
-        <div class="menu-row">
-          <label>Your nation
-            <select id="sel-player-nation"></select>
-          </label>
-          <label>Enemy nation
-            <select id="sel-enemy-nation"></select>
-          </label>
+        <label class="nation-picker">Command
+          <select id="sel-player-nation"></select>
+        </label>
+        <div id="nation-preview">
+          <span class="preview-crest" id="preview-crest">E</span>
+          <div><b id="preview-name">England</b><p id="preview-blurb"></p></div>
+          <span class="versus">VS</span>
+          <div class="enemy-preview"><small>Your rival</small><b id="preview-enemy">Ottoman Empire</b></div>
         </div>
 
-        <div class="menu-row">
-          <label class="wide">Battle size
-            <div id="size-buttons"></div>
-          </label>
-        </div>
-
-        <div class="menu-row">
-          <label class="wide">Enemy strength
-            <div id="strength-buttons"></div>
-          </label>
-        </div>
-
-        <button id="btn-start">To Battle!</button>
+        <button id="btn-start">Found Your Empire</button>
 
         <div class="how-to">
-          <h3>How to fight</h3>
-          <ul>
-            <li><b>Drag</b> a box to select troops, <b>right-click</b> to march or attack.</li>
-            <li>Musketeers halt and volley when the enemy is in range. Reloading takes time!</li>
-            <li><b>Pikemen</b> shred cavalry. <b>Hussars</b> charge hardest at full gallop.</li>
-            <li>Cannon fire arcs over the field and doesn't care whose side you're on.</li>
-            <li>Break the enemy's morale &mdash; routed soldiers flee the field.</li>
-          </ul>
+          <h3>The road to empire</h3>
+          <ol>
+            <li><b>Begin with only a Town Center.</b> Your first villager emerges automatically.</li>
+            <li><b>Gather food, wood, gold, and stone</b> by selecting villagers and right-clicking deposits.</li>
+            <li><b>Build farms and a settlement,</b> then raise barracks, stables, and an artillery foundry.</li>
+            <li><b>Train in batches of 5 or 20.</b> The population ceiling is 1,200, built for enormous battles.</li>
+            <li><b>Destroy the rival Town Center</b> while defending your own.</li>
+          </ol>
         </div>
       </div>
     </div>
 
     <div id="overlay-end" class="overlay hidden">
-      <div class="menu-card">
+      <div class="menu-card end-card">
+        <div class="menu-kicker">The campaign is decided</div>
         <h1 id="end-title">Victory</h1>
         <p id="end-verdict" class="tagline"></p>
         <div id="end-stats"></div>
-        <button id="btn-again">New Battle</button>
+        <button id="btn-again">Return to Map Table</button>
       </div>
     </div>
   </div>

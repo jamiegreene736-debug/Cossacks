@@ -1,11 +1,14 @@
 // Entry point: wires up modules and runs the fixed-timestep game loop.
 
-import { SIM_STEP } from './config.js';
+import { SIM_STEP, BUILDING_TYPES } from './config.js';
 import { createWorld, step } from './sim.js';
 import { Commander } from './ai.js';
-import { initRender, startBattle as startBattleRender, draw } from './render.js';
+import { initRender, startBattle as startBattleRender, draw,
+         camera, clampCamera } from './render.js';
 import { initInput, updateInput, getSelection, getDragRect,
-         setFormation, haltSelection, resetForBattle } from './input.js';
+         getPlacementPreview, beginPlacement, setFormation,
+         haltSelection, resetForBattle } from './input.js';
+import { placeBuilding, queueUnit, validatePlacement } from './economy.js';
 import * as ui from './ui.js';
 import { sfx } from './audio.js';
 
@@ -20,6 +23,11 @@ initRender(canvas, minimap);
 initInput(canvas, minimap, () => world, {
   onPause: togglePause,
   onFormation: ui.markFormation,
+  onSelection: () => world && ui.updateHud(world, getSelection()),
+  onValidatePlacement: (type, x, y) => validatePlacement(world, 0, type, x, y),
+  onPlaceBuilding: (type, x, y, workers) => placeBuilding(world, 0, type, x, y, workers),
+  onPlacement: placement => ui.setPlacement(Boolean(placement), placement ? BUILDING_TYPES[placement.type].label : ''),
+  onToast: ui.toast,
 });
 
 ui.initMenu(startBattle);
@@ -28,6 +36,7 @@ ui.bindControls({
   onSpeed: toggleSpeed,
   onHalt: haltSelection,
   onFormation: setFormation,
+  onCommand: handleCommand,
   onAgain: () => {
     world = null;
     ui.showStartMenu();
@@ -46,6 +55,20 @@ function startBattle(opts) {
   ui.markFormation('line');
   endShown = false;
   acc = 0;
+}
+
+function handleCommand(command) {
+  if (!world) return;
+  if (command.action === 'build') {
+    beginPlacement(command.type);
+    return;
+  }
+  if (command.action === 'train') {
+    const building = getSelection().find(entity => entity.entityKind === 'building');
+    const result = queueUnit(world, building, command.type, command.count);
+    ui.toast(result.message, result.ok ? 'good' : 'danger');
+    ui.updateHud(world, getSelection());
+  }
 }
 
 function togglePause() {
@@ -82,7 +105,7 @@ function frame(now) {
   }
 
   updateInput(dt);
-  draw(world, Math.min(1, acc / SIM_STEP), getDragRect());
+  draw(world, Math.min(1, acc / SIM_STEP), getDragRect(), getPlacementPreview());
   ui.updateHud(world, getSelection());
 
   if (world.state === 'ended' && !endShown) {
@@ -101,11 +124,35 @@ window.__tick = (secs = 1) => {
     step(world, SIM_STEP);
     commander.update(SIM_STEP);
   }
-  draw(world, 1, null);
+  draw(world, 1, null, getPlacementPreview());
   ui.updateHud(world, getSelection());
   if (world.state === 'ended' && !endShown) {
     endShown = true;
     ui.showEnd(world);
   }
   return `t=${world.time.toFixed(1)}s  ${world.sides[0].alive} vs ${world.sides[1].alive}`;
+};
+
+// Console/debug hook: park the camera for reproducible screenshots.
+window.__view = (x, y, zoom) => {
+  if (!world) return 'no battle running';
+  camera.x = x; camera.y = y; camera.zoom = zoom;
+  clampCamera();
+  draw(world, 1, null, getPlacementPreview());
+  return `cam=(${camera.x | 0},${camera.y | 0}) zoom=${camera.zoom}`;
+};
+
+// Lightweight diagnostics used by the local browser checks and useful when
+// balancing large matches from DevTools.
+window.__state = () => {
+  if (!world) return null;
+  return {
+    time: world.time,
+    state: world.state,
+    winner: world.winner,
+    units: world.sides.map(side => side.alive),
+    population: world.sides.map(side => side.population),
+    buildings: world.sides.map((_, side) => world.buildings.filter(b => b.alive && b.side === side).length),
+    resources: world.sides.map(side => Object.fromEntries(Object.entries(side.resources).map(([key, value]) => [key, Math.floor(value)]))),
+  };
 };

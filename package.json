@@ -1,9 +1,11 @@
 {
-  "name": "cossacks-line-of-fire",
-  "version": "1.0.0",
-  "description": "Browser RTS: massed 1700s battles inspired by Cossacks: European Wars",
+  "name": "empires-1700",
+  "version": "2.0.0",
+  "description": "Build an 18th-century empire and command armies at Cossacks scale",
   "type": "module",
   "scripts": {
-    "start": "python3 -m http.server 8000"
+    "start": "python3 -m http.server 8000",
+    "check": "for file in js/*.js test/*.js; do node --check \"$file\"; done",
+    "test": "node --test"
   }
 }

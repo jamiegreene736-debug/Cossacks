@@ -1,74 +1,76 @@
-# Cossacks: Line of Fire
+# Empires: 1700
 
-A browser-based real-time tactics game inspired by the classic *Cossacks:
-European Wars* — massed armies of the early 1700s clashing on an open field.
-Runs on any Mac (or anything else) in Chrome. No install, no plugins, no build
-step, no dependencies: plain HTML, CSS, and JavaScript on a 2D canvas.
+A browser-based real-time strategy game about building an 18th-century
+settlement into an empire and fielding armies at *Cossacks* scale. England and
+the Ottoman Empire begin with one Town Center, grow real economies, construct
+bases, and fight for the rival seat of power.
 
-![Era](https://img.shields.io/badge/era-1700s-8f6b2f) ![Platform](https://img.shields.io/badge/platform-browser-2a4d8f)
+The game has no runtime dependencies or build step. Its terrain, settlements,
+uniforms, effects, and sound are generated procedurally with plain HTML, CSS,
+and JavaScript.
 
 ## Play
 
-Any static file server works. From the repo folder:
-
 ```sh
-# macOS has Python preinstalled:
-python3 -m http.server 8000
-# then open http://localhost:8000 in Chrome
+npm start
+# open http://localhost:8000
 ```
 
-or `npx serve` if you have Node.
+## The skirmish loop
 
-## The game
+- Begin with exactly one Town Center. A free first villager emerges so the
+  opening cannot deadlock.
+- Gather food, wood, gold, and stone from deposits across a 5,200 × 3,200 map.
+- Build houses, renewable farms, mills, lumber and mining camps, barracks,
+  stables, artillery foundries, and defensive towers.
+- Train villagers, musketeers, pikemen, hussars, and cannon individually or in
+  batches of 5 and 20.
+- Expand population capacity to 1,200 and retain the optimized formation,
+  morale, volley, cavalry-charge, artillery, and spatial-grid combat systems.
+- Destroy the enemy Town Center while protecting your own.
 
-Pick a nation, pick a battle size — up to **~3,200 soldiers** on the field at
-once — and break the enemy army.
+The Ottoman or English opponent uses the same resource costs, construction,
+population, and training queues as the player. It develops a settlement and
+then sends progressively larger, staged formations into battle.
 
-**Units**
+## Nations
 
-| Unit | Role |
+| Nation | Character |
 | --- | --- |
-| Musketeers | Line infantry. Halt and volley when the enemy is in range; long reload between volleys. |
-| Pikemen | Melee wall. Devastating against cavalry. |
-| Hussars | Fast shock cavalry. Damage scales with charge momentum — hit at full gallop. |
-| Cannon | Long-range roundshot with splash damage. Doesn't distinguish friend from foe. |
+| England | Disciplined redcoats reload 10% faster; farms produce 15% more food. |
+| Ottoman Empire | Cavalry moves 15% faster; villagers train 10% faster. |
 
-**Nations** — Russia, Sweden, France, Austria, Poland, and the Ottomans, each
-with a light flavor bonus (Swedish reload drill, Polish hussars, etc.).
+## Controls
 
-**Morale** — soldiers who see comrades fall and take heavy fire will break and
-rout. Collapse the enemy's will to fight and the battle is yours.
+- **Left-click / drag** — select a building, villager, or regiment
+- **Right-click** — move, gather, construct, attack, or set a production rally point
+- **Build card, then click terrain** — place a foundation; Shift-click places another
+- **L / C / B** — line, column, or square formation
+- **H** — halt; **P** — pause; **F** — select all military units
+- **Ctrl/Command+1–9** — set a control group; **1–9** — recall it
+- **WASD / arrows / screen edge** — pan; **wheel** — zoom; **minimap** — jump
 
-**Controls**
+## Development
 
-- **Drag** — select troops. **Shift** adds to selection. **F** — select all
-- **Right-click** — march (attack-move); right-click an enemy to focus attack
-- **L / C / B** — Line / Column / Square formation (square repels cavalry)
-- **H** — halt · **P** — pause · **Ctrl+1–9** set control group, **1–9** recall
-- **WASD / arrows / screen edge** — pan · **wheel** — zoom · **minimap** — click to jump
-
-## How it handles big armies
-
-- Fixed 30 Hz simulation with interpolated 60 fps rendering
-- Flat uniform spatial grids rebuilt per tick with counting sort (no GC churn)
-- Staggered target acquisition; collision separation only for moving units
-- All sprites pre-rendered to offscreen atlases at load; corpses and craters
-  are painted once onto a persistent decal canvas — the battlefield litter of
-  a long fight costs nothing per frame
+```sh
+npm run check  # syntax checks
+npm test       # economy, construction, production, victory, and mass-unit tests
+```
 
 ## Code layout
 
-| File | What it does |
+| File | Responsibility |
 | --- | --- |
-| `js/config.js` | Nations, unit stats, army sizes |
-| `js/sim.js` | The battle simulation: combat, morale, projectiles |
-| `js/ai.js` | Enemy commander: infantry line, artillery, cavalry flanking |
-| `js/formations.js` | Formation slot math and order assignment |
-| `js/render.js` | Canvas renderer, procedural sprites, terrain, minimap |
-| `js/input.js` | Selection, orders, camera |
-| `js/ui.js` | Menus and HUD |
-| `js/main.js` | Game loop |
+| `js/config.js` | Nations, units, buildings, costs, map and balance data |
+| `js/economy.js` | Resources, gathering, construction, queues and population |
+| `js/sim.js` | Fixed-step movement, combat, morale, projectiles and victory |
+| `js/ai.js` | Enemy settlement development, production and attack waves |
+| `js/formations.js` | Large-formation slot math and order assignment |
+| `js/render.js` | Procedural terrain, resources, architecture, units and minimap |
+| `js/input.js` | Selection, contextual orders, placement and camera controls |
+| `js/ui.js` | Menus, resource HUD, objectives and command cards |
+| `js/main.js` | Game loop and module wiring |
 
-All art and sound are generated procedurally in code — there are no asset
-files in this repo. This is an original fan-inspired project; it contains no
-assets or code from the original game.
+See [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md) for the release boundaries and
+acceptance criteria. This is an original, fan-inspired project and does not use
+assets or code from the games that inspired its base-building and battle scale.

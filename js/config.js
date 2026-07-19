@@ -1,69 +1,117 @@
-// Static game data: world size, nations, unit stats, army sizes.
+// Static game data for the 18th-century settlement skirmish.
 
-export const WORLD = { w: 4200, h: 2600 };
+export const WORLD = { w: 5200, h: 3200 };
+export const SIM_STEP = 1 / 30;
+export const MAX_POPULATION = 1200;
 
-// Playable nations of the early 18th century. Coat/trim drive sprite colors;
-// mults give each nation a light flavor bonus.
+export const RESOURCE_KEYS = ['food', 'wood', 'gold', 'stone'];
+export const STARTING_RESOURCES = { food: 240, wood: 320, gold: 120, stone: 120 };
+
 export const NATIONS = {
-  russia:  { name: 'Russia',  coat: '#3a5e35', trim: '#c03a30', skin: '#d9a877',
-             blurb: 'Hardy infantry (+15% foot HP)',
-             mults: { muskHp: 1.15, pikeHp: 1.15 } },
-  sweden:  { name: 'Sweden',  coat: '#2a4d8f', trim: '#e8c34a', skin: '#e3b68a',
-             blurb: 'Drilled volleys (-15% reload)',
-             mults: { reload: 0.85 } },
-  france:  { name: 'France',  coat: '#b9b09a', trim: '#31549e', skin: '#e3b68a',
-             blurb: 'Fierce cavalry (+20% charge damage)',
-             mults: { cavDmg: 1.2 } },
-  austria: { name: 'Austria', coat: '#cfc8b8', trim: '#a03030', skin: '#e3b68a',
-             blurb: 'Steady gunners (-15% cannon reload)',
-             mults: { gunReload: 0.85 } },
-  poland:  { name: 'Poland',  coat: '#8f2433', trim: '#e0d8c2', skin: '#e3b68a',
-             blurb: 'Winged hussars (+20% cavalry HP)',
-             mults: { cavHp: 1.2 } },
-  ottoman: { name: 'Ottomans', coat: '#963038', trim: '#3f7d6d', skin: '#c99a68',
-             blurb: 'Swift riders (+15% cavalry speed)',
-             mults: { cavSpeed: 1.15 } },
+  england: {
+    name: 'England', adjective: 'English',
+    coat: '#b33a38', trim: '#f0e7d0', skin: '#e0ad82', roof: '#536274',
+    blurb: 'Disciplined redcoats and 15% more food from farms.',
+    mults: { reload: 0.9, farmRate: 1.15 },
+  },
+  ottoman: {
+    name: 'Ottoman Empire', adjective: 'Ottoman',
+    coat: '#2f7768', trim: '#d7b64b', skin: '#c99669', roof: '#397466',
+    blurb: 'Swift cavalry and villagers train 10% faster.',
+    mults: { cavSpeed: 1.15, villagerTrain: 0.9 },
+  },
 };
 
-// Base stats per unit type. Distances in world px, times in seconds.
+// Distances are world pixels and times are seconds. Costs are deliberately
+// generous: the economy should support Cossacks-sized armies, not a 200-pop cap.
 export const UNIT_TYPES = {
+  villager: {
+    label: 'Villager', short: 'Villager', hp: 38, speed: 54, radius: 5,
+    range: 0, acquire: 0, reload: 0, dmg: 0, acc: 0,
+    meleeDmg: 2, meleeRate: 1.5, chase: 0,
+    cost: { food: 50 }, trainTime: 6, pop: 1,
+  },
   musk: {
-    label: 'Musketeers', hp: 30, speed: 46, radius: 5,
-    range: 180, acquire: 260, reload: 4.4, dmg: 10, acc: 0.38,
+    label: 'Musketeers', short: 'Musketeer', hp: 34, speed: 46, radius: 5,
+    range: 190, acquire: 275, reload: 4.2, dmg: 11, acc: 0.4,
     meleeDmg: 4, meleeRate: 1.3, chase: 0,
+    cost: { food: 28, gold: 18 }, trainTime: 3.2, pop: 1,
   },
   pike: {
-    label: 'Pikemen', hp: 46, speed: 44, radius: 5,
-    range: 0, acquire: 200, reload: 0, dmg: 0, acc: 0,
-    meleeDmg: 9, meleeRate: 1.1, chase: 150,
+    label: 'Pikemen', short: 'Pikeman', hp: 48, speed: 45, radius: 5,
+    range: 0, acquire: 210, reload: 0, dmg: 0, acc: 0,
+    meleeDmg: 10, meleeRate: 1.05, chase: 160,
+    cost: { food: 24, wood: 16 }, trainTime: 2.8, pop: 1,
   },
   cav: {
-    label: 'Hussars', hp: 62, speed: 108, radius: 7,
-    range: 0, acquire: 320, reload: 0, dmg: 0, acc: 0,
-    meleeDmg: 11, meleeRate: 0.95, chase: 240,
+    label: 'Hussars', short: 'Hussar', hp: 68, speed: 108, radius: 7,
+    range: 0, acquire: 340, reload: 0, dmg: 0, acc: 0,
+    meleeDmg: 12, meleeRate: 0.92, chase: 260,
+    cost: { food: 55, gold: 44 }, trainTime: 5.5, pop: 2,
   },
   gun: {
-    label: 'Cannon', hp: 80, speed: 26, radius: 11,
-    range: 640, minRange: 100, acquire: 700, reload: 10, dmg: 40, acc: 1,
-    meleeDmg: 2, meleeRate: 1.6, chase: 0, splash: 30,
+    label: 'Cannon', short: 'Cannon', hp: 90, speed: 27, radius: 11,
+    range: 670, minRange: 105, acquire: 730, reload: 9.5, dmg: 48, acc: 1,
+    meleeDmg: 2, meleeRate: 1.6, chase: 0, splash: 34,
+    cost: { wood: 70, gold: 105 }, trainTime: 12, pop: 5,
   },
 };
 
-// Army compositions per battle size (per side).
-export const ARMY_SIZES = [
-  { id: 'skirmish', label: 'Skirmish', note: '~400 troops',
-    comp: { musk: 120, pike: 40, cav: 32, gun: 4 } },
-  { id: 'battle', label: 'Battle', note: '~1,200 troops',
-    comp: { musk: 370, pike: 120, cav: 90, gun: 10 } },
-  { id: 'grand', label: 'Grand Battle', note: '~2,200 troops',
-    comp: { musk: 700, pike: 220, cav: 160, gun: 16 } },
-  { id: 'epic', label: 'Epic', note: '~3,200 troops',
-    comp: { musk: 1020, pike: 320, cav: 240, gun: 24 } },
-];
+export const BUILDING_TYPES = {
+  town_center: {
+    label: 'Town Center', description: 'Heart of the settlement. Trains villagers.',
+    w: 132, h: 104, radius: 70, hp: 3200, buildTime: 0,
+    cost: {}, popCap: 40, trains: ['villager'], hotkey: 'T',
+  },
+  house: {
+    label: 'House', description: '+40 population capacity.',
+    w: 62, h: 52, radius: 34, hp: 650, buildTime: 9,
+    cost: { wood: 70 }, popCap: 40, hotkey: 'H',
+  },
+  farm: {
+    label: 'Farm', description: 'Renewable food for assigned villagers.',
+    w: 90, h: 72, radius: 48, hp: 420, buildTime: 7,
+    cost: { wood: 55 }, resource: 'food', amount: 5000, hotkey: 'F',
+  },
+  mill: {
+    label: 'Mill', description: 'Boosts nearby food gathering by 20%.',
+    w: 70, h: 60, radius: 38, hp: 900, buildTime: 11,
+    cost: { wood: 120 }, boost: 'food', hotkey: 'M',
+  },
+  lumber_camp: {
+    label: 'Lumber Camp', description: 'Boosts nearby wood gathering by 20%.',
+    w: 72, h: 58, radius: 39, hp: 900, buildTime: 10,
+    cost: { wood: 105 }, boost: 'wood', hotkey: 'L',
+  },
+  mine: {
+    label: 'Mining Camp', description: 'Boosts nearby gold and stone gathering.',
+    w: 74, h: 58, radius: 40, hp: 950, buildTime: 12,
+    cost: { wood: 110, stone: 20 }, boost: 'mineral', hotkey: 'N',
+  },
+  barracks: {
+    label: 'Barracks', description: 'Trains musketeers and pikemen in large batches.',
+    w: 104, h: 76, radius: 56, hp: 1700, buildTime: 15,
+    cost: { wood: 220, stone: 40 }, trains: ['musk', 'pike'], hotkey: 'B',
+  },
+  stable: {
+    label: 'Stable', description: 'Trains fast shock cavalry.',
+    w: 112, h: 78, radius: 60, hp: 1650, buildTime: 17,
+    cost: { wood: 280, gold: 70 }, trains: ['cav'], hotkey: 'S',
+  },
+  foundry: {
+    label: 'Artillery Foundry', description: 'Builds long-range cannon.',
+    w: 116, h: 84, radius: 62, hp: 1900, buildTime: 20,
+    cost: { wood: 320, gold: 150, stone: 90 }, trains: ['gun'], hotkey: 'A',
+  },
+  tower: {
+    label: 'Watch Tower', description: 'A garrisoned defensive gun position.',
+    w: 52, h: 52, radius: 29, hp: 1400, buildTime: 14,
+    cost: { wood: 130, stone: 180 }, attack: 17, range: 330, reload: 3.2, hotkey: 'W',
+  },
+};
 
-export const SIM_STEP = 1 / 30;
+export const GATHER_RATES = { food: 8.5, wood: 7.5, gold: 5.8, stone: 5.2 };
 
-// Damage multipliers for melee matchups.
 export const PIKE_VS_CAV = 2.8;
-export const CAV_CHARGE_BONUS = 1.8;   // max extra damage multiplier at full gallop
-export const SQUARE_VS_CAV = 0.35;     // cavalry damage multiplier vs square formation
+export const CAV_CHARGE_BONUS = 1.8;
+export const SQUARE_VS_CAV = 0.35;
