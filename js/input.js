@@ -20,6 +20,8 @@ let drag = null;
 let panDrag = null;
 let mmDown = false;
 let mouseX = 0, mouseY = 0, mouseIn = false;
+let inputCanvas = null;
+let resourceHover = null;
 
 const EDGE = 26;
 const PAN_SPEED = 720;
@@ -27,6 +29,7 @@ const PAN_SPEED = 720;
 export function initInput(canvas, minimap, worldGetter, cbs) {
   getWorld = worldGetter;
   callbacks = cbs || {};
+  inputCanvas = canvas;
   canvas.addEventListener('contextmenu', event => event.preventDefault());
 
   canvas.addEventListener('mousedown', event => {
@@ -40,6 +43,8 @@ export function initInput(canvas, minimap, worldGetter, cbs) {
     if (event.button === 0) {
       if (keys.has(' ')) {
         panDrag = { sx: event.clientX, sy: event.clientY, camX: camera.x, camY: camera.y };
+      } else if (gatherAt(event.clientX, event.clientY)) {
+        return;
       } else {
         drag = { x0: event.clientX, y0: event.clientY, x1: event.clientX, y1: event.clientY };
       }
@@ -56,6 +61,7 @@ export function initInput(canvas, minimap, worldGetter, cbs) {
     mouseY = event.clientY;
     if (drag) { drag.x1 = event.clientX; drag.y1 = event.clientY; }
     if (placement) updatePlacement(event.clientX, event.clientY);
+    else updateResourceHover(event.clientX, event.clientY);
     if (panDrag) {
       camera.x = panDrag.camX - (event.clientX - panDrag.sx) / camera.zoom;
       camera.y = panDrag.camY - (event.clientY - panDrag.sy) / camera.zoom;
@@ -70,7 +76,7 @@ export function initInput(canvas, minimap, worldGetter, cbs) {
     if (event.button === 0) mmDown = false;
   });
 
-  document.addEventListener('mouseleave', () => { mouseIn = false; });
+  document.addEventListener('mouseleave', () => { mouseIn = false; clearResourceHover(); });
   document.addEventListener('mouseenter', () => { mouseIn = true; });
   window.addEventListener('mousemove', () => { mouseIn = true; }, { once: true });
 
@@ -135,6 +141,7 @@ function setSelection(entities) {
   selection = entities.filter(entity => entity.alive && entity.side === 0);
   for (const entity of selection) entity.selected = true;
   callbacks.onSelection?.(selection);
+  updateResourceHover(mouseX, mouseY);
 }
 
 export function getSelection() {
@@ -218,6 +225,48 @@ function issueOrder(screenX, screenY) {
   }
 }
 
+function hoverableResourceAt(screenX, screenY) {
+  const world = getWorld();
+  const workers = getSelection().filter(entity => entity.type === 'villager');
+  if (!world || placement || workers.length === 0) return null;
+  const point = screenToWorld(screenX, screenY);
+  const target = findResourceAt(world, point.x, point.y);
+  if (target?.entityKind === 'building' && !workers.some(worker => worker.side === target.side)) return null;
+  return target;
+}
+
+function updateResourceHover(screenX, screenY) {
+  const target = hoverableResourceAt(screenX, screenY);
+  resourceHover = target;
+  inputCanvas?.classList.toggle('cursor-gather', Boolean(target));
+  callbacks.onResourceHover?.({
+    target,
+    workers: getSelection().filter(entity => entity.type === 'villager'),
+    screenX,
+    screenY,
+  });
+}
+
+function clearResourceHover() {
+  if (!resourceHover && !inputCanvas?.classList.contains('cursor-gather')) return;
+  resourceHover = null;
+  inputCanvas?.classList.remove('cursor-gather');
+  callbacks.onResourceHover?.({ target: null, workers: [], screenX: mouseX, screenY: mouseY });
+}
+
+function gatherAt(screenX, screenY) {
+  const world = getWorld();
+  const workers = getSelection().filter(entity => entity.type === 'villager');
+  const target = hoverableResourceAt(screenX, screenY);
+  if (!world || !target || workers.length === 0 || !assignGatherers(world, workers, target)) return false;
+  world.flags.push({ x: target.x, y: target.y, life: 1.2, max: 1.2, gather: true });
+  const label = target.resourceType === 'wood' ? 'timber' : target.resourceType;
+  callbacks.onToast?.(`${workers.length} villager${workers.length === 1 ? '' : 's'} gathering ${label}.`, 'good');
+  callbacks.onSelection?.(getSelection());
+  updateResourceHover(screenX, screenY);
+  return true;
+}
+
 export function setFormation(formation) {
   currentFormation = formation;
   const units = getSelection().filter(entity => entity.entityKind !== 'building' && entity.type !== 'villager');
@@ -236,6 +285,7 @@ export function haltSelection() {
 }
 
 export function beginPlacement(type) {
+  clearResourceHover();
   placement = { type, x: camera.x, y: camera.y, valid: false, message: '' };
   updatePlacement(mouseX || window.innerWidth / 2, mouseY || window.innerHeight / 2);
   callbacks.onPlacement?.(placement);
@@ -245,6 +295,7 @@ export function cancelPlacement() {
   if (!placement) return;
   placement = null;
   callbacks.onPlacement?.(null);
+  updateResourceHover(mouseX, mouseY);
 }
 
 function updatePlacement(screenX, screenY) {
@@ -276,6 +327,7 @@ function placeAt(screenX, screenY, keepPlacing) {
 }
 
 export function getPlacementPreview() { return placement; }
+export function getResourceHoverTarget() { return resourceHover; }
 
 export function getDragRect() {
   if (!drag) return null;
@@ -291,6 +343,7 @@ export function resetForBattle() {
   for (const key of Object.keys(groups)) delete groups[key];
   drag = null;
   panDrag = null;
+  clearResourceHover();
 }
 
 export function updateInput(dt) {

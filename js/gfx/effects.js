@@ -1649,4 +1649,5 @@ function drawEffects(ctx, world, alpha) {
   ctx.globalCompositeOperation = 'source-over';
   ctx.globalAlpha = 1;
 }
-export { setEffectsCamera, setEffectsView, buildParticleTextures, drawEffects };
+export { setEffectsCamera, setEffectsView, buildParticleTextures,
+         resetEffectFields, drawSmokeUnder, drawEffects };

@@ -5,6 +5,7 @@ import { createWorld, damage, spawnUnit, step } from '../js/sim.js';
 import { Commander } from '../js/ai.js';
 import {
   assignGatherers, createBuilding, findNearestResource, placeBuilding,
+  getBuildingEconomyStats, getEconomyBreakdown, getGatherAssignmentStats,
   queueUnit, stepEconomy, validatePlacement,
 } from '../js/economy.js';
 
@@ -50,6 +51,47 @@ test('villagers gather from deposits without allowing resource values to go nega
   assert.ok(world.sides[0].resources.food > beforeFood);
   assert.ok(berries.amount < beforeDeposit);
   assert.ok(berries.amount >= 0);
+});
+
+test('economy telemetry separates assigned hourly output from sampled live income', () => {
+  const world = makeWorld();
+  advance(world, 4.1);
+  const worker = world.units.find(unit => unit.side === 0);
+  const berries = findNearestResource(world, worker.x, worker.y, 'food', 0);
+  worker.x = berries.x + berries.radius + 5;
+  worker.y = berries.y;
+  assert.equal(assignGatherers(world, [worker], berries), true);
+
+  const preview = getGatherAssignmentStats(world, [worker], berries);
+  assert.equal(preview.workers, 1);
+  assert.equal(preview.projectedPerHour, 30_600);
+
+  world.sides[0].incomeSampleTime = 0;
+  world.sides[0].incomeSample = { food: 0, wood: 0, gold: 0, stone: 0 };
+  stepEconomy(world, 0.75);
+  const breakdown = getEconomyBreakdown(world, 0);
+  assert.equal(breakdown.food.workers, 1);
+  assert.equal(breakdown.food.projectedPerHour, 30_600);
+  assert.ok(Math.abs(breakdown.food.actualPerHour - 30_600) < 0.001);
+  assert.equal(breakdown.wood.actualPerHour, 0);
+});
+
+test('economic-building readouts attribute workers and the exact 20% local bonus', () => {
+  const world = makeWorld();
+  advance(world, 4.1);
+  const worker = world.units.find(unit => unit.side === 0);
+  const berries = findNearestResource(world, worker.x, worker.y, 'food', 0);
+  const mill = createBuilding(0, 'mill', berries.x + 180, berries.y, true);
+  world.buildings.push(mill);
+  worker.x = berries.x + berries.radius + 5;
+  worker.y = berries.y;
+  assignGatherers(world, [worker], berries);
+
+  const stats = getBuildingEconomyStats(world, mill);
+  assert.equal(stats.workers, 1);
+  assert.equal(stats.resources[0].resourceType, 'food');
+  assert.equal(stats.resources[0].projectedPerHour, 36_720);
+  assert.ok(Math.abs(stats.resources[0].bonusPerHour - 6_120) < 0.001);
 });
 
 test('construction validates collisions, consumes costs, and expands population on completion', () => {
