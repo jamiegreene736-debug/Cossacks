@@ -1058,6 +1058,77 @@ function bdDentilCourse(g, x, y, w, material, count) {
   for (let i = 0; i < n; i++) g.fillRect(x + i * step + step * 0.18, y + 2.0, step * 0.52, 0.55);
 }
 
+/** Open stone balustrade used by the British civic roof and stair landings. */
+function bdCivicBalustrade(g, x0, x1, yBase, h, material, count) {
+  const M = material || bdRamp(BMAT.LIMESTONE);
+  const n = Math.max(2, count || 8);
+  bdRect(g, x0 - 1.2, yBase - h, x1 - x0 + 2.4, 2.0, M, { litW: 0.55, edge: true });
+  bdRect(g, x0 - 1.5, yBase - 2.0, x1 - x0 + 3.0, 2.2, M, { litW: 0.60, edge: true });
+  for (let i = 0; i <= n; i++) {
+    const x = x0 + (x1 - x0) * i / n;
+    bdRect(g, x - 0.75, yBase - h + 2.0, 1.5, h - 4.0, M, { litW: 0.38, lineW: 0.65 });
+    bdEllipse(g, x, yBase - h * 0.52, 1.15, 1.55, M, { litW: 0.38, lineW: 0.6 });
+  }
+}
+
+/** Balustrade receding across an isometric side plane. */
+function bdCivicIsoBalustrade(g, x0, y0, x1, y1, h, material, count) {
+  const M = material || bdRamp(BMAT.LIMESTONE);
+  const n = Math.max(2, count || 4);
+  bdBeam(g, M, x0, y0 - h, x1, y1 - h, 2.0, { cap: 'butt' });
+  bdBeam(g, M, x0, y0, x1, y1, 2.2, { cap: 'butt' });
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t;
+    bdBeam(g, M, x, y - 1, x, y - h + 1, 1.45, { cap: 'butt' });
+    bdEllipse(g, x, y - h * 0.50, 1.0, 1.35, M, { litW: 0.35, lineW: 0.55 });
+  }
+}
+
+/** Dressed-stone urn and finial, deliberately oversized at command zoom. */
+function bdCivicUrn(g, cx, yBase, material, scale) {
+  const M = material || bdRamp(BMAT.LIMESTONE), k = scale || 1;
+  bdRect(g, cx - 2.3 * k, yBase - 2.2 * k, 4.6 * k, 2.2 * k, M, { litW: 0.45 });
+  bdLitPath(g, function (c) {
+    c.moveTo(cx - 1.7 * k, yBase - 2.2 * k);
+    c.quadraticCurveTo(cx - 3.0 * k, yBase - 5.4 * k, cx - 1.2 * k, yBase - 7.1 * k);
+    c.lineTo(cx + 1.2 * k, yBase - 7.1 * k);
+    c.quadraticCurveTo(cx + 3.0 * k, yBase - 5.4 * k, cx + 1.7 * k, yBase - 2.2 * k);
+    c.closePath();
+  }, M, { bbox: [cx - 3 * k, yBase - 7.1 * k, 6 * k, 5 * k], litW: 0.55, edge: true });
+  bdEllipse(g, cx, yBase - 7.4 * k, 1.7 * k, 0.85 * k, M, { litW: 0.4 });
+}
+
+/** Small extruded block for the clock cupola's stacked masonry stages. */
+function bdCivicIsoBlock(g, cx, yBot, w, h, depth, rise, material) {
+  const M = material || bdRamp(BMAT.LIMESTONE), x0 = cx - w / 2, x1 = cx + w / 2;
+  bdPoly(g, [x1, yBot - h, x1 + depth, yBot - h - rise,
+    x1 + depth, yBot - rise, x1, yBot], M,
+  { fill: M.shade, shade: false, litW: 0.55, edge: true });
+  bdRect(g, x0, yBot - h, w, h, M, { litW: 0.9, edge: true });
+  bdPoly(g, [x0, yBot - h, x1, yBot - h, x1 + depth, yBot - h - rise,
+    x0 + depth, yBot - h - rise], M,
+  { fill: M.lit, shade: false, litW: 0.5, edge: true });
+}
+
+/** Clock face with a raised bezel and readable hands at 2x zoom. */
+function bdCivicClock(g, cx, cy, r, material) {
+  const M = material || bdRamp(BMAT.LIMESTONE), I = bdRamp(BMAT.IRON);
+  bdEllipse(g, cx, cy, r + 1.8, r + 1.8, M, { litW: 0.65, edge: true });
+  bdEllipse(g, cx, cy, r, r, bdRamp('#E5DDC6'), { litW: 0.55, edge: true });
+  g.strokeStyle = bdRgba(I.shade, 0.90); g.lineWidth = 0.7;
+  for (let i = 0; i < 12; i++) {
+    const a = i / 12 * BD_TAU - Math.PI / 2;
+    g.beginPath();
+    g.moveTo(cx + Math.cos(a) * r * 0.72, cy + Math.sin(a) * r * 0.72);
+    g.lineTo(cx + Math.cos(a) * r * 0.90, cy + Math.sin(a) * r * 0.90);
+    g.stroke();
+  }
+  g.strokeStyle = I.line; g.lineCap = 'round';
+  g.lineWidth = 1.05; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx, cy - r * 0.60); g.stroke();
+  g.lineWidth = 0.85; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + r * 0.48, cy + r * 0.17); g.stroke();
+  g.fillStyle = I.lit; g.beginPath(); g.arc(cx, cy, 1.0, 0, BD_TAU); g.fill();
+}
+
 /** A brick chimney stack with a corbelled cap and a soot-darkened flue. */
 function bdChimney(g, cx, yBot, w, h) {
   const B = bdRamp(BMAT.BRICK);
@@ -1421,12 +1492,18 @@ function bdPaintSceneDressing(g, G, o) {
 
   if (o.type === 'town_center') {
     bdCobblePatch(g, 0, y + 6, w * 0.62, h * 0.23, seed, false);
-    bdGardenBed(g, left * 0.92, y + 3, w * 0.24, seed + 1);
-    bdGardenBed(g, right * 0.92, y + 3, w * 0.24, seed + 2);
     bdLantern(g, -G.bw * 0.56, G.yG - h * 0.19, o.side);
     bdLantern(g, G.bw * 0.56, G.yG - h * 0.19, o.side);
-    bdCrate(g, right + 2, y + 4, 13, 10, seed + 3);
-    bdBarrel(g, right - 11, y + 5, 9, 13);
+    if (o.nation === 'england') {
+      // A formal civic forecourt keeps the grand British hall uncluttered.
+      bdGardenBed(g, left * 1.02, y + 5, w * 0.18, seed + 1);
+      bdGardenBed(g, right * 1.02, y + 5, w * 0.18, seed + 2);
+    } else {
+      bdGardenBed(g, left * 0.92, y + 3, w * 0.24, seed + 1);
+      bdGardenBed(g, right * 0.92, y + 3, w * 0.24, seed + 2);
+      bdCrate(g, right + 2, y + 4, 13, 10, seed + 3);
+      bdBarrel(g, right - 11, y + 5, 9, 13);
+    }
   } else if (o.type === 'house') {
     bdCobblePatch(g, 0, y + 2, w * 0.54, h * 0.18, seed, false);
     bdGardenBed(g, right * 0.88, y + 3, w * 0.30, seed + 4);
@@ -1874,7 +1951,7 @@ function bdDome(g, G, o) {
    as the bible requires. Rendered as pure black at 8px height these must all
    remain tellable apart, so each type is given ONE structural signature that
    lives in the outline, not in its colour:
-     town_center  tall belfry spike offset up-left of a very wide mass
+     town_center  centered clock cupola over a flat balustraded civic roof
      house        small, plain, single gable + one chimney
      farm         flat — no vertical mass at all, the only such piece
      mill         a CROSS of four sails, unmistakable at any size
@@ -1892,125 +1969,208 @@ function bdRoofMat(baseHex, natRoof, t) {
   return bdRamp(bdMix(baseHex, natRoof, t == null ? 0.22 : t));
 }
 
-function bdPaintTownCenter(g, o) {
+function bdPaintEnglishTownCenter(g, o) {
   const def = o.def;
-  const ottoman = o.nation === 'ottoman';
+  const G = bdGeometry({
+    w: def.w, h: def.h, bwK: 0.37, groundK: 0.42, wallK: 0.70,
+    overK: 0.025, roofK: 0.06, hipK: 0.90, plinthK: 0.15,
+    depthK: 0.18, riseK: 0.46,
+  });
+  const wall = bdRamp('#C7B58E');
+  const panel = bdRamp('#D6C18F');
+  const Q = bdRamp('#D9D3C3');
+  const glass = bdRamp(BMAT.GLASS);
+  const roof = bdRamp(bdMix(BMAT.SLATE, '#77756E', 0.48));
+
+  bdWalls(g, G, { wall: wall, seed: o.seed, material: 'plain' });
+
+  // Deep sash windows on the visible side elevation. Their skew follows the
+  // same projection as the wall, so they remain embedded in the architecture.
+  for (const t of [0.28, 0.73]) {
+    const half = 0.13;
+    const x0 = G.bw + G.depth * (t - half), x1 = G.bw + G.depth * (t + half);
+    const y0 = G.yE + 12 - G.rise * (t - half), y1 = G.yE + 12 - G.rise * (t + half);
+    bdPoly(g, [x0 - 1.2, y0 - 1.3, x1 + 1.2, y1 - 1.3,
+      x1 + 1.2, y1 + 16.3, x0 - 1.2, y0 + 16.3], Q,
+    { fill: Q.base, shade: false, litW: 0.5, edge: true });
+    bdPoly(g, [x0, y0, x1, y1, x1, y1 + 14, x0, y0 + 14], glass,
+      { fill: glass.shade, shade: false, litW: 0.35 });
+    g.strokeStyle = bdRgba(Q.lit, 0.78); g.lineWidth = 0.55;
+    g.beginPath(); g.moveTo((x0 + x1) / 2, (y0 + y1) / 2);
+    g.lineTo((x0 + x1) / 2, (y0 + y1) / 2 + 14); g.stroke();
+  }
+
+  const facadeBottom = G.yG - G.plinth;
+  const facadeH = facadeBottom - G.yE;
+  const lowerTop = G.yE + facadeH * 0.66;
+
+  // Warm recessed bays behind the pale monumental order reproduce the deep
+  // gold-and-stone rhythm of the reference without flattening into stripes.
+  for (const cx of [-G.bw * 0.62, 0, G.bw * 0.62]) {
+    bdRect(g, cx - G.bw * 0.19, G.yE + 4.5, G.bw * 0.38, lowerTop - G.yE - 7,
+      panel, { litW: 0.55, edge: true, edgeA: 0.45 });
+    bdSashWindow(g, cx, G.yE + facadeH * 0.35, 10.5, 23, {
+      trim: '#DED8C8', frame: '#E7E1D3', keystone: true,
+    });
+  }
+
+  // Rusticated ground floor and a projecting string course support the tall
+  // upper order. The reference building is visibly raised above the street.
+  bdStoneCourses(g, function (c) { c.rect(-G.bw, lowerTop, G.bw * 2, facadeBottom - lowerTop); },
+    -G.bw, lowerTop, G.bw * 2, facadeBottom - lowerTop, Q, o.seed * 17, 4.0, { ao: false });
+  bdRect(g, -G.bw - 2.2, lowerTop - 1.2, G.bw * 2 + 4.4, 3.4, Q, { litW: 0.8, edge: true });
+  bdSashWindow(g, -G.bw * 0.58, lowerTop + 8.0, 8.2, 9.0, { keystone: false });
+  bdSashWindow(g, G.bw * 0.58, lowerTop + 8.0, 8.2, 9.0, { keystone: false });
+  bdDoor(g, 0, facadeBottom, 12.5, facadeBottom - lowerTop - 1.5, BD_SIDE[o.side].rim, {});
+
+  // Ashlar corners run the full height, alternating long and short blocks.
+  const qh = facadeH / 9;
+  for (let i = 0; i < 9; i++) {
+    const inset = i % 2 ? 1.5 : 0;
+    bdRect(g, -G.bw - 1.2, G.yE + i * qh, 8.0 - inset, qh - 0.45, Q, { litW: 0.6 });
+    bdRect(g, G.bw - 6.8 + inset, G.yE + i * qh, 8.0 - inset, qh - 0.45, Q, { litW: 0.6 });
+  }
+
+  // Four colossal fluted columns carry a continuous entablature, matching the
+  // reference's unmistakable three-bay neoclassical front.
+  for (const cx of [-G.bw * 0.86, -G.bw * 0.29, G.bw * 0.29, G.bw * 0.86]) {
+    bdClassicalColumn(g, cx, G.yE + 1.2, lowerTop + 2.2, 5.8, Q);
+  }
+  bdDentilCourse(g, -G.bw - 3.2, G.yE - 3.4, G.bw * 2 + 6.4, Q, 22);
+  bdRect(g, -G.bw - 4, G.yE - 6.3, G.bw * 2 + 8, 3.1, Q, { litW: 0.8, edge: true });
+
+  // Flat lead roof deck, then the full perimeter balustrade and urns. This is
+  // the defining break from the previous pitched-roof Georgian model.
+  const deckY = G.yE - 6.0;
+  bdPoly(g, [-G.bw - 4, deckY, G.bw + 4, deckY,
+    G.bw + G.depth + 4, deckY - G.rise, -G.bw + G.depth - 4, deckY - G.rise], roof,
+  { fill: roof.lit, shade: false, litW: 0.8, edge: true });
+  bdRect(g, -G.bw - 4.5, deckY - 0.5, G.bw * 2 + 9, 4.2, Q, { litW: 0.8, edge: true });
+  bdCivicBalustrade(g, -G.bw + G.depth, G.bw + G.depth, deckY - G.rise, 8.0, Q, 12);
+  bdCivicIsoBalustrade(g, G.bw, deckY, G.bw + G.depth, deckY - G.rise, 8.0, Q, 5);
+  bdCivicBalustrade(g, -G.bw, G.bw, deckY, 8.5, Q, 13);
+  for (const [x, y] of [[-G.bw, deckY], [G.bw, deckY],
+    [-G.bw + G.depth, deckY - G.rise], [G.bw + G.depth, deckY - G.rise]]) {
+    bdCivicUrn(g, x, y - 7.4, Q, 0.74);
+  }
+
+  // Broad ceremonial stair with stone cheek walls and open iron handrails.
+  const St = bdRamp(bdMix(BMAT.STONE, BT.EARTH, 0.18));
+  const stairTop = G.yG - 6.0;
+  for (let i = 0; i < 6; i++) {
+    const sw = 30 + i * 6.5, sy = stairTop + i * 3.0;
+    bdRect(g, -sw / 2, sy, sw, 3.2, St, { litW: 0.75, edge: true, lineW: 0.75 });
+  }
+  const iron = bdRamp(BMAT.IRON);
+  for (const side of [-1, 1]) {
+    bdBeam(g, iron, side * 13.5, stairTop - 2.5, side * 31, stairTop + 15, 1.15, { cap: 'round' });
+    for (let i = 0; i < 4; i++) {
+      const t = i / 3, x = side * (13.5 + 17.5 * t), y = stairTop + 15 * t;
+      bdBeam(g, iron, x, y + 2, x, y - 5.5, 0.9, { cap: 'butt' });
+    }
+  }
+
+  // Centered square clock cupola: stepped base, clock stage, open bell lantern,
+  // shallow lead cap and a final weather-vane needle.
+  const bx = -6, baseBot = deckY - G.rise * 0.26;
+  bdCivicIsoBlock(g, bx, baseBot, 26, 7, 6.0, 2.8, Q);
+  const clockBot = baseBot - 6.0;
+  bdCivicIsoBlock(g, bx, clockBot, 19, 22, 5.0, 2.3, Q);
+  bdCivicClock(g, bx, clockBot - 11.5, 5.3, Q);
+  bdDentilCourse(g, bx - 11.5, clockBot - 24.5, 23, Q, 8);
+  const lanternBot = clockBot - 25.0, lanternH = 14.5;
+  g.fillStyle = bdShadow(0.88);
+  g.fillRect(bx - 7.0, lanternBot - lanternH, 14.0, lanternH);
+  for (const cx of [bx - 6.0, bx + 6.0]) bdClassicalColumn(g, cx, lanternBot - lanternH, lanternBot, 2.4, Q);
+  const bell = bdRamp('#A9893D');
+  bdEllipse(g, bx, lanternBot - 5.4, 3.2, 3.6, bell, { litW: 0.55, edge: true });
+  bdRect(g, bx - 9.0, lanternBot - lanternH - 2.5, 18.0, 3.0, Q, { litW: 0.7, edge: true });
+  const capY = lanternBot - lanternH - 2.3;
+  bdPoly(g, [bx - 10.5, capY, bx + 10.5, capY, bx + 6.8, capY - 5.2, bx - 6.8, capY - 5.2],
+    roof, { litW: 0.8, edge: true, shadeX: 0.64 });
+  bdCivicIsoBlock(g, bx, capY - 5.0, 6.2, 6.6, 2.0, 0.9, Q);
+  bdPoly(g, [bx - 4.2, capY - 11.5, bx + 4.2, capY - 11.5, bx, capY - 16.0],
+    roof, { litW: 0.7, edge: true });
+  const finial = bdRamp('#A58942');
+  bdBeam(g, finial, bx, capY - 15.2, bx, capY - 24.5, 1.1, { cap: 'butt' });
+  bdEllipse(g, bx, capY - 17.2, 1.8, 1.8, finial, { litW: 0.4 });
+  g.strokeStyle = finial.lit; g.lineWidth = 0.75;
+  g.beginPath(); g.moveTo(bx - 4.5, capY - 22.5); g.lineTo(bx + 4.5, capY - 22.5); g.stroke();
+
+  // A compact gameplay banner keeps faction ownership legible without
+  // overwhelming the reference's restrained civic silhouette.
+  bdBanner(g, G.bw + G.depth * 0.76, deckY - G.rise * 0.76, 24, o.side,
+    { w: 13, h: 9, dir: o.side === 0 ? 1 : -1 });
+  return G;
+}
+
+function bdPaintOttomanTownCenter(g, o) {
+  const def = o.def;
   const G = bdGeometry({
     w: def.w, h: def.h, bwK: 0.40, groundK: 0.40, wallK: 0.50,
     overK: 0.055, roofK: 0.36, hipK: 0.58, plinthK: 0.13,
   });
-  const wall = bdRamp(ottoman ? BMAT.PLASTER_WARM : BMAT.BRICK_RED);
-  const roof = ottoman
-    ? bdRamp(bdMix(BMAT.SLATE, o.natRoof, 0.55))
-    : bdRoofMat(BMAT.SLATE, o.natRoof, 0.48);
+  const wall = bdRamp(BMAT.PLASTER_WARM);
+  const roof = bdRamp(bdMix(BMAT.SLATE, o.natRoof, 0.55));
+  const Q = bdRamp(BMAT.LIMESTONE);
 
   bdWalls(g, G, { wall: wall, seed: o.seed, material: 'plain' });
-  if (!ottoman) {
-    bdBrickCourses(g, -G.bw, G.yE, G.bw * 2, G.yG - G.plinth - G.yE, wall, o.seed * 17);
-  } else {
-    // A restrained limestone string course binds the Ottoman civic façade.
-    const band = bdRamp(BMAT.LIMESTONE);
-    bdRect(g, -G.bw, G.yE + G.wallH * 0.45, G.bw * 2, 2.3, band, { litW: 0.7, edge: true });
-  }
-
-  // Ashlar quoins at both corners — a civic building is dressed in stone
-  const Q = bdRamp(BMAT.LIMESTONE);
+  bdRect(g, -G.bw, G.yE + G.wallH * 0.45, G.bw * 2, 2.3, Q, { litW: 0.7, edge: true });
   const qh = (G.yG - G.plinth - G.yE) / 7;
   for (let i = 0; i < 7; i++) {
     const inset = i % 2 ? 1.5 : 0;
     bdRect(g, -G.bw - 1, G.yE + i * qh, 8.5 - inset, qh - 0.5, Q, { litW: 0.65 });
     bdRect(g, G.bw - 7.5 + inset, G.yE + i * qh, 8.5 - inset, qh - 0.5, Q, { litW: 0.65 });
   }
-
-  // Symmetrical upper storey: sash windows for England, pointed lattice for
-  // the Ottoman seat. This is the strongest nation read below roof height.
   for (let i = -2; i <= 2; i++) {
-    if (i === 0) continue;
-    if (ottoman) bdArchedWindow(g, i * G.bw * 0.36, G.yE + G.h * 0.16, 8, 13);
-    else bdSashWindow(g, i * G.bw * 0.36, G.yE + G.h * 0.16, 9, 13, {});
+    if (i !== 0) bdArchedWindow(g, i * G.bw * 0.36, G.yE + G.h * 0.16, 8, 13);
   }
 
-  // The English portico is genuinely classical rather than a row of stone
-  // rectangles: four tapered, fluted columns, moulded capitals, dentils and a
-  // deep pediment. The Ottoman front substitutes an arcaded loggia.
   const pW = G.bw * 0.62, pTop = G.yE + G.h * 0.30, pBot = G.yG - G.plinth * 0.4;
-  g.fillStyle = bdShadow(0.34);
-  g.fillRect(-pW + 2, pTop + 2, pW * 2, pBot - pTop);
-  bdDoor(g, 0, pBot, 15, G.h * 0.22, BD_SIDE[o.side].rim, { arch: ottoman });
-  if (ottoman) {
-    const archY = pTop + 5.5;
-    g.strokeStyle = Q.base; g.lineWidth = 2.4;
-    for (let bay = -1; bay <= 1; bay++) {
-      const cx = bay * pW * 0.62;
-      g.beginPath();
-      g.moveTo(cx - pW * 0.28, pBot - 1);
-      g.lineTo(cx - pW * 0.28, archY + 8);
-      g.quadraticCurveTo(cx - pW * 0.16, archY, cx, archY - 4);
-      g.quadraticCurveTo(cx + pW * 0.16, archY, cx + pW * 0.28, archY + 8);
-      g.lineTo(cx + pW * 0.28, pBot - 1);
-      g.stroke();
-    }
-    for (const cx of [-pW, -pW * 0.34, pW * 0.34, pW]) {
-      bdClassicalColumn(g, cx, pTop - 1, pBot, 5.4, Q);
-    }
-    bdDentilCourse(g, -pW - 3, pTop - 4, pW * 2 + 6, Q, 15);
-  } else {
-    for (const cx of [-pW * 0.78, -pW * 0.26, pW * 0.26, pW * 0.78]) {
-      bdClassicalColumn(g, cx, pTop, pBot, 6.2, Q);
-    }
-    bdDentilCourse(g, -pW - 3, pTop - 4.2, pW * 2 + 6, Q, 16);
-    bdPoly(g, [-pW - 4, pTop - 4.2, 0, pTop - G.h * 0.15, pW + 4, pTop - 4.2],
-      Q, { litW: 1.2, edge: true, shadeX: 0.66 });
-    // Recessed tympanum and round civic seal give the pediment real depth.
-    bdPoly(g, [-pW * 0.76, pTop - 6.4, 0, pTop - G.h * 0.12, pW * 0.76, pTop - 6.4],
-      bdRamp(bdMix(BMAT.LIMESTONE, BMAT.PLASTER_WARM, 0.55)), { litW: 0.65, edge: true });
-    bdEllipse(g, 0, pTop - G.h * 0.072, 3.2, 3.2, bdRamp(BD_SIDE[o.side].rim),
-      { litW: 0.7, edge: true });
+  g.fillStyle = bdShadow(0.34); g.fillRect(-pW + 2, pTop + 2, pW * 2, pBot - pTop);
+  bdDoor(g, 0, pBot, 15, G.h * 0.22, BD_SIDE[o.side].rim, { arch: true });
+  const archY = pTop + 5.5;
+  g.strokeStyle = Q.base; g.lineWidth = 2.4;
+  for (let bay = -1; bay <= 1; bay++) {
+    const cx = bay * pW * 0.62;
+    g.beginPath();
+    g.moveTo(cx - pW * 0.28, pBot - 1); g.lineTo(cx - pW * 0.28, archY + 8);
+    g.quadraticCurveTo(cx - pW * 0.16, archY, cx, archY - 4);
+    g.quadraticCurveTo(cx + pW * 0.16, archY, cx + pW * 0.28, archY + 8);
+    g.lineTo(cx + pW * 0.28, pBot - 1); g.stroke();
   }
+  for (const cx of [-pW, -pW * 0.34, pW * 0.34, pW]) bdClassicalColumn(g, cx, pTop - 1, pBot, 5.4, Q);
+  bdDentilCourse(g, -pW - 3, pTop - 4, pW * 2 + 6, Q, 15);
 
-  // Steps down to the board
   const St = bdRamp(bdMix(BMAT.STONE, BT.EARTH, 0.18));
   for (let i = 0; i < 3; i++) {
     bdRect(g, -pW * 0.7 - i * 5, G.yG - 6 + i * 2.6, pW * 1.4 + i * 10, 3.0, St, { litW: 0.8 });
   }
+  bdDome(g, G, { roof: roof });
 
-  if (ottoman) bdDome(g, G, { roof: roof });
-  else bdRoof(g, G, { roof: roof, roofKind: 'slate', seed: o.seed, pitch: 3.5 });
-
-  // BELFRY — the silhouette signature. Deliberately offset up-LEFT of centre
-  // so the mass is asymmetric and the tower catches the lamp on its own face.
   const bx = -G.rr * 0.52, bBot = G.yR + 3, bH = G.h * 0.30, bW = def.w * 0.11;
   bdRect(g, bx - bW, bBot - bH, bW * 2, bH, wall, { litW: 1.3, edge: true });
   bdStoneCourses(g, function (c) { c.rect(bx - bW, bBot - bH, bW * 2, bH); },
     bx - bW, bBot - bH, bW * 2, bH, wall, o.seed * 3 + 7, bH * 0.2);
-  // Belfry / Ottoman clock pavilion — a real hole, with the bell hanging in it
   g.fillStyle = bdShadow(0.86);
-  if (ottoman) {
-    g.beginPath();
-    g.moveTo(bx - bW * 0.46, bBot - bH * 0.28);
-    g.lineTo(bx - bW * 0.46, bBot - bH * 0.68);
-    g.quadraticCurveTo(bx, bBot - bH * 0.96, bx + bW * 0.46, bBot - bH * 0.68);
-    g.lineTo(bx + bW * 0.46, bBot - bH * 0.28); g.closePath(); g.fill();
-  } else {
-    g.fillRect(bx - bW * 0.45, bBot - bH * 0.78, bW * 0.9, bH * 0.5);
-  }
+  g.beginPath();
+  g.moveTo(bx - bW * 0.46, bBot - bH * 0.28); g.lineTo(bx - bW * 0.46, bBot - bH * 0.68);
+  g.quadraticCurveTo(bx, bBot - bH * 0.96, bx + bW * 0.46, bBot - bH * 0.68);
+  g.lineTo(bx + bW * 0.46, bBot - bH * 0.28); g.closePath(); g.fill();
   const Bell = bdRamp('#AE8737');
   bdEllipse(g, bx, bBot - bH * 0.50, bW * 0.30, bW * 0.34, Bell, { litW: 0.6, edge: true });
-  if (ottoman) {
-    bdEllipse(g, bx, bBot - bH - 1, bW + 2, bW * 0.52, roof, { litW: 1.0, edge: true });
-    const Gold = bdRamp('#C9A24E');
-    bdBeam(g, Gold, bx, bBot - bH - 2, bx, bBot - bH - G.h * 0.13, 1.4, { cap: 'butt' });
-    g.strokeStyle = Gold.lit; g.lineWidth = 1.5;
-    g.beginPath(); g.arc(bx + 1, bBot - bH - G.h * 0.15, 3.0, Math.PI * 0.42, Math.PI * 1.5); g.stroke();
-  } else {
-    bdPoly(g, [bx - bW - 2, bBot - bH, bx, bBot - bH - G.h * 0.19, bx + bW + 2, bBot - bH],
-      roof, { litW: 1.2, edge: true, shadeX: 0.62 });
-  }
-
-  // BANNER on the opposite side of the ridge, clear of the belfry
+  bdEllipse(g, bx, bBot - bH - 1, bW + 2, bW * 0.52, roof, { litW: 1.0, edge: true });
+  const Gold = bdRamp('#C9A24E');
+  bdBeam(g, Gold, bx, bBot - bH - 2, bx, bBot - bH - G.h * 0.13, 1.4, { cap: 'butt' });
+  g.strokeStyle = Gold.lit; g.lineWidth = 1.5;
+  g.beginPath(); g.arc(bx + 1, bBot - bH - G.h * 0.15, 3.0, Math.PI * 0.42, Math.PI * 1.5); g.stroke();
   bdBanner(g, G.rr * 0.66, G.yR + 2, G.h * 0.34, o.side,
     { w: 20, h: 14, dir: o.side === 0 ? 1 : -1 });
   return G;
+}
+
+function bdPaintTownCenter(g, o) {
+  return o.nation === 'ottoman' ? bdPaintOttomanTownCenter(g, o) : bdPaintEnglishTownCenter(g, o);
 }
 
 function bdPaintHouse(g, o) {
