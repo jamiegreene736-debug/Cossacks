@@ -44,20 +44,19 @@ function setBuildingRefs(refs) {
    lamp that lit the ground it stands on. Nothing here invents a light.
    ------------------------------------------------------------------------ */
 
-// Bake oversampling. A compromise, and worth stating the arithmetic.
-// The sprite atlas uses SCALE 4 because a 22-world-px musketeer must hold a
-// 0.25px edge. Buildings are 5-10x larger, so 4x is wasteful: a town centre
-// stamp box is 184x258 world px, which at 4x is a 736x1032 canvas (3.0 MB),
-// and the full settlement set lands near 55 MB.
-// But 2x is too coarse at the other end: input.js caps camera.zoom at 2.5 and
-// dpr at 2, so max on-screen density is 5 device px per world px. A 2x bake
-// upscales 2.5x at the zoom ceiling, and this file's finest marks — the 0.6px
-// joint and course lines — would be sampled at 1.2 device px and alias.
-// 3x resolves those marks at 1.8 device px, upscales only 1.67x at max zoom,
-// and puts the whole set near 30 MB (lazily, so typically 12-18 MB resident
-// for the 6-8 types a player actually builds). That is the right trade.
-const BD_SCALE     = 3;
-const BD_RES_SCALE = 2;    // resource-node clusters are large and low-frequency
+// Bake oversampling. The settlement is the player's visual reward for growing
+// an economy, so it gets the same 4x source density as the miniature atlas.
+// At input.js's 2.5x zoom ceiling and a 2x display, this retains the 0.45-0.8
+// world-pixel joints, nails, leadwork and patina marks instead of smearing them
+// through a 2.5x bitmap upscale. A lazy cache keeps the practical footprint
+// bounded: only placed building types are baked, while damage and mill frames
+// appear on demand. A town-centre surface is about 3 MB and a normal settlement
+// remains comfortably below a modern browser's graphics-memory budget.
+// Resource nodes use 3x because their organic silhouettes contain many fine
+// twigs, ore veins, berry highlights and cut-stump rings.
+const BD_SCALE     = 4;
+const BD_RES_SCALE = 3;
+const BD_MILL_FRAMES = 8;
 
 const bdSUN = {
   x: -0.64, y: -0.77,             // unit vector TOWARD the light (up-left)
@@ -1220,6 +1219,330 @@ function bdWheelRing(g, cx, cy, r, R, spokes) {
   g.restore();
 }
 
+/** A coopered barrel with iron hoops and an end-grain ellipse. */
+function bdBarrel(g, cx, yBot, w, h) {
+  const W = bdRamp(BMAT.LOG), I = bdRamp(BMAT.IRON);
+  bdContactShadow(g, cx, yBot + 1, w * 0.72, h * 0.8, 0.78);
+  bdLitPath(g, function (c) {
+    c.moveTo(cx - w * 0.42, yBot);
+    c.quadraticCurveTo(cx - w * 0.58, yBot - h * 0.5, cx - w * 0.38, yBot - h);
+    c.lineTo(cx + w * 0.38, yBot - h);
+    c.quadraticCurveTo(cx + w * 0.58, yBot - h * 0.5, cx + w * 0.42, yBot);
+    c.closePath();
+  }, W, { bbox: [cx - w * 0.6, yBot - h, w * 1.2, h], litW: 0.8, edge: true });
+  g.strokeStyle = I.base; g.lineWidth = 1.15;
+  for (const fy of [0.20, 0.51, 0.82]) {
+    g.beginPath();
+    g.moveTo(cx - w * 0.47, yBot - h * fy);
+    g.quadraticCurveTo(cx, yBot - h * fy + 1.0, cx + w * 0.47, yBot - h * fy);
+    g.stroke();
+  }
+  g.strokeStyle = I.lit; g.lineWidth = 0.45;
+  g.beginPath(); g.moveTo(cx - w * 0.43, yBot - h * 0.84);
+  g.lineTo(cx + w * 0.34, yBot - h * 0.84); g.stroke();
+  bdEllipse(g, cx, yBot - h, w * 0.38, w * 0.15, W, { litW: 0.55, edge: true });
+}
+
+/** A nailed packing crate. Cross-bracing prevents it reading as a plain box. */
+function bdCrate(g, cx, yBot, w, h, seed) {
+  const P = bdRamp(BMAT.SHINGLE), I = bdRamp(BMAT.IRON);
+  bdContactShadow(g, cx, yBot + 1, w * 0.72, h * 0.68, 0.72);
+  bdRect(g, cx - w / 2, yBot - h, w, h, P, { litW: 0.85, edge: true });
+  g.strokeStyle = bdRgba(P.shade, 0.72); g.lineWidth = 1.05;
+  g.beginPath(); g.moveTo(cx - w * 0.38, yBot - h * 0.84); g.lineTo(cx + w * 0.38, yBot - h * 0.16); g.stroke();
+  g.beginPath(); g.moveTo(cx + w * 0.38, yBot - h * 0.84); g.lineTo(cx - w * 0.38, yBot - h * 0.16); g.stroke();
+  g.fillStyle = P.lit;
+  g.fillRect(cx - w / 2, yBot - h, w, 1.2);
+  g.fillRect(cx - w / 2, yBot - h, 1.2, h);
+  const rr = bdRnd(seed || 1);
+  g.fillStyle = I.lit;
+  for (let i = 0; i < 5; i++) {
+    g.beginPath(); g.arc(cx + rr(-w * 0.36, w * 0.36), yBot - rr(h * 0.12, h * 0.88), 0.55, 0, BD_TAU); g.fill();
+  }
+}
+
+/** A tied grain or powder sack, deliberately soft among all the hard joinery. */
+function bdSack(g, cx, yBot, w, h, seed) {
+  const C = bdRamp(BMAT.CANVAS), rr = bdRnd(seed || 1);
+  bdContactShadow(g, cx, yBot + 1, w * 0.72, h * 0.65, 0.68);
+  bdLitPath(g, function (c) {
+    c.moveTo(cx - w * 0.48, yBot);
+    c.quadraticCurveTo(cx - w * 0.66, yBot - h * 0.34, cx - w * 0.28, yBot - h * 0.84);
+    c.lineTo(cx - w * 0.12, yBot - h);
+    c.lineTo(cx + w * 0.12, yBot - h);
+    c.lineTo(cx + w * 0.28, yBot - h * 0.84);
+    c.quadraticCurveTo(cx + w * 0.66, yBot - h * 0.34, cx + w * 0.48, yBot);
+    c.closePath();
+  }, C, { bbox: [cx - w * 0.7, yBot - h, w * 1.4, h], litW: 0.75, edge: true });
+  g.strokeStyle = bdRgba(C.shade, 0.55); g.lineWidth = 0.7;
+  g.beginPath(); g.moveTo(cx - w * 0.22, yBot - h * 0.80); g.quadraticCurveTo(cx + rr(-1, 1), yBot - h * 0.52, cx + w * 0.20, yBot - h * 0.10); g.stroke();
+  g.strokeStyle = bdRgba(BMAT.TIMBER_DARK, 0.75); g.lineWidth = 0.9;
+  g.beginPath(); g.moveTo(cx - w * 0.24, yBot - h * 0.83); g.lineTo(cx + w * 0.24, yBot - h * 0.83); g.stroke();
+}
+
+/** A two-wheel utility cart. Its voids and diagonals remain legible at 8px. */
+function bdCart(g, cx, yBot, scale, seed) {
+  const k = scale || 1, P = bdRamp(BMAT.TIMBER), I = bdRamp(BMAT.IRON);
+  bdContactShadow(g, cx, yBot + 2, 20 * k, 14 * k, 0.84);
+  bdPoly(g, [cx - 14 * k, yBot - 15 * k, cx + 11 * k, yBot - 13 * k,
+    cx + 8 * k, yBot - 4 * k, cx - 11 * k, yBot - 5 * k], P,
+    { litW: 1.0, edge: true, shadeX: 0.70 });
+  // separate plank lines and corner ironwork
+  g.strokeStyle = bdRgba(P.shade, 0.64); g.lineWidth = 0.75 * k;
+  for (let i = 1; i <= 3; i++) {
+    const y = yBot - (5 + i * 2.25) * k;
+    g.beginPath(); g.moveTo(cx - 11 * k, y); g.lineTo(cx + 8 * k, y - 0.8 * k); g.stroke();
+  }
+  bdWheelRing(g, cx - 8 * k, yBot - 2 * k, 6.6 * k, I, 8);
+  bdWheelRing(g, cx + 7 * k, yBot - 2 * k, 6.6 * k, I, 8);
+  bdBeam(g, P, cx + 10 * k, yBot - 8 * k, cx + 30 * k, yBot - 1 * k, 2.0 * k, { cap: 'butt' });
+  bdBeam(g, P, cx + 10 * k, yBot - 11 * k, cx + 30 * k, yBot - 4 * k, 1.5 * k, { cap: 'butt' });
+  const rr = bdRnd(seed || 1);
+  g.fillStyle = I.lit;
+  for (let i = 0; i < 4; i++) {
+    g.beginPath(); g.arc(cx + rr(-10, 7) * k, yBot - rr(6, 13) * k, 0.55 * k, 0, BD_TAU); g.fill();
+  }
+}
+
+/** Wall lantern with a small warm glass note and a wrought bracket. */
+function bdLantern(g, cx, cy, side) {
+  const I = bdRamp(BMAT.IRON), S = bdRamp(BD_SIDE[side].rim);
+  bdBeam(g, I, cx - 6, cy - 7, cx, cy, 1.25, { cap: 'butt' });
+  bdBeam(g, I, cx - 6, cy - 7, cx - 6, cy - 12, 1.25, { cap: 'butt' });
+  bdPoly(g, [cx - 9, cy - 5, cx - 3, cy - 5, cx - 4, cy + 3, cx - 8, cy + 3],
+    bdRamp('#C9A24E'), { litW: 0.65, edge: true });
+  g.fillStyle = bdRgba('#FFE3A0', 0.78);
+  g.fillRect(cx - 7.6, cy - 3.7, 2.6, 5.2);
+  g.fillStyle = S.base;
+  g.fillRect(cx - 9, cy - 6.2, 6, 1.2);
+}
+
+/** Stone trough used by stable yards and civic water points. */
+function bdTrough(g, cx, yBot, w) {
+  const S = bdRamp(BMAT.STONE), water = bdRamp('#667C82');
+  bdContactShadow(g, cx, yBot + 1, w * 0.62, 10, 0.72);
+  bdPoly(g, [cx - w / 2, yBot - 8, cx + w / 2, yBot - 8,
+    cx + w * 0.42, yBot, cx - w * 0.42, yBot], S, { litW: 0.9, edge: true });
+  bdEllipse(g, cx, yBot - 8, w * 0.43, 2.1, water, { litW: 0.55, edge: true });
+  g.strokeStyle = bdRgba('#FFF1CE', 0.42); g.lineWidth = 0.55;
+  g.beginPath(); g.moveTo(cx - w * 0.22, yBot - 8.5); g.lineTo(cx + w * 0.18, yBot - 8.2); g.stroke();
+}
+
+/** Low clipped planting bed, with flowers held away from team-colour hues. */
+function bdGardenBed(g, cx, cy, w, seed) {
+  const rr = bdRnd(seed || 1), S = bdRamp(BMAT.STONE_ROUGH);
+  bdLitPath(g, function (c) {
+    c.ellipse(cx, cy, w * 0.5, 7, 0, 0, BD_TAU);
+  }, S, { bbox: [cx - w / 2, cy - 7, w, 14], litW: 0.65 });
+  g.fillStyle = bdLawful(BT.EARTH_DARK);
+  g.beginPath(); g.ellipse(cx, cy - 1, w * 0.42, 4.6, 0, 0, BD_TAU); g.fill();
+  for (let i = 0; i < Math.round(w * 0.7); i++) {
+    const x = cx + rr(-w * 0.38, w * 0.38), y = cy + rr(-3.2, 2.5);
+    g.strokeStyle = bdRgba(BT.FOLIAGE_LIT, 0.75); g.lineWidth = 0.7;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + rr(-1, 1), y - rr(2.5, 6)); g.stroke();
+    if (i % 4 === 0) {
+      g.fillStyle = i % 8 ? '#D4B35C' : '#E6D9BA';
+      g.beginPath(); g.arc(x, y - rr(3.8, 6.2), 0.85, 0, BD_TAU); g.fill();
+    }
+  }
+}
+
+/** Irregular dressed-stone apron / lane, painted behind the structure. */
+function bdCobblePatch(g, cx, cy, rx, ry, seed, muddy) {
+  const rr = bdRnd(seed || 1);
+  const base = bdRamp(bdLawful(muddy ? bdMix(BT.ROAD_BED, BT.MUD, 0.48) : bdMix(BT.ROCK, BT.ROAD_BED, 0.34)));
+  g.save();
+  g.globalCompositeOperation = 'destination-over';
+  // A scalloped, hand-laid perimeter. A perfect ellipse reads as a plastic
+  // wargame base at close zoom; this irregular edge dissolves into the board.
+  const edge = [];
+  for (let i = 0; i < 28; i++) {
+    const a = i / 28 * BD_TAU;
+    const k = rr(0.92, 1.05);
+    edge.push([cx + Math.cos(a) * rx * k, cy + Math.sin(a) * ry * k]);
+  }
+  g.beginPath();
+  g.moveTo((edge[0][0] + edge[27][0]) / 2, (edge[0][1] + edge[27][1]) / 2);
+  for (let i = 0; i < edge.length; i++) {
+    const p = edge[i], q = edge[(i + 1) % edge.length];
+    g.quadraticCurveTo(p[0], p[1], (p[0] + q[0]) / 2, (p[1] + q[1]) / 2);
+  }
+  g.closePath();
+  g.clip();
+  g.fillStyle = bdRgba(base.shade, 0.76);
+  g.fillRect(cx - rx, cy - ry, rx * 2, ry * 2);
+  const rowH = muddy ? 5.2 : 4.2;
+  for (let row = -Math.ceil(ry / rowH); row <= Math.ceil(ry / rowH); row++) {
+    const y = cy + row * rowH + rr(-0.5, 0.5);
+    let x = cx - rx - (row & 1 ? 5 : 0);
+    while (x < cx + rx) {
+      const w = rr(muddy ? 6 : 5, muddy ? 12 : 10), h = rowH - 1;
+      const tone = rr(0, 1);
+      g.fillStyle = bdRgba(tone > 0.72 ? base.lit : tone > 0.23 ? base.base : base.shade, muddy ? 0.52 : 0.84);
+      g.fillRect(x + 0.7, y - h / 2, w - 1.1, h);
+      g.fillStyle = bdRgba(base.edge, muddy ? 0.18 : 0.36);
+      g.fillRect(x + 0.8, y - h / 2, w - 1.4, 0.55);
+      x += w;
+    }
+  }
+  if (muddy) {
+    g.strokeStyle = bdRgba(BT.EARTH_DARK, 0.54); g.lineWidth = 1.5;
+    for (const dx of [-rx * 0.24, rx * 0.24]) {
+      g.beginPath(); g.moveTo(cx + dx - rx * 0.18, cy - ry); g.quadraticCurveTo(cx + dx + 2, cy, cx + dx + rx * 0.16, cy + ry); g.stroke();
+    }
+  }
+  g.restore();
+}
+
+/** A compact blacksmith tool rack: tongs, hammers and a lit anvil edge. */
+function bdToolRack(g, cx, yBot, scale) {
+  const k = scale || 1, W = bdRamp(BMAT.TIMBER), I = bdRamp(BMAT.IRON);
+  bdBeam(g, W, cx - 11 * k, yBot, cx - 11 * k, yBot - 20 * k, 2 * k, { cap: 'butt' });
+  bdBeam(g, W, cx + 11 * k, yBot, cx + 11 * k, yBot - 20 * k, 2 * k, { cap: 'butt' });
+  bdBeam(g, W, cx - 12 * k, yBot - 17 * k, cx + 12 * k, yBot - 17 * k, 2 * k, { cap: 'butt' });
+  for (let i = -1; i <= 1; i++) {
+    const x = cx + i * 7 * k;
+    bdBeam(g, I, x, yBot - 16 * k, x + i * 1.5 * k, yBot - 4 * k, 1.1 * k, { cap: 'round' });
+    g.strokeStyle = I.lit; g.lineWidth = 0.7 * k;
+    g.beginPath(); g.arc(x, yBot - 3 * k, 2.2 * k, 0, BD_TAU); g.stroke();
+  }
+}
+
+/**
+ * Functional yard dressing. Every type gets a distinct foreground story and
+ * a worked ground surface, but everything remains part of its once-baked
+ * sprite. This is the visual-density pass that turns isolated icons into a
+ * lived-in 18th-century settlement without touching the per-frame hot path.
+ */
+function bdPaintSceneDressing(g, G, o) {
+  const w = o.def.w, h = o.def.h, y = G.yG + h * 0.10;
+  const left = -w * 0.43, right = w * 0.43;
+  const seed = o.seed ^ 0x51f15e;
+
+  if (o.type === 'town_center') {
+    bdCobblePatch(g, 0, y + 6, w * 0.62, h * 0.23, seed, false);
+    bdGardenBed(g, left * 0.92, y + 3, w * 0.24, seed + 1);
+    bdGardenBed(g, right * 0.92, y + 3, w * 0.24, seed + 2);
+    bdLantern(g, -G.bw * 0.56, G.yG - h * 0.19, o.side);
+    bdLantern(g, G.bw * 0.56, G.yG - h * 0.19, o.side);
+    bdCrate(g, right + 2, y + 4, 13, 10, seed + 3);
+    bdBarrel(g, right - 11, y + 5, 9, 13);
+  } else if (o.type === 'house') {
+    bdCobblePatch(g, 0, y + 2, w * 0.54, h * 0.18, seed, false);
+    bdGardenBed(g, right * 0.88, y + 3, w * 0.30, seed + 4);
+    bdBarrel(g, left, y + 4, 9, 14);
+    bdCrate(g, left + 10, y + 5, 10, 8, seed + 5);
+    bdLantern(g, G.bw * 0.38, G.yG - h * 0.16, o.side);
+  } else if (o.type === 'mill') {
+    bdCobblePatch(g, 0, y + 4, w * 0.58, h * 0.22, seed, true);
+    bdCart(g, right - 4, y + 4, 0.72, seed + 6);
+    bdSack(g, left + 2, y + 4, 9, 13, seed + 7);
+    bdSack(g, left + 11, y + 5, 10, 15, seed + 8);
+    bdSack(g, left + 19, y + 4, 8, 11, seed + 9);
+  } else if (o.type === 'lumber_camp') {
+    bdCobblePatch(g, 0, y + 5, w * 0.62, h * 0.22, seed, true);
+    bdCart(g, right - 16, y + 5, 0.66, seed + 10);
+    bdToolRack(g, left + 4, y + 3, 0.72);
+  } else if (o.type === 'mine') {
+    bdCobblePatch(g, 0, y + 5, w * 0.62, h * 0.24, seed, true);
+    const I = bdRamp(BMAT.IRON), T = bdRamp(BMAT.TIMBER);
+    for (const dx of [-7, 7]) bdBeam(g, I, dx - 24, y + 5, dx + 30, y + 1, 1.25, { cap: 'butt' });
+    for (let x = -22; x <= 28; x += 8) bdBeam(g, T, x, y + 8, x + 1, y - 1, 1.6, { cap: 'butt' });
+    bdToolRack(g, left + 4, y + 3, 0.68);
+    bdBarrel(g, right - 2, y + 5, 9, 12);
+  } else if (o.type === 'barracks') {
+    bdCobblePatch(g, 0, y + 4, w * 0.60, h * 0.20, seed, false);
+    bdCrate(g, right - 5, y + 5, 15, 11, seed + 11);
+    bdCrate(g, right - 18, y + 4, 12, 9, seed + 12);
+    bdBarrel(g, left + 3, y + 5, 9, 13);
+    bdLantern(g, G.bw * 0.36, G.yG - h * 0.18, o.side);
+  } else if (o.type === 'stable') {
+    bdCobblePatch(g, 0, y + 5, w * 0.62, h * 0.22, seed, true);
+    bdTrough(g, left + 7, y + 5, 25);
+    bdCart(g, right - 12, y + 5, 0.75, seed + 13);
+    bdSack(g, right - 29, y + 5, 10, 14, seed + 14);
+  } else if (o.type === 'foundry') {
+    bdCobblePatch(g, 0, y + 5, w * 0.60, h * 0.22, seed, false);
+    bdToolRack(g, right - 5, y + 4, 0.78);
+    bdCrate(g, left + 2, y + 5, 14, 10, seed + 15);
+    bdBarrel(g, left + 15, y + 4, 9, 13);
+    const rr = bdRnd(seed + 16);
+    for (let i = 0; i < 18; i++) {
+      g.fillStyle = bdRgba(i % 3 ? '#292A2A' : '#4A4338', rr(0.55, 0.9));
+      g.beginPath(); g.arc(right + rr(-13, 12), y + rr(-2, 5), rr(1.2, 3.2), 0, BD_TAU); g.fill();
+    }
+  } else if (o.type === 'tower') {
+    bdCobblePatch(g, 0, y + 4, w * 0.58, h * 0.18, seed, false);
+    bdBarrel(g, right - 3, y + 5, 9, 13);
+    bdBarrel(g, right - 12, y + 4, 8, 11);
+    bdCrate(g, left + 5, y + 5, 12, 9, seed + 17);
+    bdLantern(g, G.bw * 0.52, G.yG - h * 0.16, o.side);
+  }
+}
+
+/** Sub-pixel pigment, soot and rain marks, clipped to already-painted pixels. */
+function bdPassSurfacePatina(g, box, seed) {
+  const rr = bdRnd(seed ^ 0x6ac690c5);
+  g.save();
+  g.globalCompositeOperation = 'source-atop';
+  for (let i = 0; i < 320; i++) {
+    const x = rr(box[0], box[0] + box[2]), y = rr(box[1], box[1] + box[3]);
+    const light = rr(0, 1) > 0.72;
+    g.fillStyle = light ? 'rgba(255,241,206,0.055)' : 'rgba(38,35,38,0.045)';
+    g.beginPath(); g.arc(x, y, rr(0.18, 0.72), 0, BD_TAU); g.fill();
+  }
+  // Vertical rain streaks are sparse and faint; repetition would look printed.
+  g.strokeStyle = 'rgba(44,42,43,0.065)'; g.lineWidth = 0.42;
+  for (let i = 0; i < 24; i++) {
+    const x = rr(box[0], box[0] + box[2]), y = rr(box[1], box[1] + box[3] * 0.72);
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + rr(-0.3, 0.3), y + rr(3, 11)); g.stroke();
+  }
+  g.restore();
+}
+
+/** Cached structural damage: cracks, soot, broken glazing and foreground debris. */
+function bdPaintDamage(g, G, o, stage) {
+  if (!stage) return;
+  const rr = bdRnd(o.seed ^ (stage * 0x45d9f3b));
+  const yTop = G.yE + 4, yBot = G.yG - G.plinth;
+  const cracks = stage === 1 ? 4 : 9;
+  g.save();
+  g.strokeStyle = bdShadow(stage === 1 ? 0.52 : 0.76);
+  g.lineWidth = stage === 1 ? 0.8 : 1.15;
+  for (let i = 0; i < cracks; i++) {
+    const x = rr(-G.bw * 0.82, G.bw * 0.82), y = rr(yTop, yBot - 5);
+    g.beginPath(); g.moveTo(x, y);
+    let px = x, py = y;
+    for (let k = 0; k < (stage === 1 ? 3 : 5); k++) {
+      px += rr(-4.2, 4.2); py += rr(2.0, 5.8); g.lineTo(px, py);
+    }
+    g.stroke();
+    if (stage === 2 && i % 2 === 0) {
+      g.beginPath(); g.moveTo(px, py); g.lineTo(px + rr(-6, 6), py + rr(2, 5)); g.stroke();
+    }
+  }
+  // smoke-blackened roof holes and shattered windows read clearly from above
+  g.fillStyle = bdRgba('#1B181A', stage === 1 ? 0.28 : 0.58);
+  for (let i = 0; i < stage + 1; i++) {
+    g.beginPath();
+    g.ellipse(rr(-G.rr * 0.62, G.rr * 0.62), rr(G.yR + 4, G.yE - 3), rr(3, 7), rr(1.8, 3.8), rr(-0.3, 0.3), 0, BD_TAU);
+    g.fill();
+  }
+  if (stage === 2) {
+    const P = bdRamp(BMAT.SHINGLE), stone = bdRamp(BMAT.STONE_ROUGH);
+    // emergency boarding over one front opening
+    const bx = rr(-G.bw * 0.55, G.bw * 0.55), by = yTop + (yBot - yTop) * 0.44;
+    for (let i = -1; i <= 1; i++) bdBeam(g, P, bx - 8, by + i * 4, bx + 8, by + i * 2, 1.8, { cap: 'butt' });
+    // masonry rubble accumulated on the near edge
+    for (let i = 0; i < 18; i++) {
+      const x = rr(-G.bw, G.bw), y = G.yG + rr(-1, 8), r = rr(1.1, 3.1);
+      bdPoly(g, [x - r, y, x - r * 0.45, y - r, x + r * 0.7, y - r * 0.65, x + r, y],
+        stone, { litW: 0.45, line: false });
+    }
+  }
+  g.restore();
+}
+
 
 /* ---------------------------------------------------------------------------
    5. THE SHELL — walls and roof
@@ -1723,7 +2046,10 @@ function bdPaintMill(g, o) {
   const hx = 0, hy = yTop + (yBot - yTop) * 0.14, armL = def.w * 0.52;
   const W = bdRamp(BMAT.TIMBER);
   const C = bdRamp(BMAT.CANVAS);
-  const tilt = 0.42;
+  // Only eight angles are needed for convincing motion because the four sails
+  // are rotationally symmetric. The complete frame is baked lazily, so this
+  // still costs exactly one drawImage at runtime.
+  const tilt = 0.42 + ((o.animFrame || 0) / BD_MILL_FRAMES) * (Math.PI / 2);
   for (let i = 0; i < 4; i++) {
     const a = tilt + i * Math.PI / 2;
     const ex = hx + Math.cos(a) * armL, ey = hy + Math.sin(a) * armL;
@@ -2666,6 +2992,16 @@ function bdPaintFarm(g, def, side, stage, seed) {
     g.beginPath(); g.moveTo(sx - 4, sy - 7); g.lineTo(sx + 4, sy - 7.6); g.stroke();
   }
 
+  // Harvest furniture makes the parcel feel worked rather than decorative.
+  // The cart arrives as the crop is cut; full fields retain only water and
+  // empty sacks at the boundary so the grain remains the visual focus.
+  bdBarrel(g, -hw * 0.77, hh * 0.72, 8, 12);
+  if (stage <= 2) {
+    bdCart(g, hw * 0.56, hh * 0.70, 0.56, seed * 17 + stage);
+    bdSack(g, hw * 0.28, hh * 0.73, 8, 11, seed * 19 + stage);
+    if (stage <= 1) bdSack(g, hw * 0.39, hh * 0.75, 9, 13, seed * 23 + stage);
+  }
+
   // --- boundary: post and rail on the two near sides only, so the parcel is
   // enclosed without walling off the villagers' approach
   bdFence(g, -hw, hw, hh + 1, 9, seed * 3, 16);
@@ -2767,8 +3103,10 @@ const BD_PAINTERS = {
   stable: bdPaintStable, foundry: bdPaintFoundry, tower: bdPaintTower,
 };
 
-function bdBuildingSprite(type, def, side, nation, natRoof, variant) {
-  const key = type + '|' + side + '|' + nation + '|' + variant;
+function bdBuildingSprite(type, def, side, nation, natRoof, variant, damageStage, animFrame) {
+  const frame = type === 'mill' ? (animFrame || 0) : 0;
+  const damage = damageStage || 0;
+  const key = type + '|' + side + '|' + nation + '|' + variant + '|' + damage + '|' + frame;
   let s = bdBuildingCache.get(key);
   if (s) return s;
 
@@ -2782,10 +3120,14 @@ function bdBuildingSprite(type, def, side, nation, natRoof, variant) {
   for (let i = 0; i < type.length; i++) seed = (seed * 31 + type.charCodeAt(i)) | 0;
 
   s = bdBake(box, BD_SCALE, function (g, scale) {
-    const G = painter(g, {
+    const opts = {
       def: def, type: type, side: side, nation: nation,
-      natRoof: natRoof, variant: variant, seed: seed,
-    });
+      natRoof: natRoof, variant: variant, seed: seed, animFrame: frame,
+    };
+    const G = painter(g, opts);
+    bdPaintSceneDressing(g, G, opts);
+    bdPaintDamage(g, G, opts, damage);
+    bdPassSurfacePatina(g, box, seed + damage * 101 + frame * 17);
     bdPassGalleryLight(g, box);
     bdPassRecessWash(g, scale);
     bdPassMatteVarnish(g, box);
@@ -2809,8 +3151,9 @@ function bdFarmSprite(def, side, stage) {
   let s = bdFarmCache.get(key);
   if (s) return s;
   const box = bdBoxFor('farm', def);
-  s = bdBake(box, BD_SCALE * 0.75, function (g, scale) {
+  s = bdBake(box, BD_SCALE, function (g, scale) {
     bdPaintFarm(g, def, side, stage, side * 613 + stage * 71 + 3);
+    bdPassSurfacePatina(g, box, side * 613 + stage * 71 + 3);
     bdPassGalleryLight(g, box);
     bdPassMatteVarnish(g, box);
   });
@@ -2845,7 +3188,7 @@ function bdResourceSprite(res) {
     // Seeded from the node's own seed, so props keep their positions across
     // every depletion step and only their COUNT changes.
     const rr = bdRnd((res.seed * 1000) | 0);
-    const full = res.type === 'wood' ? 13 : res.type === 'food' ? 15 : 12;
+    const full = res.type === 'wood' ? 17 : res.type === 'food' ? 19 : 15;
     const props = [];
     for (let i = 0; i < full; i++) {
       const a = rr(0, BD_TAU);
@@ -2894,6 +3237,39 @@ function bdResourceSprite(res) {
         }
       }
     }
+    // Human-scale clues on the near edge communicate both use and scale. They
+    // are sparse enough that an untouched resource still reads as landscape.
+    if (res.type === 'wood') {
+      const L = bdRamp(BMAT.LOG);
+      bdBeam(g, L, -r * 0.54, r * 0.38, -r * 0.14, r * 0.31, 7.5, { cap: 'round' });
+      bdEllipse(g, -r * 0.14, r * 0.31, 3.8, 4.8, L, { litW: 0.7, edge: true });
+      const chips = bdRnd(((res.seed * 43) | 0));
+      for (let i = 0; i < 18; i++) {
+        g.fillStyle = bdRgba(i % 2 ? BT.STRAW : BT.TRUNK_LIT, chips(0.30, 0.68));
+        g.fillRect(-r * 0.34 + chips(-16, 16), r * 0.37 + chips(-4, 5), chips(1, 3.2), 1.1);
+      }
+    } else if (res.type === 'food') {
+      const B = bdRamp(BMAT.SHINGLE);
+      bdLitPath(g, function (c) {
+        c.moveTo(-r * 0.50, r * 0.42); c.lineTo(-r * 0.34, r * 0.42);
+        c.lineTo(-r * 0.37, r * 0.30); c.lineTo(-r * 0.47, r * 0.30); c.closePath();
+      }, B, { bbox: [-r * 0.50, r * 0.30, r * 0.16, r * 0.12], litW: 0.65, edge: true });
+      g.strokeStyle = B.lit; g.lineWidth = 0.75;
+      for (let i = 0; i < 4; i++) {
+        const y = r * (0.32 + i * 0.026);
+        g.beginPath(); g.moveTo(-r * 0.48, y); g.lineTo(-r * 0.36, y); g.stroke();
+      }
+      g.fillStyle = '#8E2F33';
+      for (let i = 0; i < 12; i++) {
+        g.beginPath(); g.arc(-r * 0.47 + rr(0, r * 0.10), r * 0.31 + rr(-2, 2), rr(0.8, 1.4), 0, BD_TAU); g.fill();
+      }
+    } else {
+      const I = bdRamp(BMAT.IRON), T = bdRamp(BMAT.TIMBER);
+      bdBeam(g, T, -r * 0.52, r * 0.40, -r * 0.37, r * 0.18, 2.0, { cap: 'butt' });
+      bdPoly(g, [-r * 0.41, r * 0.17, -r * 0.31, r * 0.19,
+        -r * 0.33, r * 0.24, -r * 0.43, r * 0.22], I, { litW: 0.55, edge: true });
+      bdCrate(g, r * 0.40, r * 0.43, 12, 9, (res.seed * 59) | 0);
+    }
     // A quarry face / cut bank for the mineral nodes, so stone and gold sit IN
     // the board rather than on it.
     if (res.type === 'gold' || res.type === 'stone') {
@@ -2906,6 +3282,7 @@ function bdResourceSprite(res) {
         g.fill();
       }
     }
+    bdPassSurfacePatina(g, box, (res.seed * 97 + step * 13) | 0);
   });
   bdResourceCache.set(res.id, { step: step, s: s });
   return s;
@@ -3078,15 +3455,20 @@ function drawFarm(building) {
 }
 
 /** COMPLETED BUILDINGS — one blit, plus the two live overlays. */
-function drawCompleteBuilding(building, nation) {
+function drawCompleteBuilding(building, nation, worldTime) {
   const def = BUILDING_TYPES[building.type];
   if (building.type === 'farm') { drawFarm(building); return; }
 
   const nat = NATIONS[nation];
   const variants = BD_VARIANTS[building.type] || 1;
   const variant = ((building.id % variants) + variants) % variants;
+  const hpFraction = building.hp / Math.max(1, building.maxHp);
+  const damageStage = hpFraction < 0.30 ? 2 : hpFraction < 0.66 ? 1 : 0;
+  const animFrame = building.type === 'mill'
+    ? Math.floor(((worldTime || 0) * 0.42 + building.id * 0.17) * BD_MILL_FRAMES) % BD_MILL_FRAMES
+    : 0;
   const s = bdBuildingSprite(building.type, def, building.side, nation,
-    (nat && nat.roof) || BMAT.SLATE, variant);
+    (nat && nat.roof) || BMAT.SLATE, variant, damageStage, animFrame);
   if (s) ctx.drawImage(s.c, s.x, s.y, s.w, s.h);
 
   // Live overlay: the training queue. Kept OUT of the bake because it changes
@@ -3171,7 +3553,7 @@ function drawBuilding(building, world) {
     ctx.stroke();
   }
 
-  if (building.complete) drawCompleteBuilding(building, world.sides[building.side].nation);
+  if (building.complete) drawCompleteBuilding(building, world.sides[building.side].nation, world.time);
   else drawFoundation(building);
 
   if (building.selected || building.hp < building.maxHp || !building.complete) {
