@@ -7,7 +7,9 @@ bases, and fight for the rival seat of power.
 
 The game has no runtime dependencies or build step. Its terrain, settlements,
 uniforms, effects, and sound are generated procedurally with plain HTML, CSS,
-and JavaScript.
+and JavaScript. Settlement art is baked at high resolution with nation-specific
+18th-century materials and architecture, functional yard props, worked ground,
+animated mill sails, and structural damage states.
 
 ## Play
 
@@ -43,7 +45,8 @@ then sends progressively larger, staged formations into battle.
 ## Controls
 
 - **Left-click / drag** — select a building, villager, or regiment
-- **Right-click** — move, gather, construct, attack, or set a production rally point
+- **Select villagers, then hover and left-click a deposit** — gather resources
+- **Right-click** — move, construct, attack, or set a production rally point
 - **Build card, then click terrain** — place a foundation; Shift-click places another
 - **L / C / B** — line, column, or square formation
 - **H** — halt; **P** — pause; **F** — select all military units
@@ -66,7 +69,9 @@ npm test       # economy, construction, production, victory, and mass-unit tests
 | `js/sim.js` | Fixed-step movement, combat, morale, projectiles and victory |
 | `js/ai.js` | Enemy settlement development, production and attack waves |
 | `js/formations.js` | Large-formation slot math and order assignment |
-| `js/render.js` | Procedural terrain, resources, architecture, units and minimap |
+| `js/render.js` | Camera, frame composition and minimap orchestration |
+| `js/gfx/buildings.js` | High-resolution architecture, farms, resources, props and damage variants |
+| `js/gfx/*.js` | Terrain, miniatures, effects, decals and composition passes |
 | `js/input.js` | Selection, contextual orders, placement and camera controls |
 | `js/ui.js` | Menus, resource HUD, objectives and command cards |
 | `js/main.js` | Game loop and module wiring |

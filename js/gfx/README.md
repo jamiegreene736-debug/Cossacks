@@ -51,6 +51,9 @@ A battle can put thousands of units on the field, so:
 - Work done **once** — sprite atlas painting, terrain baking, decal stamping,
   texture pre-baking — is effectively free. Be lavish there. That is where all
   the quality comes from.
+- Buildings bake at 4x, resources at 3x. Functional yard props, material
+  patina, mill animation frames and three structural-damage states all remain
+  lazy cache variants; a completed building still costs one runtime blit.
 - Work done **per unit per frame** must stay at about one `drawImage`. Per-unit
   gradients, shadow ellipses, `save`/`restore` churn, `ctx.filter` or
   `ctx.shadowBlur` in the hot loop are regressions.
@@ -63,6 +66,7 @@ Measured at 1,625 living units: 0.4ms median frame draw against a 16.7ms budget.
 | File | Owns |
 | --- | --- |
 | `terrain.js` | The board: material field, parcels, hedgerows, road, stream, foliage. Bakes 1:1 into frustum-culled tiles; `drawTerrain()` is ≤12 blits. |
+| `buildings.js` | Nation-specific 18th-century architecture, farms, resource nodes, scene props, animated mill frames and cached damage states. |
 | `infantry.js` | `drawSoldier()` — musketeers and pikemen. |
 | `mounted.js` | `drawCavalry()`, `drawCannon()`. |
 | `villager.js` | `drawWorker()` — civilian, deliberately distinct in silhouette from a soldier. |
