@@ -2,11 +2,29 @@
 // Musket fire is aggregated: many shots in a short window become one
 // louder crackle so 700-man volleys don't spawn 700 oscillators.
 
+export const AUDIO_KEY = 'empires1700.audio.v1';
+const DEFAULT_AUDIO = Object.freeze({ master: 0.7, effects: 0.72, muted: false });
+
+function clampVolume(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.min(1, number)) : fallback;
+}
+
+export function normalizeAudioSettings(settings = {}) {
+  return {
+    master: clampVolume(settings.master, DEFAULT_AUDIO.master),
+    effects: clampVolume(settings.effects, DEFAULT_AUDIO.effects),
+    muted: Boolean(settings.muted),
+  };
+}
+
 class Sfx {
   constructor() {
     this.ctx = null;
     this.master = null;
-    this.muted = false;
+    this.effects = null;
+    this.settings = this.readSettings();
+    this.muted = this.settings.muted;
     this.musketQueue = 0;
     this.musketCooldown = 0;
     this.meleeCooldown = 0;
@@ -22,8 +40,49 @@ class Sfx {
     if (!AC) return;
     this.ctx = new AC();
     this.master = this.ctx.createGain();
-    this.master.gain.value = 0.5;
+    this.effects = this.ctx.createGain();
+    this.effects.connect(this.master);
     this.master.connect(this.ctx.destination);
+    this.syncGains(true);
+  }
+
+  readSettings() {
+    try {
+      const stored = globalThis.localStorage?.getItem(AUDIO_KEY);
+      return stored ? normalizeAudioSettings(JSON.parse(stored)) : { ...DEFAULT_AUDIO };
+    } catch (_error) {
+      return { ...DEFAULT_AUDIO };
+    }
+  }
+
+  persistSettings() {
+    try { globalThis.localStorage?.setItem(AUDIO_KEY, JSON.stringify(this.settings)); } catch (_error) { /* optional */ }
+  }
+
+  syncGains(immediate = false) {
+    if (!this.ctx || !this.master || !this.effects) return;
+    const time = this.ctx.currentTime;
+    const master = this.settings.muted ? 0 : this.settings.master;
+    if (immediate) {
+      this.master.gain.value = master;
+      this.effects.gain.value = this.settings.effects;
+    } else {
+      this.master.gain.cancelScheduledValues(time);
+      this.effects.gain.cancelScheduledValues(time);
+      this.master.gain.setTargetAtTime(master, time, 0.018);
+      this.effects.gain.setTargetAtTime(this.settings.effects, time, 0.018);
+    }
+    this.muted = this.settings.muted;
+  }
+
+  getSettings() { return { ...this.settings }; }
+
+  setSettings(next) {
+    this.settings = normalizeAudioSettings({ ...this.settings, ...next });
+    this.muted = this.settings.muted;
+    this.syncGains();
+    this.persistSettings();
+    return this.getSettings();
   }
 
   noiseBuffer(dur) {
@@ -48,7 +107,7 @@ class Sfx {
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(0.045, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
-    osc.connect(g).connect(this.master);
+    osc.connect(g).connect(this.effects);
     osc.start(t);
     osc.stop(t + 0.09);
   }
@@ -66,7 +125,7 @@ class Sfx {
     const og = this.ctx.createGain();
     og.gain.setValueAtTime(0.5, t);
     og.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
-    osc.connect(og).connect(this.master);
+    osc.connect(og).connect(this.effects);
     osc.start(t);
     osc.stop(t + 0.6);
 
@@ -79,7 +138,7 @@ class Sfx {
     const ng = this.ctx.createGain();
     ng.gain.setValueAtTime(0.35, t);
     ng.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
-    src.connect(filt).connect(ng).connect(this.master);
+    src.connect(filt).connect(ng).connect(this.effects);
     src.start(t);
   }
 
@@ -95,7 +154,7 @@ class Sfx {
     const vol = Math.min(0.4, 0.06 + 0.045 * count);
     g.gain.setValueAtTime(vol, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-    src.connect(filt).connect(g).connect(this.master);
+    src.connect(filt).connect(g).connect(this.effects);
     src.start(t);
   }
 

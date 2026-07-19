@@ -91,6 +91,18 @@
 
         <button id="btn-start">Found Your Empire</button>
 
+        <section id="saved-game-card" class="saved-game-card hidden" aria-label="Saved campaign">
+          <div class="saved-game-heading">
+            <span><small>Saved campaign</small><b id="saved-game-title">England</b></span>
+            <time id="saved-game-date"></time>
+          </div>
+          <p id="saved-game-summary"></p>
+          <div class="saved-game-actions">
+            <button id="btn-load-save">Resume Campaign</button>
+            <button id="btn-delete-save">Discard Save</button>
+          </div>
+        </section>
+
         <div class="how-to">
           <h3>The road to empire</h3>
           <ol>
@@ -101,6 +113,32 @@
             <li><b>Destroy the rival Town Center</b> while defending your own.</li>
           </ol>
         </div>
+      </div>
+    </div>
+
+    <div id="overlay-pause" class="overlay pause-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+      <div class="menu-card pause-card">
+        <div class="menu-kicker">Campaign paused</div>
+        <h1 id="pause-title">War Council</h1>
+        <p class="tagline">The field is still while orders are considered.</p>
+
+        <div class="pause-actions">
+          <button id="btn-resume">Return to Field</button>
+          <button id="btn-save">Save Campaign</button>
+          <button id="btn-save-exit">Save &amp; Exit to Map Table</button>
+        </div>
+        <p id="pause-save-status" role="status" aria-live="polite"></p>
+
+        <section class="audio-panel" aria-labelledby="audio-title">
+          <div class="audio-heading">
+            <span><small class="eyebrow">Sound</small><b id="audio-title">Battlefield Volume</b></span>
+            <button id="btn-mute" aria-pressed="false">Mute</button>
+          </div>
+          <label for="volume-master"><span>Master volume</span><output id="volume-master-value">70%</output></label>
+          <input id="volume-master" type="range" min="0" max="100" step="1" value="70">
+          <label for="volume-effects"><span>Battle effects</span><output id="volume-effects-value">72%</output></label>
+          <input id="volume-effects" type="range" min="0" max="100" step="1" value="72">
+        </section>
       </div>
     </div>
 

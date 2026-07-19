@@ -11,6 +11,9 @@ import { initInput, updateInput, getSelection, getDragRect,
 import { placeBuilding, queueUnit, validatePlacement } from './economy.js';
 import * as ui from './ui.js';
 import { sfx } from './audio.js';
+import {
+  deleteCampaign, getCampaignSummary, loadCampaign, restoreGameSnapshot, saveCampaign,
+} from './savegame.js';
 
 let world = null;
 let commander = null;
@@ -31,18 +34,36 @@ initInput(canvas, minimap, () => world, {
   onToast: ui.toast,
 });
 
-ui.initMenu(startBattle);
+ui.initMenu({
+  onStart: startBattle,
+  onLoad: resumeSavedCampaign,
+  onDelete: discardSavedCampaign,
+});
 ui.bindControls({
   onPause: togglePause,
   onSpeed: toggleSpeed,
   onHalt: haltSelection,
   onFormation: setFormation,
   onCommand: handleCommand,
+  onSave: saveCurrentCampaign,
+  onAudio: settings => {
+    sfx.setSettings(settings);
+    ui.setAudioControls(sfx.getSettings());
+  },
+  onMute: () => {
+    const settings = sfx.getSettings();
+    sfx.setSettings({ muted: !settings.muted });
+    ui.setAudioControls(sfx.getSettings());
+  },
   onAgain: () => {
     world = null;
+    commander = null;
+    resetForBattle();
     ui.showStartMenu();
+    refreshSavedCampaign();
   },
 });
+refreshSavedCampaign();
 
 function startBattle(opts) {
   sfx.ensure();
@@ -75,7 +96,70 @@ function handleCommand(command) {
 function togglePause() {
   if (!world || world.state === 'ended') return;
   world.state = world.state === 'paused' ? 'running' : 'paused';
-  ui.setPauseLabel(world.state === 'paused');
+  const paused = world.state === 'paused';
+  ui.setPauseLabel(paused);
+  if (paused) ui.showPauseMenu(sfx.getSettings());
+  else ui.hidePauseMenu();
+}
+
+function refreshSavedCampaign() {
+  ui.setSavedCampaign(getCampaignSummary());
+}
+
+function saveCurrentCampaign(exitToMap = false) {
+  if (!world || !commander || world.state !== 'paused') return;
+  try {
+    const summary = saveCampaign(world, commander, camera);
+    refreshSavedCampaign();
+    ui.setPauseSaveStatus(`Campaign saved at ${new Date(summary.savedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.`);
+    if (exitToMap) {
+      world = null;
+      commander = null;
+      resetForBattle();
+      ui.showStartMenu();
+      ui.toast('Campaign saved. Resume it from the map table.', 'good');
+    }
+  } catch (error) {
+    ui.setPauseSaveStatus(error?.message || 'The campaign could not be saved.', 'danger');
+  }
+}
+
+function resumeSavedCampaign() {
+  try {
+    const snapshot = loadCampaign();
+    if (!snapshot) {
+      refreshSavedCampaign();
+      ui.toast('No saved campaign was found.', 'danger');
+      return;
+    }
+    const restored = restoreGameSnapshot(snapshot);
+    world = restored.world;
+    commander = restored.commander;
+    resetForBattle();
+    startBattleRender(world);
+    camera.x = restored.camera?.x ?? camera.x;
+    camera.y = restored.camera?.y ?? camera.y;
+    camera.zoom = restored.camera?.zoom ?? camera.zoom;
+    clampCamera();
+    world.state = 'running';
+    ui.showBattleHud(world);
+    ui.setPauseLabel(false);
+    ui.setSpeedLabel(world.speed);
+    ui.markFormation('line');
+    sfx.ensure();
+    endShown = false;
+    acc = 0;
+    ui.toast('Saved campaign restored.', 'good');
+  } catch (error) {
+    refreshSavedCampaign();
+    ui.toast(error?.message || 'The campaign could not be restored.', 'danger');
+  }
+}
+
+function discardSavedCampaign() {
+  deleteCampaign();
+  refreshSavedCampaign();
+  ui.toast('Saved campaign discarded.');
 }
 
 function toggleSpeed() {

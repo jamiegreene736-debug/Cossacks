@@ -9,6 +9,10 @@ import { applyMoveOrder } from './formations.js';
 
 let nextEntityId = 100000;
 
+export function reserveEntityIds(maxId) {
+  if (Number.isFinite(maxId)) nextEntityId = Math.max(nextEntityId, Math.floor(maxId) + 1);
+}
+
 function freshResources() {
   return Object.fromEntries(RESOURCE_KEYS.map(key => [key, STARTING_RESOURCES[key] || 0]));
 }

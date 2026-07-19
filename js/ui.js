@@ -12,7 +12,7 @@ let selectedNation = 'england';
 let lastSelectionKey = '';
 let toastTimer = 0;
 
-export function initMenu(onStart) {
+export function initMenu(menuCallbacks) {
   const select = $('sel-player-nation');
   for (const [key, nation] of Object.entries(NATIONS)) {
     const option = document.createElement('option');
@@ -28,8 +28,10 @@ export function initMenu(onStart) {
   });
   $('btn-start').addEventListener('click', () => {
     const enemyNation = selectedNation === 'england' ? 'ottoman' : 'england';
-    onStart({ playerNation: selectedNation, enemyNation });
+    menuCallbacks.onStart({ playerNation: selectedNation, enemyNation });
   });
+  $('btn-load-save').addEventListener('click', () => menuCallbacks.onLoad?.());
+  $('btn-delete-save').addEventListener('click', () => menuCallbacks.onDelete?.());
 }
 
 function updateNationPreview() {
@@ -48,6 +50,12 @@ export function bindControls(cbs) {
   $('btn-speed').addEventListener('click', cbs.onSpeed);
   $('btn-halt').addEventListener('click', cbs.onHalt);
   $('btn-again').addEventListener('click', cbs.onAgain);
+  $('btn-resume').addEventListener('click', cbs.onPause);
+  $('btn-save').addEventListener('click', () => cbs.onSave?.(false));
+  $('btn-save-exit').addEventListener('click', () => cbs.onSave?.(true));
+  $('volume-master').addEventListener('input', event => cbs.onAudio?.({ master: Number(event.target.value) / 100 }));
+  $('volume-effects').addEventListener('input', event => cbs.onAudio?.({ effects: Number(event.target.value) / 100 }));
+  $('btn-mute').addEventListener('click', () => cbs.onMute?.());
   $('command-grid').addEventListener('click', event => {
     const button = event.target.closest('button[data-action]');
     if (!button || button.disabled) return;
@@ -65,6 +73,7 @@ export function bindControls(cbs) {
 export function showBattleHud(world) {
   $('overlay-start').classList.add('hidden');
   $('overlay-end').classList.add('hidden');
+  hidePauseMenu();
   for (const id of ['hud-top', 'time-controls', 'panel', 'minimap', 'hint-bar']) $(id).classList.remove('hidden');
   $('hud-player-nation').textContent = NATIONS[world.sides[0].nation].name;
   $('hud-enemy-nation').textContent = NATIONS[world.sides[1].nation].name;
@@ -77,6 +86,58 @@ export function showBattleHud(world) {
 
 export function setPauseLabel(paused) {
   $('btn-pause').innerHTML = paused ? '&#9654;' : '&#10074;&#10074;';
+}
+
+export function showPauseMenu(audioSettings) {
+  $('pause-save-status').textContent = '';
+  setAudioControls(audioSettings);
+  $('overlay-pause').classList.remove('hidden');
+  $('btn-resume').focus();
+}
+
+export function hidePauseMenu() { $('overlay-pause').classList.add('hidden'); }
+
+export function setPauseSaveStatus(message, tone = 'good') {
+  const status = $('pause-save-status');
+  status.textContent = message;
+  status.className = tone;
+}
+
+export function setAudioControls(settings) {
+  const master = Math.round((settings?.master ?? 0.7) * 100);
+  const effects = Math.round((settings?.effects ?? 0.72) * 100);
+  $('volume-master').value = String(master);
+  $('volume-effects').value = String(effects);
+  $('volume-master-value').textContent = `${master}%`;
+  $('volume-effects-value').textContent = `${effects}%`;
+  $('btn-mute').textContent = settings?.muted ? 'Unmute' : 'Mute';
+  $('btn-mute').setAttribute('aria-pressed', String(Boolean(settings?.muted)));
+}
+
+function formatCampaignTime(seconds) {
+  const value = Math.max(0, Math.floor(Number(seconds) || 0));
+  return `${Math.floor(value / 60)}m ${String(value % 60).padStart(2, '0')}s`;
+}
+
+export function setSavedCampaign(summary) {
+  const card = $('saved-game-card');
+  card.classList.toggle('hidden', !summary);
+  if (!summary) return;
+  if (summary.corrupt) {
+    $('saved-game-title').textContent = 'Unreadable campaign';
+    $('saved-game-date').textContent = '';
+    $('saved-game-summary').textContent = 'This local save cannot be resumed. Discard it to begin a clean campaign.';
+    $('btn-load-save').disabled = true;
+    return;
+  }
+  $('btn-load-save').disabled = false;
+  const player = NATIONS[summary.nation];
+  const enemy = NATIONS[summary.enemyNation];
+  $('saved-game-title').textContent = `${player?.name || 'Unknown realm'} vs ${enemy?.name || 'Unknown rival'}`;
+  const date = new Date(summary.savedAt);
+  $('saved-game-date').textContent = date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  $('saved-game-date').dateTime = date.toISOString();
+  $('saved-game-summary').textContent = `${formatCampaignTime(summary.elapsed)} campaign · ${summary.population.toLocaleString()} population · ${summary.military.toLocaleString()} soldiers · ${summary.buildings.toLocaleString()} buildings`;
 }
 
 export function setSpeedLabel(speed) { $('btn-speed').textContent = `${speed}×`; }
@@ -378,5 +439,6 @@ export function showEnd(world) {
 export function showStartMenu() {
   for (const id of ['hud-top', 'time-controls', 'panel', 'minimap', 'hint-bar', 'placement-tip']) $(id).classList.add('hidden');
   $('overlay-end').classList.add('hidden');
+  hidePauseMenu();
   $('overlay-start').classList.remove('hidden');
 }

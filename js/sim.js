@@ -65,6 +65,13 @@ class FlatGrid {
 
 let nextId = 1;
 
+// Save-game restoration replaces the freshly-created entities with their
+// persisted counterparts. Keep future spawns above every restored id so a
+// resumed long campaign cannot create duplicate unit identities.
+export function reserveUnitIds(maxId) {
+  if (Number.isFinite(maxId)) nextId = Math.max(nextId, Math.floor(maxId) + 1);
+}
+
 function makeUnit(side, nationKey, type, x, y) {
   const base = UNIT_TYPES[type];
   const m = NATIONS[nationKey].mults;
@@ -112,7 +119,7 @@ export function createWorld(opts) {
   const world = {
     units: [], active: [],
     projectiles: [], particles: [], flags: [],
-    pendingDecals: [],
+    pendingDecals: [], decals: [],
     time: 0, state: 'running', winner: -1, checkT: 1,
     speed: 1, killLog: {},
     sepGrid: new FlatGrid(20, WORLD.w, WORLD.h),

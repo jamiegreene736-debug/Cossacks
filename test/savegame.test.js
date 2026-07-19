@@ -1,0 +1,102 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import { Commander } from '../js/ai.js';
+import { normalizeAudioSettings } from '../js/audio.js';
+import { createBuilding } from '../js/economy.js';
+import {
+  createGameSnapshot, decodeSnapshot, deleteCampaign, encodeSnapshot,
+  getCampaignSummary, loadCampaign, restoreGameSnapshot, saveCampaign,
+} from '../js/savegame.js';
+import { createWorld, spawnUnit } from '../js/sim.js';
+
+function memoryStorage() {
+  const values = new Map();
+  return {
+    getItem: key => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, String(value)),
+    removeItem: key => values.delete(key),
+  };
+}
+
+test('a campaign round trip preserves economy, AI, camera and entity references', () => {
+  const world = createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
+  world.time = 187.25;
+  world.speed = 2;
+  world.state = 'paused';
+  world.sides[0].resources.wood = 1234.5;
+  world.decals.push({ kind: 'crater', x: 222, y: 333 });
+  const attacker = spawnUnit(world, 0, 'musk', 900, 1500);
+  const defender = spawnUnit(world, 1, 'pike', 1100, 1500);
+  const enemyTownCenter = world.buildings.find(building => building.side === 1);
+  attacker.target = defender;
+  attacker.orderTarget = enemyTownCenter;
+  attacker.selected = true;
+  attacker.orderX = NaN;
+  defender.deferredAttack = { target: world.buildings[0], at: 194 };
+  world.projectiles.push({ kind: 'tower', x: 1, y: 2, target: attacker, t: 0, dur: 1 });
+
+  const commander = new Commander(world, 1);
+  commander.thinkTimer = 0.25;
+  commander.attackTimer = 41;
+  commander.committed.add(defender.id);
+  commander.planCursor = { house: 4 };
+
+  const encoded = encodeSnapshot(createGameSnapshot(world, commander, { x: 777, y: 888, zoom: 1.4 }, 123456));
+  const restored = restoreGameSnapshot(decodeSnapshot(encoded));
+  const restoredAttacker = restored.world.units.find(unit => unit.id === attacker.id);
+  const restoredDefender = restored.world.units.find(unit => unit.id === defender.id);
+
+  assert.equal(restored.world.state, 'paused');
+  assert.equal(restored.world.time, 187.25);
+  assert.equal(restored.world.speed, 2);
+  assert.equal(restored.world.sides[0].resources.wood, 1234.5);
+  assert.equal(Number.isNaN(restoredAttacker.orderX), true);
+  assert.equal(restoredAttacker.selected, false);
+  assert.equal(restoredAttacker.target, restoredDefender);
+  assert.equal(restoredAttacker.orderTarget.id, enemyTownCenter.id);
+  assert.equal(restoredDefender.deferredAttack.target, restored.world.buildings[0]);
+  assert.equal(restored.world.projectiles[0].target, restoredAttacker);
+  assert.deepEqual(restored.world.decals, world.decals);
+  assert.equal(restored.commander.committed.has(defender.id), true);
+  assert.deepEqual(restored.commander.planCursor, { house: 4 });
+  assert.deepEqual(restored.camera, { x: 777, y: 888, zoom: 1.4 });
+
+  const maxUnitId = Math.max(...restored.world.units.map(unit => unit.id));
+  assert.ok(restored.world.spawnUnit(0, 'villager', 700, 1500).id > maxUnitId);
+  const maxEntityId = Math.max(...restored.world.buildings.map(building => building.id), ...restored.world.resources.map(resource => resource.id));
+  assert.ok(createBuilding(0, 'house', 800, 1500, true).id > maxEntityId);
+});
+
+test('local campaign storage exposes metadata and supports discard', () => {
+  const storage = memoryStorage();
+  const world = createWorld({ playerNation: 'ottoman', enemyNation: 'england' });
+  const commander = new Commander(world, 1);
+  world.state = 'paused';
+  world.time = 64;
+
+  const summary = saveCampaign(world, commander, { x: 1, y: 2, zoom: 1 }, storage);
+  assert.equal(summary.nation, 'ottoman');
+  assert.equal(getCampaignSummary(storage).elapsed, 64);
+  assert.equal(loadCampaign(storage).version, 1);
+  deleteCampaign(storage);
+  assert.equal(loadCampaign(storage), null);
+});
+
+test('a maximum-scale army remains within a normal localStorage budget', () => {
+  const world = createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
+  for (let index = 0; index < 2400; index++) {
+    spawnUnit(world, index % 2, index % 5 === 0 ? 'cav' : 'musk', 100 + index, 1200 + index % 40);
+  }
+  const encoded = encodeSnapshot(createGameSnapshot(world, new Commander(world, 1), { x: 1, y: 2, zoom: 1 }));
+  assert.ok(encoded.length < 4_500_000, `save was unexpectedly large: ${encoded.length} bytes`);
+});
+
+test('audio settings clamp invalid values and preserve mute state', () => {
+  assert.deepEqual(normalizeAudioSettings({ master: 2, effects: -1, muted: true }), {
+    master: 1, effects: 0, muted: true,
+  });
+  assert.deepEqual(normalizeAudioSettings({ master: 'bad' }), {
+    master: 0.7, effects: 0.72, muted: false,
+  });
+});
