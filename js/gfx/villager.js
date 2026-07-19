@@ -510,16 +510,37 @@ function vlPassRecessWash(g, S) {
   c.width = src.width; c.height = src.height;
   const s = c.getContext('2d');
 
+  // BLUR THE FRAME, NOT THE SILHOUETTE. Blurring a solid silhouette and
+  // multiplying it back is a no-op in the interior: the blur of a solid region
+  // is still solid, so every pixel more than a blur-radius from the outline
+  // gets the SAME multiplier. That is not a shade wash, it is a flat darkening
+  // of the entire figure, and it stacks on the gallery-light gradient's 0.34
+  // darkening in the lower right — the villager goes to mud and, worse, stops
+  // matching the musketeer standing next to him.
+  //
+  // Blurring the frame's own COLOUR makes the multiplier a function of each
+  // pixel's neighbourhood: bright sun-facing planes are multiplied by something
+  // near white and barely move, while pixels beside dark neighbours — under the
+  // hat brim, in the gap between arm and smock, inside the ragged hem, along
+  // the lining — are multiplied by something dark and pool.
+  //
+  // Byte-identical construction and constants to infantry.js passRecessWash.
   s.filter = 'blur(' + (S * 0.42).toFixed(2) + 'px)';
-  s.drawImage(vlSilhouetteOf(src, '#151322'), 0, 0);
+  s.drawImage(src, 0, 0);
   s.filter = 'none';
+
+  // Lift the wash toward white so it can only pool, never crush.
+  s.globalCompositeOperation = 'source-atop';
+  s.fillStyle = 'rgba(255,252,244,0.42)';
+  s.fillRect(0, 0, c.width, c.height);
+
   s.globalCompositeOperation = 'destination-in';   // confine to the figure
   s.drawImage(src, 0, 0);
 
   g.save();
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.globalCompositeOperation = 'multiply';
-  g.globalAlpha = 0.30;
+  g.globalAlpha = 0.55;
   g.drawImage(c, 0, 0);
   g.restore();
 }
@@ -582,10 +603,36 @@ function vlPassLining(g, S, tintHex) {
  * infantry's 0.42) and a smaller radius, so a mixed crowd of troops and
  * civilians still reads soldiers first.
  */
-function vlPassGroundContact(g, cx, cy, rx, rimHex) {
-  g.save();
-  g.globalCompositeOperation = 'destination-over';
+function vlPassGroundContact(g, S, cx, cy, rx, rimHex) {
+  // COMPOSITED VIA A SCRATCH CANVAS, not painted straight onto the frame with
+  // destination-over. Every operation inside a destination-over block lands
+  // BENEATH everything already drawn in that block, so painting the scuff
+  // gradient, then the lit crescent, then the clods, then the cast shadow
+  // directly onto the frame stacks them in exactly reverse order: the crescent
+  // and the 20 clods end up buried under the 0.76-alpha scuff that was supposed
+  // to sit below them, and the cast shadow ends up under the ground it falls
+  // on. Building the whole ground plate in normal source-over order on a
+  // scratch surface and blitting it under the figure as ONE destination-over
+  // drawImage preserves the intended stacking. Bake-time only.
+  //
+  // Same construction as infantry.js passGroundContact / paintGroundPlate.
+  const src = g.canvas;
+  const plate = document.createElement('canvas');
+  plate.width = src.width; plate.height = src.height;
+  const gp = plate.getContext('2d');
+  gp.scale(S, S);
 
+  vlPaintGroundPlate(gp, cx, cy, rx, rimHex);
+
+  g.save();
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalCompositeOperation = 'destination-over';
+  g.drawImage(plate, 0, 0);
+  g.restore();
+}
+
+/** The ground plate itself, painted bottom-up in normal source-over order. */
+function vlPaintGroundPlate(g, cx, cy, rx, rimHex) {
   // --- the side-tinted trodden scuff ---------------------------------------
   if (rimHex) {
     const rimRGB = vlParseHex(rimHex);
@@ -640,8 +687,6 @@ function vlPassGroundContact(g, cx, cy, rx, rimHex) {
   sh.addColorStop(1.00, 'rgba(' + VL_SUN.shadowRGB + ',0)');
   g.fillStyle = sh;
   g.beginPath(); g.arc(0, 0, R, 0, 7); g.fill();
-  g.restore();
-
   g.restore();
 }
 
@@ -1106,10 +1151,11 @@ function vlDrawMallet(g, wood, steel, x0, y0, x1, y1) {
 function vlDrawPeg(g, wood, x, y, ang) {
   const ux = Math.cos(ang), uy = Math.sin(ang);
   vlBone(g, wood, x, y, x + ux * 1.85, y + uy * 1.85, 0.55, { cap: 'butt' });
+  g.save();
   g.fillStyle = wood.edge;
   g.globalAlpha = 0.7;
   g.beginPath(); g.arc(x + ux * 1.85, y + uy * 1.85, 0.30, 0, 7); g.fill();
-  g.globalAlpha = 1;
+  g.restore();
 }
 
 /**
@@ -1661,6 +1707,6 @@ function drawWorker(g, nat, pose, legPhase) {
   // Scuff radius 4.6 against infantry's 5.2 — a smaller footprint for a
   // smaller, quieter figure, and it keeps a dense worker crowd from turning
   // into one continuous slab of team colour.
-  vlPassGroundContact(g, VL_BX + 0.15, VL_GY + 0.35, 4.6, teamHex);
+  vlPassGroundContact(g, S, VL_BX + 0.15, VL_GY + 0.35, 4.6, teamHex);
 }
 export { drawWorker, VL_W, VL_H, VL_AX, VL_AY };
