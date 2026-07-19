@@ -1,6 +1,10 @@
 # Graphics subsystems
 
-All art in this game is drawn procedurally in code. There are no image files.
+Most art in this game is drawn procedurally in code. Signature landmarks may
+use checked-in, high-resolution pre-rendered sprites when fine masonry,
+weathering, glazing, and carved ornament need to survive close gameplay zoom.
+Those assets are preloaded before battle setup and baked into the same cache as
+procedural buildings, so a completed building still costs one runtime blit.
 
 Everything here implements one art direction — **Kriegsspiel Table**: the player
 is looking down at a painted 1:72 wargame diorama under a single warm gallery
@@ -26,10 +30,12 @@ shadowRGB '26,30,48'
 Contact shadows are cool blue-violet, never pure black — a warm key light
 produces cool shadows, and pure black desaturates the flock underneath.
 
-**Hard-edged shading, not gradients.** Each material is painted from a ramp
+**Hard-edged shading, not gradients, in procedural painters.** Each procedural material is painted from a ramp
 (`out` / `shade` / `base` / `lit`) derived programmatically from one base hex, so
 every nation's colours work automatically. Gradients inside a material read as
-muddy realism; the ramp reads as painted.
+muddy realism; the ramp reads as painted. Pre-rendered landmarks are the
+deliberate exception: their material response is already baked into the source
+art and must bypass lining and gallery-light post-processes.
 
 **Team colour lives on a painted base rim.** Every unit sprite is glued to an
 oval base whose rim is solid side colour — `#3E78B8` for side 0, `#B8483E` for
@@ -66,7 +72,8 @@ Measured at 1,625 living units: 0.4ms median frame draw against a 16.7ms budget.
 | File | Owns |
 | --- | --- |
 | `terrain.js` | The board: material field, parcels, hedgerows, road, stream, foliage. Bakes 1:1 into frustum-culled tiles; `drawTerrain()` is ≤12 blits. |
-| `buildings.js` | Nation-specific 18th-century architecture, farms, resource nodes, scene props, animated mill frames and cached damage states. |
+| `buildings.js` | Nation-specific 18th-century architecture, production-landmark preloading, farms, resource nodes, scene props, animated mill frames and cached damage states. |
+| `assets/buildings/` | Transparent high-resolution sources for production landmarks; currently the British Town Center. |
 | `infantry.js` | `drawSoldier()` — musketeers and pikemen. |
 | `mounted.js` | `drawCavalry()`, `drawCannon()`. |
 | `villager.js` | `drawWorker()` — civilian, deliberately distinct in silhouette from a soldier. |

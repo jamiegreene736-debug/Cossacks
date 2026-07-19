@@ -5,11 +5,12 @@ settlement into an empire and fielding armies at *Cossacks* scale. England and
 the Ottoman Empire begin with one Town Center, grow real economies, construct
 bases, and fight for the rival seat of power.
 
-The game has no runtime dependencies or build step. Its terrain, settlements,
-uniforms, effects, and sound are generated procedurally with plain HTML, CSS,
-and JavaScript. Settlement art is baked at high resolution with nation-specific
-18th-century materials and architecture, functional yard props, worked ground,
-animated mill sails, and structural damage states.
+The game has no runtime dependencies or build step. Terrain, troops, effects,
+sound, and most settlement art are generated procedurally with plain HTML, CSS,
+and JavaScript. Signature landmarks can use checked-in, high-resolution
+pre-rendered art; they enter the same one-blit cache as procedural buildings and
+retain deterministic structural damage states. The British Town Center is the
+first production landmark on this hybrid path.
 
 ## Play
 

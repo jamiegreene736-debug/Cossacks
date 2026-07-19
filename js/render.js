@@ -1,5 +1,5 @@
-// Rendering: procedurally drawn sprite atlases (no image files), terrain and
-// corpse-decal offscreen canvases, camera transform, effects, minimap.
+// Rendering: procedural sprite atlases plus selected production building art,
+// terrain and corpse-decal canvases, camera transform, effects, and minimap.
 
 import { WORLD, NATIONS, BUILDING_TYPES } from './config.js';
 import { buildTerrain, drawTerrain, drawTree, buildMinimapTerrain } from './gfx/terrain.js';
