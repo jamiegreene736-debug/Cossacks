@@ -6,6 +6,7 @@ import { COMBAT_FRAMES, resolveWorkerAction, getWorkerFrame } from '../js/worker
 test('worker jobs resolve to historically legible tool actions', () => {
   const gather = { kind: 'gather', targetId: 7 };
   assert.equal(resolveWorkerAction({ kind: 'build', targetId: 1 }, {}), 'build');
+  assert.equal(resolveWorkerAction({ kind: 'repair', targetId: 2 }, {}), 'build');
   assert.equal(resolveWorkerAction(gather, { entityKind: 'resource', resourceType: 'wood' }), 'chop');
   assert.equal(resolveWorkerAction(gather, { entityKind: 'resource', resourceType: 'stone' }), 'mine');
   assert.equal(resolveWorkerAction(gather, { entityKind: 'resource', resourceType: 'gold' }), 'mine');

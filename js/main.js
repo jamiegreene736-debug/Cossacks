@@ -139,7 +139,26 @@ function setupLocalBuildingFirePreview(activeWorld) {
   const debugName = new URLSearchParams(window.location.search).get('debug');
   const localHost = window.location.hostname === 'localhost'
     || window.location.hostname === '127.0.0.1';
-  if (!localHost || debugName !== 'building-fire') return;
+  if (!localHost || !['building-fire', 'building-repair'].includes(debugName)) return;
+
+  if (debugName === 'building-repair') {
+    const repairTarget = createBuilding(0, 'stable', 1120, 1500, true);
+    repairTarget.hp = repairTarget.maxHp * 0.24;
+    repairTarget.ignited = true;
+    repairTarget.fireImpactCount = 4;
+    repairTarget.fireSeed = 7341;
+    activeWorld.buildings.push(repairTarget);
+    activeWorld.resources = activeWorld.resources.filter(resource => (
+      Math.hypot(resource.x - repairTarget.x, resource.y - repairTarget.y)
+        > repairTarget.radius + resource.radius + 34
+    ));
+    spawnUnit(activeWorld, 0, 'villager', repairTarget.x - repairTarget.radius - 32, repairTarget.y);
+    camera.x = repairTarget.x;
+    camera.y = repairTarget.y;
+    camera.zoom = 1.65;
+    clampCamera();
+    return;
+  }
 
   const target = createBuilding(1, 'stable', 1120, 1500, true);
   target.maxHp = 170;

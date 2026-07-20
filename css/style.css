@@ -25,7 +25,9 @@ button, select { font: inherit; }
 #app { position: relative; width: 100vw; height: 100vh; }
 #game { position: absolute; inset: 0; display: block; cursor: crosshair; }
 #game.cursor-gather { cursor: pointer; }
-#game.cursor-build { cursor: crosshair; }
+#game.cursor-build {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M7 27L21 13' stroke='%23181310' stroke-width='7' stroke-linecap='round'/%3E%3Cpath d='M7 27L21 13' stroke='%23b8843f' stroke-width='3.5' stroke-linecap='round'/%3E%3Cpath d='M15 6l5-3 9 9-3 5-5-5-4 4-4-4 4-4z' fill='%23181310'/%3E%3Cpath d='M17 7l3-2 7 7-2 3-4-5-4 4-2-2 4-4z' fill='%23e4c66d'/%3E%3C/svg%3E") 7 27, crosshair;
+}
 #game.cursor-move { cursor: move; }
 #game.cursor-attack {
   cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%23181310' stroke-width='5'/%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%23f06b5c' stroke-width='2'/%3E%3Cpath d='M16 2v8M16 22v8M2 16h8M22 16h8' stroke='%23f8d0c7' stroke-width='2'/%3E%3C/svg%3E") 16 16, crosshair;
@@ -240,6 +242,15 @@ button, select { font: inherit; }
 }
 #resource-tooltip.attack strong { color: #ffd9d0; }
 #resource-tooltip.attack span { color: #e98677; }
+#resource-tooltip.repair {
+  background: linear-gradient(145deg, rgba(58,47,22,.98), rgba(25,21,14,.98));
+  border-color: #d1b454;
+}
+#resource-tooltip.repair::before {
+  background: #352d18; border-color: #d1b454;
+}
+#resource-tooltip.repair strong { color: #fff0bd; }
+#resource-tooltip.repair span { color: #e0c36b; }
 
 #toast {
   position: absolute; z-index: 70; left: 50%; bottom: 176px; transform: translateX(-50%);

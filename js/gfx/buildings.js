@@ -4926,8 +4926,8 @@ function bdDrawConstructionReveal(g, building, sprite, structureTop, structureBo
   }
 }
 
-function bdDrawConstructionScaffold(g, building, structureTop, structureBottom) {
-  const p = bdClamp(building.progress, 0, 1);
+function bdDrawConstructionScaffold(g, building, structureTop, structureBottom, progress = building.progress) {
+  const p = bdClamp(progress, 0, 1);
   const w = building.w;
   const targetH = Math.max(24, structureBottom - structureTop);
   const scaffoldFraction = bdClamp(0.20 + p * 1.08, 0.20, 1);
@@ -5006,6 +5006,48 @@ function bdDrawConstructionScaffold(g, building, structureTop, structureBottom) 
     }
   }
   g.restore();
+}
+
+function bdDrawRepairOverlay(building, worldTime) {
+  if (!building.repairing || building.repairProgress >= 1) return;
+  const p = bdClamp(building.repairProgress || 0, 0, 1);
+  const structureBottom = building.h * 0.40 + 3;
+  const structureTop = -(building.h * 0.5
+    + (BD_TOP_EXTRA[building.type] || building.h * 0.75)) + 18;
+  const height = Math.max(24, structureBottom - structureTop);
+  const workingY = structureBottom - height * (0.14 + p * 0.80);
+  const masonry = building.type === 'tower' || building.type === 'mine'
+    || building.type === 'foundry' || building.type === 'town_center'
+    || isFortificationType(building.type) || building.type === 'wall_stairs';
+  const course = bdRamp(masonry ? BMAT.STONE_ROUGH : BMAT.TIMBER);
+
+  ctx.save();
+  ctx.globalAlpha = 0.92 - p * 0.46;
+  bdDrawConstructionScaffold(ctx, building, structureTop, structureBottom, 1);
+  bdBeam(
+    ctx,
+    course,
+    -building.w * 0.43,
+    workingY,
+    building.w * 0.43,
+    workingY,
+    2.5,
+    { cap: 'butt' },
+  );
+
+  // Small lime-and-dust motes climb with the active course. The intact sprite
+  // underneath changes damage stages as HP returns, so the building visibly
+  // closes up while this temporary worksite fades away.
+  const phase = (worldTime || 0) * 2.2 + building.id * 0.17;
+  ctx.fillStyle = bdRgba(masonry ? BT.ROCK_LIGHT : BT.STRAW_LIGHT, 0.58);
+  for (let index = 0; index < 3; index++) {
+    const x = Math.sin(phase + index * 2.1) * building.w * (0.16 + index * 0.04);
+    const y = workingY - 4 - ((phase * 5 + index * 9) % 14);
+    ctx.beginPath();
+    ctx.arc(x, y, 1.2 + index * 0.28, 0, BD_TAU);
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 function bdDrawFarmFoundation(g, building, sprite) {
@@ -5575,6 +5617,7 @@ function drawBuilding(building, world) {
   }
   if (building.complete) drawCompleteBuilding(building, nation, world.time);
   else drawFoundation(building, nation, world.time);
+  if (building.complete) bdDrawRepairOverlay(building, world.time);
   bdDrawFortificationJunctions(building, world);
   ctx.restore();
 
