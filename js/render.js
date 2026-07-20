@@ -17,6 +17,7 @@ import {
   MILITARY_ART_SPECS,
   VILLAGER_COMBAT_ART_SPEC,
   getProductionArt,
+  getProductionFrameSlice,
 } from './gfx/art-assets.js';
 import { fortificationCorners, isFortificationType } from './fortifications.js';
 import { getWorkerFrame } from './worker-animation.js';
@@ -326,6 +327,7 @@ function withProductionMilitaryArt(type, nationKey, fallback) {
       sourceW: spec.sourceW,
       sourceH: spec.sourceH,
       sourceRow,
+      frameXBounds: spec.frameXBounds?.[nationKey],
     },
   };
 }
@@ -475,12 +477,18 @@ function buildNationSprites(nationKey, side = 0) {
         if (def.military) paintProductionMilitaryBase(g, def, side);
         g.imageSmoothingEnabled = true;
         g.imageSmoothingQuality = 'high';
+        const slice = getProductionFrameSlice(
+          production.sourceW,
+          sourceFrame,
+          production.frameXBounds,
+          def.w,
+        );
         g.drawImage(
           production.image,
-          sourceFrame * production.sourceW,
+          slice.sourceX,
           production.sourceRow * production.sourceH,
-          production.sourceW, production.sourceH,
-          0, 0, def.w, def.h,
+          slice.sourceW, production.sourceH,
+          slice.destX, 0, slice.destW, def.h,
         );
         if (!def.military && action && sourceKind !== 'combat') {
           paintProductionWorkerTool(g, nationKey, action, leg);
