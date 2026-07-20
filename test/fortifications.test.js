@@ -272,7 +272,7 @@ test('musketeers use a completed staircase, hold wall slots, and keep moderate r
   assert.equal(order.assigned, 1);
   assert.equal(updateWallAssignment(world, musketeer), 'mounted');
   assert.equal(musketeer.wallMount.wallId, wall.id);
-  assert.equal(musketeer.wallElevation, 30);
+  assert.equal(musketeer.wallElevation, 40);
   assert.equal(musketeer.range, 190, 'the firing walk does not turn a musket into artillery');
 
   const mounted = { x: musketeer.x, y: musketeer.y };

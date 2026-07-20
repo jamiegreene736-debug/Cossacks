@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { createWorld, damage, spawnUnit, step } from '../js/sim.js';
 import { Commander } from '../js/ai.js';
+import { BUILDING_TYPES } from '../js/config.js';
 import {
   assignBuilders, assignGatherers, AUTO_BUILD_SEARCH_RADIUS,
   createBuilding, findNearestResource, findResourceAt, placeBuilding,
@@ -31,8 +32,14 @@ test('a skirmish starts with exactly one Town Center per side and no units', () 
 test('the free first villager emerges and regular training spends resources', () => {
   const world = makeWorld();
   advance(world, 4.1);
-  assert.equal(world.units.filter(unit => unit.side === 0 && unit.type === 'villager').length, 1);
+  const openingVillagers = world.units.filter(unit => unit.side === 0 && unit.type === 'villager');
+  assert.equal(openingVillagers.length, 1);
   const townCenter = world.buildings.find(building => building.side === 0);
+  assert.ok(
+    Math.abs(openingVillagers[0].x - townCenter.x)
+      > townCenter.w * BUILDING_TYPES.town_center.visualScale * 0.62,
+    'the first villager should emerge beyond the displayed civic facade',
+  );
   const result = queueUnit(world, townCenter, 'villager', 5);
   assert.equal(result.queued, 4);
   assert.equal(world.sides[0].resources.food, 40);

@@ -177,68 +177,70 @@ export const UNIT_TYPES = {
 export const BUILDING_TYPES = {
   town_center: {
     label: 'Town Center', description: 'Heart of the settlement. Trains villagers.',
-    w: 132, h: 104, radius: 70, hp: 3200, buildTime: 0,
+    w: 132, h: 104, radius: 70, visualScale: 1.35, hp: 3200, buildTime: 0,
     cost: {}, popCap: 40, trains: ['villager'], hotkey: 'T',
   },
   house: {
     label: 'House', description: '+40 population capacity.',
-    w: 62, h: 52, radius: 34, hp: 650, buildTime: 9,
+    w: 62, h: 52, radius: 34, visualScale: 1.28, hp: 650, buildTime: 9,
     cost: { wood: 70 }, popCap: 40, hotkey: 'H',
   },
   farm: {
     label: 'Field', description: 'A cultivated plot attached to a completed Mill. Villagers work within its crop rows.',
-    w: 108, h: 82, radius: 52, hp: 420, buildTime: 7,
+    w: 108, h: 82, radius: 52, visualScale: 1, hp: 420, buildTime: 7,
     cost: { wood: 55 }, resource: 'food', amount: 5000, hotkey: 'F',
   },
   mill: {
     label: 'Mill', description: 'Anchors up to eight attached fields and boosts their food gathering by 20%.',
-    w: 70, h: 60, radius: 38, hp: 900, buildTime: 11,
+    w: 70, h: 60, radius: 38, visualScale: 1.25, hp: 900, buildTime: 11,
     cost: { wood: 120 }, boost: 'food', hotkey: 'M',
   },
   lumber_camp: {
     label: 'Lumber Camp', description: 'Employs woodcutters and boosts nearby wood gathering by 20%.',
-    w: 72, h: 58, radius: 39, hp: 900, buildTime: 10,
+    w: 72, h: 58, radius: 39, visualScale: 1.28, hp: 900, buildTime: 10,
     cost: { wood: 105 }, boost: 'wood', workResources: ['wood'], hotkey: 'L',
   },
   mine: {
     label: 'Mining Camp', description: 'Employs miners and boosts nearby gold and stone gathering.',
-    w: 74, h: 58, radius: 40, hp: 950, buildTime: 12,
+    w: 74, h: 58, radius: 40, visualScale: 1.26, hp: 950, buildTime: 12,
     cost: { wood: 110, stone: 20 }, boost: 'mineral', workResources: ['gold', 'stone'], hotkey: 'N',
   },
   barracks: {
     label: 'Barracks', description: 'Trains musketeers and pikemen in large batches.',
-    w: 104, h: 76, radius: 56, hp: 1700, buildTime: 15,
+    w: 104, h: 76, radius: 56, visualScale: 1.26, hp: 1700, buildTime: 15,
     cost: { wood: 220, stone: 40 }, trains: ['musk', 'pike'], hotkey: 'B',
   },
   stable: {
     label: 'Stable', description: 'Trains fast shock cavalry.',
-    w: 112, h: 78, radius: 60, hp: 1650, buildTime: 17,
+    w: 112, h: 78, radius: 60, visualScale: 1.26, hp: 1650, buildTime: 17,
     cost: { wood: 280, gold: 70 }, trains: ['cav'], hotkey: 'S',
   },
   foundry: {
     label: 'Artillery Foundry', description: 'Builds long-range cannon.',
-    w: 116, h: 84, radius: 62, hp: 1900, buildTime: 20,
+    w: 116, h: 84, radius: 62, visualScale: 1.26, hp: 1900, buildTime: 20,
     cost: { wood: 320, gold: 150, stone: 90 }, trains: ['gun'], hotkey: 'A',
   },
   tower: {
     label: 'Watch Tower', description: 'A garrisoned defensive gun position.',
-    w: 52, h: 52, radius: 29, hp: 1400, buildTime: 14,
+    w: 52, h: 52, radius: 29, visualScale: 1.28, hp: 1400, buildTime: 14,
     cost: { wood: 130, stone: 180 }, attack: 17, range: 330, reload: 3.2, hotkey: 'W',
   },
   wall: {
     label: 'Stone Wall', description: 'Heavy masonry that blocks troops and musket fire.',
-    w: 88, h: 22, radius: 46, hp: 1250, buildTime: 7,
+    w: 88, h: 22, radius: 46, visualScale: 1.32, hp: 1250, buildTime: 7,
     cost: { stone: 25 }, fortification: true, blocksUnits: true, hotkey: 'U',
   },
   gate: {
     label: 'Stone Gate', description: 'A fortified passage that can be opened or barred on command.',
-    w: 104, h: 26, radius: 54, hp: 1650, buildTime: 10,
+    w: 104, h: 26, radius: 54, visualScale: 1.32, hp: 1650, buildTime: 10,
     cost: { wood: 20, stone: 45 }, fortification: true, gate: true, hotkey: 'G',
   },
   wall_stairs: {
     label: 'Stone Staircase',
     description: 'Wall-side steps that let musketeers occupy the protected firing walk.',
-    w: 36, h: 50, radius: 29, hp: 760, buildTime: 9,
+    // Stair geometry already derives its rise from WALL_WALK_ELEVATION, so it
+    // only needs a slight breadth adjustment rather than the wall's full scale.
+    w: 36, h: 50, radius: 29, visualScale: 1.05, hp: 760, buildTime: 9,
     cost: { wood: 15, stone: 55 }, wallAttachment: true, hotkey: 'X',
   },
 };

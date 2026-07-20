@@ -1163,7 +1163,12 @@ function spawnFromQueue(world, building, unitType) {
   side.queuedPopulation = Math.max(0, side.queuedPopulation - (UNIT_TYPES[unitType].pop || 1));
   const dir = building.side === 0 ? 1 : -1;
   const angle = Math.random() * Math.PI - Math.PI / 2;
-  const x = building.x + dir * (building.radius + 24) + Math.cos(angle) * 18;
+  // Production exits must clear the painted architecture, not only its compact
+  // simulation radius. Enlarging the civic hall otherwise caused its first
+  // villager to emerge underneath the right-hand façade.
+  const visualScale = BUILDING_TYPES[building.type]?.visualScale || 1;
+  const visualExit = Math.max(building.radius, building.w * visualScale * 0.62) + 24;
+  const x = building.x + dir * visualExit + Math.cos(angle) * 18;
   const y = building.y + Math.sin(angle) * (building.radius + 14);
   const unit = world.spawnUnit(building.side, unitType, x, y);
   sfx.unitReady(building.x);
@@ -1303,9 +1308,11 @@ export function findEntityAt(world, x, y, sideFilter = null) {
   for (const building of world.buildings) {
     if (!building.alive || (sideFilter !== null && building.side !== sideFilter)) continue;
     const distance = Math.hypot(building.x - x, building.y - y);
-    const contains = isFortificationType(building.type) || BUILDING_TYPES[building.type]?.wallAttachment
-      ? pointInsideFortification(building, x, y, 8)
-      : distance <= building.radius;
+    const def = BUILDING_TYPES[building.type];
+    const visualScale = def?.visualScale || 1;
+    const contains = isFortificationType(building.type) || def?.wallAttachment
+      ? pointInsideFortification(building, x, y, 8 + def.w * (visualScale - 1))
+      : distance <= Math.max(building.radius * visualScale, def.w * visualScale * 0.75);
     if (contains && distance < bestDistance + 20) {
       best = building; bestDistance = distance;
     }
