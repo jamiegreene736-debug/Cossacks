@@ -56,6 +56,12 @@ export function initInput(canvas, minimap, worldGetter, cbs) {
     }
   });
 
+  document.addEventListener('mousedown', event => {
+    if (!placement || event.button !== 0 || event.target === canvas) return;
+    if (event.target.closest?.('button[data-action="build"]')) return;
+    cancelPlacement();
+  }, true);
+
   window.addEventListener('mousemove', event => {
     mouseX = event.clientX;
     mouseY = event.clientY;

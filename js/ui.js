@@ -11,6 +11,7 @@ let callbacks = {};
 let selectedNation = 'england';
 let lastSelectionKey = '';
 let toastTimer = 0;
+let activePlacementType = null;
 
 export function initMenu(menuCallbacks) {
   const select = $('sel-player-nation');
@@ -56,6 +57,7 @@ export function bindControls(cbs) {
   $('volume-master').addEventListener('input', event => cbs.onAudio?.({ master: Number(event.target.value) / 100 }));
   $('volume-effects').addEventListener('input', event => cbs.onAudio?.({ effects: Number(event.target.value) / 100 }));
   $('btn-mute').addEventListener('click', () => cbs.onMute?.());
+  $('btn-cancel-placement').addEventListener('click', () => cbs.onCancelPlacement?.());
   $('command-grid').addEventListener('click', event => {
     const button = event.target.closest('button[data-action]');
     if (!button || button.disabled) return;
@@ -322,6 +324,11 @@ function addCommand(grid, command) {
   button.className = 'command-card';
   button.dataset.action = command.action;
   button.dataset.type = command.type;
+  if (command.action === 'build') {
+    const active = command.type === activePlacementType;
+    button.classList.toggle('placement-active', active);
+    button.setAttribute('aria-pressed', String(active));
+  }
   if (command.count) button.dataset.count = String(command.count);
   const icon = document.createElement('span');
   icon.className = 'command-icon';
@@ -381,9 +388,17 @@ function updateObjective(world) {
   $('objective-text').textContent = body;
 }
 
-export function setPlacement(active, label = '') {
+export function setPlacement(active, label = '', type = '') {
+  activePlacementType = active ? type : null;
   $('placement-tip').classList.toggle('hidden', !active);
-  if (active && label) $('placement-tip').textContent = `${label}: move to place · Click to build · Shift-click for another · Right-click or Esc to cancel`;
+  if (active && label) {
+    $('placement-message').textContent = `${label}: click terrain to build · Click any HUD panel to cancel`;
+  }
+  for (const button of $('command-grid').querySelectorAll('button[data-action="build"]')) {
+    const selected = active && button.dataset.type === type;
+    button.classList.toggle('placement-active', selected);
+    button.setAttribute('aria-pressed', String(selected));
+  }
 }
 
 export function setResourceHover(world, hover) {

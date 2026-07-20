@@ -7,7 +7,7 @@ import { initRender, startBattle as startBattleRender, draw,
          camera, clampCamera } from './render.js';
 import { initInput, updateInput, getSelection, getDragRect,
          getPlacementPreview, getResourceHoverTarget, beginPlacement, setFormation,
-         haltSelection, resetForBattle } from './input.js';
+         cancelPlacement, haltSelection, resetForBattle } from './input.js';
 import { placeBuilding, queueUnit, validatePlacement } from './economy.js';
 import * as ui from './ui.js';
 import { sfx } from './audio.js';
@@ -31,7 +31,11 @@ initInput(canvas, minimap, () => world, {
   onSelection: () => world && ui.updateHud(world, getSelection()),
   onValidatePlacement: (type, x, y) => validatePlacement(world, 0, type, x, y),
   onPlaceBuilding: (type, x, y, workers) => placeBuilding(world, 0, type, x, y, workers),
-  onPlacement: placement => ui.setPlacement(Boolean(placement), placement ? BUILDING_TYPES[placement.type].label : ''),
+  onPlacement: placement => ui.setPlacement(
+    Boolean(placement),
+    placement ? BUILDING_TYPES[placement.type].label : '',
+    placement?.type || '',
+  ),
   onResourceHover: hover => ui.setResourceHover(world, hover),
   onToast: ui.toast,
 });
@@ -47,6 +51,7 @@ ui.bindControls({
   onHalt: haltSelection,
   onFormation: setFormation,
   onCommand: handleCommand,
+  onCancelPlacement: cancelPlacement,
   onSave: saveCurrentCampaign,
   onAudio: settings => {
     sfx.setSettings(settings);
@@ -85,6 +90,10 @@ async function startBattle(opts) {
 function handleCommand(command) {
   if (!world) return;
   if (command.action === 'build') {
+    if (getPlacementPreview()?.type === command.type) {
+      cancelPlacement();
+      return;
+    }
     beginPlacement(command.type);
     return;
   }
