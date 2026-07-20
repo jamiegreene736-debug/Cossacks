@@ -1,6 +1,6 @@
-// Shared production-art registry. Signature buildings and natural-resource
-// clusters use pre-rendered sources; every consumer still bakes them into its
-// own one-blit runtime cache.
+// Shared production-art registry. Buildings, civilians, natural-resource
+// clusters and terrain accents use pre-rendered sources; every consumer still
+// bakes them into its own one-blit runtime cache.
 
 const ART_URLS = Object.freeze({
   englishTownCenter: new URL('../../assets/buildings/english-town-center.png', import.meta.url).href,
@@ -17,6 +17,9 @@ const ART_URLS = Object.freeze({
   stoneOutcrop: new URL('../../assets/resources/stone-outcrop.webp', import.meta.url).href,
   goldOutcrop: new URL('../../assets/resources/gold-outcrop.webp', import.meta.url).href,
   englishMeadow: new URL('../../assets/terrain/english-meadow.jpg', import.meta.url).href,
+  countryVegetation: new URL('../../assets/terrain/country-vegetation.webp', import.meta.url).href,
+  englishVillager: new URL('../../assets/units/english-villager.webp', import.meta.url).href,
+  ottomanVillager: new URL('../../assets/units/ottoman-villager.webp', import.meta.url).href,
 });
 
 const artImages = new Map();

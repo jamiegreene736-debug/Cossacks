@@ -11,6 +11,7 @@ import { getTerrainCanvas } from './gfx/terrain.js';
 import { getTrampleCanvas } from './gfx/decals.js';
 import { drawCavalry, drawCannon } from './gfx/mounted.js';
 import { drawWorker, VL_W, VL_H, VL_AX, VL_AY } from './gfx/villager.js';
+import { getProductionArt } from './gfx/art-assets.js';
 import { setBuildingRefs, bdResetCaches, drawResourceNode, drawFarm,
          drawFoundation, drawCompleteBuilding, drawBuilding } from './gfx/buildings.js';
 import { setCompositeRefs, setCompositeView, setCompositeTrampleLayer,
@@ -23,6 +24,13 @@ const SCALE = 4; // sprite atlas oversampling — 4 keeps figures crisp at 2.4x 
 // Reserved side colours. These appear nowhere else in the world, so side
 // identity survives even a mirror matchup (England vs England).
 const SIDE_RIM = ['#3E78B8', '#B8483E'];
+const PRODUCTION_WORKER = Object.freeze({
+  w: 38, h: 44, ax: 19, ay: 36.5, sourceW: 384, sourceH: 448,
+});
+const PRODUCTION_WORKER_ART = Object.freeze({
+  england: 'englishVillager',
+  ottoman: 'ottomanVillager',
+});
 
 export const camera = { x: 660, y: WORLD.h / 2, zoom: 0.9 };
 
@@ -140,11 +148,25 @@ function buildNationSprites(nationKey, side = 0) {
   // The painters read an optional `rim` (side colour) and `headgear` off nat.
   const nat = { ...NATIONS[nationKey], rim: SIDE_RIM[side] };
   const out = {};
+  const productionWorker = getProductionArt(PRODUCTION_WORKER_ART[nationKey]);
+  const workerDef = productionWorker ? {
+    w: PRODUCTION_WORKER.w,
+    h: PRODUCTION_WORKER.h,
+    ax: PRODUCTION_WORKER.ax,
+    ay: PRODUCTION_WORKER.ay,
+    production: productionWorker,
+    frames: [['idle', 0], ['idle', 1], ['idle', 2], ['work', 0]],
+  } : {
+    w: VL_W,
+    h: VL_H,
+    ax: VL_AX,
+    ay: VL_AY,
+    frames: [['idle', 0], ['idle', 1], ['idle', 2], ['work', 0]],
+    painter: (g, pose, leg) => drawWorker(g, nat, pose, leg),
+  };
 
   const defs = {
-    villager: { w: VL_W, h: VL_H, ax: VL_AX, ay: VL_AY, frames: [
-      ['idle', 0], ['idle', 1], ['idle', 2], ['work', 0],
-    ], painter: (g, pose, leg) => drawWorker(g, nat, pose, leg) },
+    villager: workerDef,
     musk: { w: INF_W, h: INF_H, ax: INF_AX, ay: INF_AY, frames: [
       ['idle', 0], ['idle', 1], ['idle', 2], ['fire', 0],
     ], painter: (g, pose, leg) => drawSoldier(g, nat, pose, leg, 'musk') },
@@ -165,9 +187,21 @@ function buildNationSprites(nationKey, side = 0) {
 
   for (const [type, def] of Object.entries(defs)) {
     const right = [], left = [];
-    for (const [pose, leg] of def.frames) {
+    for (let frameIndex = 0; frameIndex < def.frames.length; frameIndex++) {
+      const [pose, leg] = def.frames[frameIndex];
       const [c, g] = frameCanvas(def.w, def.h);
-      def.painter(g, pose, leg);
+      if (def.production) {
+        g.imageSmoothingEnabled = true;
+        g.imageSmoothingQuality = 'high';
+        g.drawImage(
+          def.production,
+          frameIndex * PRODUCTION_WORKER.sourceW, 0,
+          PRODUCTION_WORKER.sourceW, PRODUCTION_WORKER.sourceH,
+          0, 0, def.w, def.h,
+        );
+      } else {
+        def.painter(g, pose, leg);
+      }
       right.push(c);
       left.push(mirror(c));
     }

@@ -1,12 +1,13 @@
 # Graphics subsystems
 
 The renderer combines procedural art with checked-in, high-resolution sprites
-where fine masonry, weathering, glazing, foliage, and carved ornament need to
-survive close gameplay zoom. England's complete building roster and natural
-resource nodes use one coordinated production-art set. Those assets are
-preloaded before battle setup and enter the same caches as procedural art, so a
-completed building or resource still costs one runtime blit. Procedural paths
-remain as resilient fallbacks and continue to render the Ottoman roster.
+where fine masonry, weathering, glazing, foliage, carved ornament, cloth, and
+human anatomy need to survive close gameplay zoom. England's complete building
+roster, both nations' civilians, natural resource nodes, meadow, and country
+vegetation use coordinated production-art sets. Those assets are preloaded
+before battle setup and enter the same caches as procedural art, so a completed
+building, resource, or unit still costs one runtime blit. Procedural paths
+remain as resilient fallbacks.
 
 Everything here implements one art direction — **Kriegsspiel Table**: the player
 is looking down at a painted 1:72 wargame diorama under a single warm gallery
@@ -39,12 +40,11 @@ muddy realism; the ramp reads as painted. Pre-rendered production assets are the
 deliberate exception: their material response is already baked into the source
 art and must bypass lining and gallery-light post-processes.
 
-**Team colour lives on a painted base rim.** Every unit sprite is glued to an
-oval base whose rim is solid side colour — `#3E78B8` for side 0, `#B8483E` for
-side 1. These appear nowhere else in the world, so a mirror matchup still reads.
-The rim sits at the sprite anchor where the figure never occludes it, and
-because bases pack at roughly 12px spacing a formation front resolves into a
-continuous chain of side colour before the eye resolves a single man.
+**Team colour lives on military base rims.** Every procedural military sprite
+is glued to an oval base whose rim is solid side colour — `#3E78B8` for side 0,
+`#B8483E` for side 1. Production civilians instead retain a natural cast shadow
+and use their nation-specific dress plus the live selection ring for identity;
+adding a painted pedestal would undo their new material depth.
 
 **Keep every drawn pixel inside the frame box, and put the anchor at `w/2`.**
 Sprites are mirrored for the left-facing copy by drawing at `ix - ax`, which is
@@ -60,8 +60,9 @@ A battle can put thousands of units on the field, so:
   texture pre-baking — is effectively free. Be lavish there. That is where all
   the quality comes from.
 - Procedural buildings bake at 4x and procedural resources at 3x. Production
-  sprites load once, then use lazy scale/damage/depletion variants. The Town
-  Center's waving flag is the only live overlay in England's architectural set.
+  sprites load once, then use lazy scale/damage/depletion variants. Civilian
+  production frames bake into the same left/right unit atlas at battle start.
+  The Town Center's waving flag is the only live architectural overlay.
 - Work done **per unit per frame** must stay at about one `drawImage`. Per-unit
   gradients, shadow ellipses, `save`/`restore` churn, `ctx.filter` or
   `ctx.shadowBlur` in the hot loop are regressions.
@@ -74,14 +75,15 @@ Measured at 1,625 living units: 0.4ms median frame draw against a 16.7ms budget.
 | File | Owns |
 | --- | --- |
 | `art-assets.js` | Central URL registry, preload lifecycle and lookup for production art. |
-| `terrain.js` | The board: production meadow texture, material field, parcels, hedgerows, road, stream, and restrained procedural foliage. Bakes 1:1 into frustum-culled tiles; `drawTerrain()` is ≤12 blits. |
+| `terrain.js` | The board: production meadow, hedgerow and scrub art; material field; parcels; road; stream; and restrained procedural foliage. Bakes 1:1 into frustum-culled tiles; `drawTerrain()` is ≤12 blits. |
 | `buildings.js` | Nation-specific 18th-century architecture, farms, production and procedural resource nodes, scene props, waving Union flag, and cached damage/depletion states. |
 | `assets/buildings/` | Transparent high-resolution sources for every completed England structure. |
 | `assets/resources/` | Transparent woodland, berry, stone, and gold sources. |
-| `assets/terrain/` | Seamless production meadow source. |
+| `assets/terrain/` | Seamless meadow plus alpha country-vegetation sources. |
+| `assets/units/` | Four-frame English and Ottoman civilian production sheets. |
 | `infantry.js` | `drawSoldier()` — musketeers and pikemen. |
 | `mounted.js` | `drawCavalry()`, `drawCannon()`. |
-| `villager.js` | `drawWorker()` — civilian, deliberately distinct in silhouette from a soldier. |
+| `villager.js` | `drawWorker()` — resilient procedural civilian fallback. |
 | `decals.js` | Persistent aftermath: corpses, craters, wrecks, ruins, trample. |
 | `effects.js` | Powder smoke, muzzle flash, projectiles, blood, dust. |
 | `composite.js` | Frame composition: haze, grade, vignette, selection, health bars, order flags, minimap. |
