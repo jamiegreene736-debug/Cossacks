@@ -54,7 +54,8 @@ then sends progressively larger, staged formations into battle.
 - **Left-click / drag** — select a building, villager, or regiment
 - **Select villagers, then left-click open ground** — move them to a flagged destination
 - **Select villagers, then hover and left-click a deposit or economic building** — gather resources or work there
-- **Right-click** — move, construct, attack, or set a production rally point
+- **Right-click / Mac two-finger click / Control-click** — move, construct, attack, or set a ground rally point
+- **Town Center selected + primary click on a resource or worksite** — send newly trained villagers there to gather, work, or build
 - **Build card, then click terrain** — place a foundation
 - **Stone Wall, then press-drag-release** — preview and place the longest connected run your stone and open terrain allow
 - **Villager + open-ground click** — move to the waypoint using a route around walls, buildings, and deposits
