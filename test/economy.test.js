@@ -53,6 +53,32 @@ test('villagers gather from deposits without allowing resource values to go nega
   assert.ok(berries.amount >= 0);
 });
 
+test('arriving workers face their target and expose the matching work animation', () => {
+  const world = makeWorld();
+  advance(world, 4.1);
+  const worker = world.units.find(unit => unit.side === 0);
+  const targets = [
+    [findNearestResource(world, worker.x, worker.y, 'wood', 0), 'chop'],
+    [findNearestResource(world, worker.x, worker.y, 'stone', 0), 'mine'],
+    [findNearestResource(world, worker.x, worker.y, 'gold', 0), 'mine'],
+    [findNearestResource(world, worker.x, worker.y, 'food', 0), 'forage'],
+  ];
+  const farm = createBuilding(0, 'farm', 900, 1750, true);
+  world.buildings.push(farm);
+  targets.push([farm, 'farm']);
+
+  for (const [target, expectedAction] of targets) {
+    worker.x = target.x - target.radius - 5;
+    worker.y = target.y;
+    worker.facing = -1;
+    assert.equal(assignGatherers(world, [worker], target), true);
+    stepEconomy(world, 1 / 30);
+    assert.equal(worker.state, 'work');
+    assert.equal(worker.workAction, expectedAction);
+    assert.equal(worker.facing, 1);
+  }
+});
+
 test('economy telemetry separates assigned hourly output from sampled live income', () => {
   const world = makeWorld();
   advance(world, 4.1);
