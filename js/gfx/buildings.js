@@ -602,109 +602,318 @@ function bdPassLining(g, scale, tintHex) {
 }
 
 /**
- * PASS E — the brick-and-packed-earth apron and the soft ground bed, painted
- * under everything with 'destination-over' so they are not swept into the
- * lining silhouette.
+ * Generates one deterministic brick courtyard in an unsquashed ground plane.
+ * Rendering later compresses Y to the building's isometric apron depth. A
+ * zig-zag of alternating 45-degree pavers forms a true 90-degree herringbone
+ * field, while tangent header pavers bind the whole perimeter.
  *
- * The apron is the building's share of the base-rim mechanism: muted pavers
- * interrupted by worn earth, with only the outer course nudged toward the
- * owner's colour. Everything passes through bdLawful so it still reads as
- * ground rather than a coloured plinth or permanent selection ring.
+ * Keeping layout independent of Canvas makes the bond, weathering density and
+ * full-circumference border regression-testable without a browser.
+ */
+function getBuildingPavingLayout(rx, ry, seed) {
+  const safeRx = Math.max(16, Number.isFinite(rx) ? rx : 16);
+  const safeRy = Math.max(8, Number.isFinite(ry) ? ry : safeRx * bdSUN.squash);
+  const rr = bdRnd(seed || ((safeRx * 71 + safeRy * 131) | 0));
+  const brickWidth = bdClamp(safeRx * 0.050, 3.45, 4.85);
+  const brickLength = brickWidth * 2.08;
+  const joint = bdClamp(brickWidth * 0.16, 0.54, 0.78);
+  const borderRadius = safeRx * 0.930;
+  const borderWidth = brickWidth * 1.18;
+  const borderCount = Math.max(28, Math.round(BD_TAU * borderRadius / (brickLength * 0.92)));
+  const borderLength = BD_TAU * borderRadius / borderCount - joint * 0.55;
+  const fieldRadius = borderRadius - borderWidth * 0.78 - joint;
+  const pavers = [];
+
+  function addPaver(kind, x, y, angle, length, width) {
+    const weather = rr(0, 1);
+    pavers.push({
+      kind,
+      x,
+      y,
+      angle: angle + rr(-0.018, 0.018),
+      length,
+      width,
+      settle: rr(-0.22, 0.34),
+      tone: Math.min(4, Math.floor(rr(0, 5))),
+      chip: weather > 0.72 ? Math.floor(rr(0, 4)) : -1,
+      moss: weather < (kind === 'border' ? 0.28 : 0.18),
+      mossEdge: Math.floor(rr(0, 4)),
+      patina: rr(0, 1) < 0.24,
+      markX: rr(-0.28, 0.28),
+      markY: rr(-0.22, 0.22),
+    });
+  }
+
+  // The alternating diagonal pair is a repeating V. Successive offset rows
+  // lock into those Vs, giving a legible herringbone even on the smallest hut.
+  const diagonal = brickLength / Math.SQRT2;
+  const pairAdvance = diagonal * 2;
+  const rowStep = diagonal + joint * 0.48;
+  const rowLimit = Math.ceil(fieldRadius / rowStep) + 2;
+  const pairLimit = Math.ceil(fieldRadius * 2 / pairAdvance) + 3;
+  for (let row = -rowLimit; row <= rowLimit; row++) {
+    const baseline = row * rowStep - diagonal * 0.5;
+    const phase = Math.abs(row) % 2 ? diagonal : 0;
+    for (let pair = -pairLimit; pair <= pairLimit; pair++) {
+      const start = pair * pairAdvance + phase;
+      const centerY = baseline + diagonal * 0.5;
+      const candidates = [
+        { x: start + diagonal * 0.5, angle: Math.PI / 4 },
+        { x: start + diagonal * 1.5, angle: -Math.PI / 4 },
+      ];
+      for (let index = 0; index < candidates.length; index++) {
+        const candidate = candidates[index];
+        if (Math.hypot(candidate.x, centerY) <= fieldRadius - brickWidth * 0.24) {
+          addPaver('field', candidate.x, centerY, candidate.angle, brickLength, brickWidth);
+        }
+      }
+    }
+  }
+
+  // A continuous header course makes it unmistakable that the paving wraps
+  // the entire building instead of being a decorative patch at the entrance.
+  for (let index = 0; index < borderCount; index++) {
+    const angle = index / borderCount * BD_TAU;
+    addPaver('border', Math.cos(angle) * borderRadius, Math.sin(angle) * borderRadius,
+      angle + Math.PI / 2, borderLength, borderWidth);
+  }
+
+  const perimeter = [];
+  const perimeterPoints = 48;
+  const waveA = rr(0, BD_TAU);
+  const waveB = rr(0, BD_TAU);
+  for (let index = 0; index < perimeterPoints; index++) {
+    const angle = index / perimeterPoints * BD_TAU;
+    const radius = safeRx * (0.978
+      + Math.sin(angle * 3 + waveA) * 0.018
+      + Math.sin(angle * 7 + waveB) * 0.011
+      + rr(-0.007, 0.007));
+    perimeter.push({ x: Math.cos(angle) * radius, y: Math.sin(angle) * radius });
+  }
+
+  return {
+    rx: safeRx,
+    ry: safeRy,
+    yScale: safeRy / safeRx,
+    brickLength,
+    brickWidth,
+    joint,
+    fieldRadius,
+    borderRadius,
+    borderCount,
+    pavers,
+    perimeter,
+  };
+}
+
+function bdPavingPerimeterPath(g, points) {
+  g.beginPath();
+  for (let index = 0; index < points.length; index++) {
+    const point = points[index];
+    if (index === 0) g.moveTo(point.x, point.y);
+    else g.lineTo(point.x, point.y);
+  }
+  g.closePath();
+}
+
+function bdPaverPath(g, paver, grow) {
+  const extra = grow || 0;
+  const halfLength = paver.length * 0.5 + extra;
+  const halfWidth = paver.width * 0.5 + extra;
+  const chamfer = Math.min(0.72, paver.width * 0.14 + extra * 0.18);
+  g.beginPath();
+  g.moveTo(-halfLength + chamfer, -halfWidth);
+  g.lineTo(halfLength - chamfer, -halfWidth);
+  g.lineTo(halfLength, -halfWidth + chamfer);
+  g.lineTo(halfLength, halfWidth - chamfer);
+  g.lineTo(halfLength - chamfer, halfWidth);
+  g.lineTo(-halfLength + chamfer, halfWidth);
+  g.lineTo(-halfLength, halfWidth - chamfer);
+  g.lineTo(-halfLength, -halfWidth + chamfer);
+  g.closePath();
+}
+
+function bdAtPaver(g, paver, paint) {
+  g.save();
+  g.translate(paver.x, paver.y + paver.settle);
+  g.rotate(paver.angle);
+  paint();
+  g.restore();
+}
+
+/**
+ * PASS E — a complete, weathered brick courtyard and soft ground bed, painted
+ * below the building with 'destination-over'. The stamp is still baked once,
+ * so individual pavers add no per-frame rendering cost.
+ *
+ * Under destination-over, calls are deliberately made from visual foreground
+ * to background: moss/chips/bevels, joint shadows, brick bodies, mortar, then
+ * the earth feather. This preserves real recessed joints without ever drawing
+ * paving over the building artwork.
  */
 function bdPassGroundApron(g, cx, cy, rx, sideHex, options) {
   const o = options || {};
   const ry = o.ry || rx * bdSUN.squash;
   const seed = o.seed || ((rx * 71 + ry * 131) | 0);
-  const rr = bdRnd(seed);
-  const worn = bdLawful(bdMix(BT.EARTH, sideHex || BT.EARTH, 0.16));
-  const paver = bdLawful(bdMix(BMAT.BRICK, BT.EARTH_LIGHT, 0.38));
-  const mortar = bdLawful(bdMix(BT.ROCK, BT.EARTH_LIGHT, 0.32));
+  const layout = getBuildingPavingLayout(rx, ry, seed);
+  const worn = bdLawful(bdMix(BT.EARTH, sideHex || BT.EARTH, 0.10));
+  const mortar = bdLawful(bdMix(BT.ROCK_DARK, BT.EARTH, 0.54));
+  const paverBase = bdLawful(bdMix(BMAT.BRICK_RED, BT.EARTH_LIGHT, 0.20));
+  const paverPalette = [
+    paverBase,
+    bdLawful(bdMix(BMAT.BRICK, BT.EARTH, 0.12)),
+    bdLawful(bdMix(BMAT.BRICK_RED, BT.ROCK, 0.12)),
+    bdLawful(bdMix(BMAT.BRICK, BT.EARTH_DARK, 0.28)),
+    bdLawful(bdMix(BMAT.BRICK_RED, BT.STRAW, 0.18)),
+  ];
+  const jointShadow = bdMix(mortar, '#171512', 0.38);
+  const bevelLight = bdLawful(bdMix(paverBase, bdSUN.key, 0.34));
+  const bevelShade = bdLawful(bdMix(paverBase, BT.EARTH_DARK, 0.42));
+  const mossDeep = bdLawful(BT.FOLIAGE_DEEP);
+  const mossBase = bdLawful(BT.FOLIAGE_BASE);
+  const mossLit = bdLawful(BT.FOLIAGE_LIT);
+
   g.save();
   g.globalCompositeOperation = 'destination-over';
-
-  // ORDER MATTERS AND IS INVERTED HERE. Under 'destination-over' each draw goes
-  // BEHIND the previous one, so this block is painted front-to-back: the soft
-  // bed shadow first (it must end up ON TOP of the trodden earth, because a
-  // shadow falls onto ground), then wear and paver joints, then the apron body
-  // last so it sits underneath its own detail. Painting these in reading order
-  // would bury the contact shadow and joints beneath the opaque paver body.
-
-  // 1. soft ground bed. Radii are deliberately held to 1.12x: at 1.45x the
-  // falloff ran past the stamp box on town_center / barracks / stable / foundry
-  // and the blit edge cut a dead-straight line across a soft shadow.
-  const ox = cx + rx * 0.24, oy = cy + ry * 0.34;
-  g.save();
-  g.translate(ox, oy);
-  g.scale(1, ry / rx);
-  const sh = g.createRadialGradient(0, 0, 0, 0, 0, rx * 1.12);
-  sh.addColorStop(0.00, bdShadow(0.40));
-  sh.addColorStop(0.55, bdShadow(0.18));
-  sh.addColorStop(1.00, bdShadow(0));
-  g.fillStyle = sh;
-  g.beginPath(); g.arc(0, 0, rx * 1.12, 0, BD_TAU); g.fill();
-  g.restore();
-
-  // 2. irregular packed-earth wear sits over the paving. Because this whole
-  // pass uses destination-over, painting it first keeps the worn spots above
-  // the mortar and brick body that follow.
-  for (let i = 0; i < 12; i++) {
-    const a = rr(0, BD_TAU);
-    const d = Math.sqrt(rr(0, 1)) * rx * 0.82;
-    const px = cx + Math.cos(a) * d;
-    const py = cy + Math.sin(a) * d * (ry / rx);
-    g.fillStyle = bdRgba(i % 3 ? worn : BT.EARTH_DARK, rr(0.16, 0.34));
-    g.beginPath();
-    g.ellipse(px, py, rr(2.2, 7.0), rr(1.0, 3.4), rr(-0.4, 0.4), 0, BD_TAU);
-    g.fill();
-  }
-
-  // 3. staggered paver joints. Their isometric ellipsoidal clip makes the
-  // paving read as a flat yard around the building rather than a raised base.
-  g.save();
-  g.beginPath();
-  g.ellipse(cx, cy, rx * 0.96, ry * 0.92, 0, 0, BD_TAU);
-  g.clip();
-  const courseH = bdClamp(ry * 0.18, 3.2, 6.2);
-  const brickW = courseH * 2.35;
-  let row = 0;
-  for (let y = cy - ry; y <= cy + ry; y += courseH, row++) {
-    const yn = (y - cy) / ry;
-    const span = rx * Math.sqrt(Math.max(0, 1 - yn * yn));
-    g.strokeStyle = bdRgba(bdMix(mortar, '#1B1814', 0.34), 0.50);
-    g.lineWidth = 0.72;
-    g.beginPath(); g.moveTo(cx - span, y); g.lineTo(cx + span, y); g.stroke();
-    g.strokeStyle = bdRgba(bdMix(paver, bdSUN.key, 0.24), 0.30);
-    g.lineWidth = 0.52;
-    g.beginPath(); g.moveTo(cx - span, y - 0.75); g.lineTo(cx + span, y - 0.75); g.stroke();
-    const offset = row % 2 ? brickW * 0.5 : 0;
-    for (let x = cx - span + offset; x < cx + span; x += brickW) {
-      g.strokeStyle = bdRgba(bdMix(mortar, '#1B1814', 0.42), rr(0.36, 0.56));
-      g.lineWidth = 0.68;
-      g.beginPath(); g.moveTo(x, y - courseH); g.lineTo(x + rr(-0.45, 0.45), y); g.stroke();
-    }
-  }
-  g.restore();
-
-  // 4. restrained edge course carries a trace of team colour without turning
-  // the permanent yard into a selection ring.
-  g.strokeStyle = bdRgba(bdLawful(bdMix(paver, sideHex || paver, 0.22)), 0.42);
-  g.lineWidth = 2.0;
-  g.beginPath(); g.ellipse(cx, cy, rx * 0.97, ry * 0.93, 0, 0, BD_TAU); g.stroke();
-
-  // 5. brick/earth body and its feathered turf transition, painted last so
-  // they sit beneath the wear, joints, contact shadow, and building.
-  g.fillStyle = bdRgba(paver, 0.64);
-  g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, BD_TAU); g.fill();
-  g.save();
   g.translate(cx, cy);
-  g.scale(1, ry / rx);
-  const sg = g.createRadialGradient(0, 0, 0, 0, 0, rx * 1.18);
-  sg.addColorStop(0.00, bdRgba(worn, 0.52));
-  sg.addColorStop(0.72, bdRgba(worn, 0.32));
-  sg.addColorStop(1.00, bdRgba(worn, 0));
-  g.fillStyle = sg;
-  g.beginPath(); g.arc(0, 0, rx * 1.18, 0, BD_TAU); g.fill();
+  g.scale(1, layout.yScale);
+
+  // Contact and edge shadows sit on top of the masonry, darkest down-right.
+  const shadowX = layout.rx * 0.12;
+  const shadowY = layout.rx * 0.10;
+  const bed = g.createRadialGradient(shadowX, shadowY, layout.rx * 0.08,
+    shadowX, shadowY, layout.rx * 1.10);
+  bed.addColorStop(0.00, bdShadow(0.22));
+  bed.addColorStop(0.58, bdShadow(0.06));
+  bed.addColorStop(1.00, bdShadow(0));
+  g.fillStyle = bed;
+  g.beginPath(); g.arc(shadowX, shadowY, layout.rx * 1.10, 0, BD_TAU); g.fill();
+  g.save();
+  bdPavingPerimeterPath(g, layout.perimeter);
+  g.clip();
+
+  // Sparse moss occupies joints only. Small light flecks are painted first so
+  // they remain above the broader green growth under destination-over.
+  for (let index = 0; index < layout.pavers.length; index++) {
+    const paver = layout.pavers[index];
+    if (!paver.moss) continue;
+    bdAtPaver(g, paver, function () {
+      const horizontal = paver.mossEdge % 2 === 0;
+      const positive = paver.mossEdge > 1;
+      const edge = positive ? 1 : -1;
+      const length = horizontal ? paver.length : paver.width;
+      const offset = (horizontal ? paver.width : paver.length) * 0.5 * edge;
+      g.fillStyle = bdRgba(mossLit, 0.72);
+      for (let dot = -1; dot <= 1; dot++) {
+        const along = length * (dot * 0.18 + paver.markX * 0.12);
+        g.beginPath();
+        if (horizontal) g.ellipse(along, offset, 0.54, 0.34, 0, 0, BD_TAU);
+        else g.ellipse(offset, along, 0.34, 0.54, 0, 0, BD_TAU);
+        g.fill();
+      }
+      g.strokeStyle = bdRgba(mossBase, 0.82);
+      g.lineWidth = 0.90;
+      g.beginPath();
+      if (horizontal) {
+        g.moveTo(-length * 0.31, offset);
+        g.lineTo(length * 0.28, offset + paver.markY * 0.18);
+      } else {
+        g.moveTo(offset, -length * 0.31);
+        g.lineTo(offset + paver.markX * 0.18, length * 0.28);
+      }
+      g.stroke();
+      g.strokeStyle = bdRgba(mossDeep, 0.78);
+      g.lineWidth = 1.32;
+      g.stroke();
+    });
+  }
+
+  // Chips, mineral speckle and opposing bevel lines model depth on every
+  // paver. The dark bevel follows the same down-right light law as buildings.
+  for (let index = 0; index < layout.pavers.length; index++) {
+    const paver = layout.pavers[index];
+    bdAtPaver(g, paver, function () {
+      const halfLength = paver.length * 0.5;
+      const halfWidth = paver.width * 0.5;
+      if (paver.patina) {
+        g.fillStyle = bdRgba(bdMix(paverPalette[paver.tone], BT.ROCK_LIGHT, 0.44), 0.40);
+        g.beginPath();
+        g.ellipse(paver.markX * paver.length, paver.markY * paver.width,
+          0.58, 0.24, -0.3, 0, BD_TAU);
+        g.fill();
+      }
+      if (paver.chip >= 0) {
+        const right = paver.chip === 1 || paver.chip === 2;
+        const bottom = paver.chip >= 2;
+        const sx = right ? 1 : -1;
+        const sy = bottom ? 1 : -1;
+        g.fillStyle = bdRgba(bdMix(mortar, BT.EARTH_DARK, 0.34), 0.88);
+        g.beginPath();
+        g.moveTo(sx * halfLength, sy * (halfWidth - 0.20));
+        g.lineTo(sx * (halfLength - 1.25), sy * halfWidth);
+        g.lineTo(sx * (halfLength - 0.32), sy * (halfWidth - 0.92));
+        g.closePath();
+        g.fill();
+      }
+      g.strokeStyle = bdRgba(bevelLight, 0.62);
+      g.lineWidth = 0.46;
+      g.beginPath();
+      g.moveTo(-halfLength + 0.72, -halfWidth + 0.25);
+      g.lineTo(halfLength - 0.72, -halfWidth + 0.25);
+      g.moveTo(-halfLength + 0.25, -halfWidth + 0.72);
+      g.lineTo(-halfLength + 0.25, halfWidth - 0.72);
+      g.stroke();
+      g.strokeStyle = bdRgba(bevelShade, 0.72);
+      g.lineWidth = 0.58;
+      g.beginPath();
+      g.moveTo(-halfLength + 0.72, halfWidth - 0.22);
+      g.lineTo(halfLength - 0.72, halfWidth - 0.22);
+      g.moveTo(halfLength - 0.22, -halfWidth + 0.72);
+      g.lineTo(halfLength - 0.22, halfWidth - 0.72);
+      g.stroke();
+    });
+  }
+
+  // Slightly enlarged dark silhouettes form narrow, consistently recessed
+  // joints. They are separate from the mortar bed so every brick has depth.
+  for (let index = 0; index < layout.pavers.length; index++) {
+    const paver = layout.pavers[index];
+    bdAtPaver(g, paver, function () {
+      g.fillStyle = bdRgba(jointShadow, paver.kind === 'border' ? 0.92 : 0.84);
+      bdPaverPath(g, paver, layout.joint * 0.54);
+      g.fill();
+    });
+  }
+
+  // Individual clay bodies provide the muted red/brown variation seen in worn
+  // historic paving. Only the border receives a tiny side-colour trace.
+  for (let index = 0; index < layout.pavers.length; index++) {
+    const paver = layout.pavers[index];
+    bdAtPaver(g, paver, function () {
+      const clay = paver.kind === 'border'
+        ? bdLawful(bdMix(paverPalette[paver.tone], sideHex || paverBase, 0.10))
+        : paverPalette[paver.tone];
+      g.fillStyle = bdRgba(clay, 0.97);
+      bdPaverPath(g, paver, 0);
+      g.fill();
+    });
+  }
+
+  // The compacted mortar bed only fills the hairline gaps left by pavers.
+  g.fillStyle = bdRgba(mortar, 0.96);
+  bdPavingPerimeterPath(g, layout.perimeter);
+  g.fill();
   g.restore();
+
+  // A narrow irregular soil feather seats the complete masonry field into the
+  // terrain without washing translucent brown over its centre.
+  const earthFeather = g.createRadialGradient(0, 0, layout.rx * 0.90,
+    0, 0, layout.rx * 1.15);
+  earthFeather.addColorStop(0.00, bdRgba(worn, 0.44));
+  earthFeather.addColorStop(0.54, bdRgba(worn, 0.30));
+  earthFeather.addColorStop(1.00, bdRgba(worn, 0));
+  g.fillStyle = earthFeather;
+  g.beginPath(); g.arc(0, 0, layout.rx * 1.15, 0, BD_TAU); g.fill();
 
   g.restore();
 }
@@ -4026,16 +4235,16 @@ const BD_ENGLISH_BUILDING_ART = Object.freeze({
 // paving from the gameplay footprint, preserving the intended hierarchy for
 // every building type while still allowing roof overhang and vertical mass.
 const BD_BUILDING_PRESENTATION = Object.freeze({
-  town_center: { artWidthScale: 1.48, apronWidthScale: 0.92, apronDepthScale: 0.54 },
-  house: { artWidthScale: 1.36, apronWidthScale: 0.72, apronDepthScale: 0.46 },
-  mill: { artWidthScale: 1.42, apronWidthScale: 0.78, apronDepthScale: 0.48 },
-  lumber_camp: { artWidthScale: 1.44, apronWidthScale: 0.78, apronDepthScale: 0.48 },
-  mine: { artWidthScale: 1.42, apronWidthScale: 0.78, apronDepthScale: 0.48 },
-  barracks: { artWidthScale: 1.44, apronWidthScale: 0.82, apronDepthScale: 0.50 },
-  stable: { artWidthScale: 1.48, apronWidthScale: 0.86, apronDepthScale: 0.52 },
-  foundry: { artWidthScale: 1.40, apronWidthScale: 0.84, apronDepthScale: 0.50 },
-  tower: { artWidthScale: 1.36, apronWidthScale: 0.70, apronDepthScale: 0.46 },
-  wall_stairs: { artWidthScale: 1.58, apronWidthScale: 0.86, apronDepthScale: 0.54 },
+  town_center: { artWidthScale: 1.48, apronWidthScale: 0.98, apronDepthScale: 0.62 },
+  house: { artWidthScale: 1.36, apronWidthScale: 0.82, apronDepthScale: 0.56 },
+  mill: { artWidthScale: 1.42, apronWidthScale: 0.86, apronDepthScale: 0.58 },
+  lumber_camp: { artWidthScale: 1.44, apronWidthScale: 0.86, apronDepthScale: 0.58 },
+  mine: { artWidthScale: 1.42, apronWidthScale: 0.86, apronDepthScale: 0.58 },
+  barracks: { artWidthScale: 1.44, apronWidthScale: 0.90, apronDepthScale: 0.60 },
+  stable: { artWidthScale: 1.48, apronWidthScale: 0.94, apronDepthScale: 0.62 },
+  foundry: { artWidthScale: 1.40, apronWidthScale: 0.92, apronDepthScale: 0.60 },
+  tower: { artWidthScale: 1.36, apronWidthScale: 0.80, apronDepthScale: 0.56 },
+  wall_stairs: { artWidthScale: 1.58, apronWidthScale: 0.94, apronDepthScale: 0.62 },
 });
 
 function getBuildingPresentation(type, def = BUILDING_TYPES[type]) {
@@ -5422,7 +5631,8 @@ function drawBuildingCollapse(destruction, worldTime) {
    ------------------------------------------------------------------------ */
 
 export {
-  setBuildingRefs, bdResetCaches, getBuildingPresentation, bdConstructionArtFrame,
+  setBuildingRefs, bdResetCaches, getBuildingPresentation, getBuildingPavingLayout,
+  bdConstructionArtFrame,
   drawResourceNode, drawFarm, drawFarmForeground, drawFoundation,
   drawCompleteBuilding, drawBuilding, drawBuildingCollapse,
 };
