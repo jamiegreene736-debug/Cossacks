@@ -124,6 +124,7 @@ async function startBattle(opts) {
   startBattleRender(world);
   setupLocalBuildingFirePreview(world);
   setupLocalAutoEngagePreview(world);
+  setupLocalCurvedWallPreview(world);
   ui.showBattleHud(world);
   ui.setPauseLabel(false);
   ui.setSpeedLabel(1);
@@ -209,6 +210,43 @@ function setupLocalAutoEngagePreview(activeWorld) {
   camera.x = 2750;
   camera.y = 1515;
   camera.zoom = 1.15;
+  clampCamera();
+}
+
+function setupLocalCurvedWallPreview(activeWorld) {
+  const debugName = new URLSearchParams(window.location.search).get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'curved-wall') return;
+
+  const wallWidth = BUILDING_TYPES.wall.w;
+  const angles = [-0.52, -0.36, -0.20, -0.04, 0.12, 0.28, 0.44];
+  let endpoint = { x: 910, y: 1500 };
+  const walls = [];
+  for (const angle of angles) {
+    const axis = { x: Math.cos(angle), y: Math.sin(angle) };
+    const wall = createBuilding(
+      0,
+      'wall',
+      endpoint.x + axis.x * wallWidth * 0.5,
+      endpoint.y + axis.y * wallWidth * 0.5,
+      true,
+      { orientation: angle },
+    );
+    walls.push(wall);
+    endpoint = {
+      x: endpoint.x + axis.x * wallWidth,
+      y: endpoint.y + axis.y * wallWidth,
+    };
+  }
+  activeWorld.buildings.push(...walls);
+  activeWorld.resources = activeWorld.resources.filter(resource => walls.every(wall => (
+    Math.hypot(resource.x - wall.x, resource.y - wall.y)
+      > resource.radius + wall.radius + 50
+  )));
+  camera.x = (walls[0].x + walls.at(-1).x) * 0.5;
+  camera.y = (walls[0].y + walls.at(-1).y) * 0.5;
+  camera.zoom = 1.45;
   clampCamera();
 }
 

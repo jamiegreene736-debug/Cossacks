@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { readFile, stat } from 'node:fs/promises';
 
 import { BUILDING_TYPES } from '../js/config.js';
-import { bdConstructionArtFrame, getBuildingPresentation } from '../js/gfx/buildings.js';
+import {
+  bdConstructionArtFrame, getBuildingPresentation, getFortificationRenderProfile,
+  usesFixedFortificationFrameArt,
+} from '../js/gfx/buildings.js';
 import { MILITARY_ART_SPECS } from '../js/gfx/art-assets.js';
 
 const BUILT_STRUCTURE_TYPES = Object.keys(BUILDING_TYPES).filter(type => type !== 'farm');
@@ -63,6 +66,34 @@ test('production construction art advances continuously through four authored st
   assert.equal(blend.from, 1);
   assert.equal(blend.to, 2);
   assert.ok(blend.mix > 0 && blend.mix < 1);
+});
+
+test('freehand walls bypass fixed frames while snapped orientations can use them', () => {
+  assert.equal(usesFixedFortificationFrameArt({ orientation: 'horizontal' }), true);
+  assert.equal(usesFixedFortificationFrameArt({ orientation: 'diagonal' }), true);
+  assert.equal(usesFixedFortificationFrameArt({ orientation: 0 }), false);
+  assert.equal(usesFixedFortificationFrameArt({ orientation: Math.PI / 7 }), false);
+});
+
+test('connected wall frames expose only the two ends of the complete run', () => {
+  const left = {
+    type: 'wall', x: 0, y: 0, orientation: 'horizontal',
+    side: 0, alive: true, complete: true,
+  };
+  const right = {
+    ...left, x: BUILDING_TYPES.wall.w,
+  };
+  const world = { buildings: [left, right] };
+
+  assert.deepEqual(getFortificationRenderProfile(left, world), {
+    joinedEnds: [false, true],
+    useProductionFrame: false,
+  });
+  assert.deepEqual(getFortificationRenderProfile(right, world), {
+    joinedEnds: [true, false],
+    useProductionFrame: false,
+  });
+  assert.equal(getFortificationRenderProfile(left, { buildings: [left] }).useProductionFrame, true);
 });
 
 test('the closed gate uses a substantial transparent production render', async () => {
