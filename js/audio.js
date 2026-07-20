@@ -157,6 +157,7 @@ export class Soundscape {
     this.paused = false;
     this.listenerX = 0;
     this.noise = null;
+    this.fieldAmbienceSource = null;
     this.activeMusicNodes = new Set();
     this.musicNextTime = Infinity;
     this.trackBag = [];
@@ -276,6 +277,7 @@ export class Soundscape {
     gain.gain.value = 0.075;
     source.connect(wind).connect(gain).connect(this.ambience);
     source.start();
+    this.fieldAmbienceSource = source;
   }
 
   readSettings() {
@@ -377,6 +379,49 @@ export class Soundscape {
       this.ambience.gain.cancelScheduledValues(time);
       this.ambience.gain.setTargetAtTime(0, time, 0.08);
     }
+  }
+
+  shutdown() {
+    this.pageActive = false;
+    const context = this.ctx;
+    const master = this.master;
+
+    // Silence synchronously before localStorage serialization or browser teardown
+    // can delay the asynchronous AudioContext.close() call.
+    if (context && master) {
+      const time = context.currentTime;
+      master.gain.cancelScheduledValues(time);
+      master.gain.setValueAtTime(0, time);
+    }
+    this.stopBattle();
+    if (this.fieldAmbienceSource) {
+      try { this.fieldAmbienceSource.stop(); } catch (_error) { /* already ended */ }
+    }
+    try { master?.disconnect(); } catch (_error) { /* graph already disconnected */ }
+
+    this.ctx = null;
+    this.master = null;
+    this.effects = null;
+    this.music = null;
+    this.ambience = null;
+    this.reverb = null;
+    this.noise = null;
+    this.fieldAmbienceSource = null;
+    this.musketQueue = 0;
+
+    if (!context || context.state === 'closed') return Promise.resolve();
+    let closeResult;
+    try {
+      closeResult = context.close();
+    } catch (error) {
+      this.pageActivityError = error?.message || String(error);
+      return Promise.resolve();
+    }
+    this.pageActivityTransition = Promise.resolve(closeResult).then(
+      () => { this.pageActivityError = null; },
+      error => { this.pageActivityError = error?.message || String(error); },
+    );
+    return this.pageActivityTransition;
   }
 
   stopScheduledMusic() {

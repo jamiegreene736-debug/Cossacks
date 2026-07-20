@@ -24,6 +24,23 @@ function createAudioContext(state = 'running') {
       this.transitions.push('resume');
       this.state = 'running';
     },
+    async close() {
+      this.transitions.push('close');
+      this.state = 'closed';
+    },
+  };
+}
+
+function createGain() {
+  return {
+    disconnected: false,
+    gain: {
+      value: 1,
+      cancelScheduledValues() {},
+      setValueAtTime(value) { this.value = value; },
+      setTargetAtTime(value) { this.value = value; },
+    },
+    disconnect() { this.disconnected = true; },
   };
 }
 
@@ -96,6 +113,36 @@ test('audio initialization never revives a context while the page is hidden', as
 
   assert.equal(context.state, 'suspended');
   assert.deepEqual(context.transitions, []);
+});
+
+test('page shutdown immediately silences sources, closes the context, and is idempotent', async () => {
+  const soundscape = new Soundscape();
+  const context = createAudioContext();
+  const master = createGain();
+  const ambience = createGain();
+  const musicNode = { stops: 0, stop() { this.stops++; } };
+  const fieldAmbience = { stops: 0, stop() { this.stops++; } };
+  soundscape.ctx = context;
+  soundscape.master = master;
+  soundscape.ambience = ambience;
+  soundscape.activeMusicNodes.add(musicNode);
+  soundscape.fieldAmbienceSource = fieldAmbience;
+  soundscape.musketQueue = 12;
+
+  await soundscape.shutdown();
+
+  assert.equal(master.gain.value, 0);
+  assert.equal(master.disconnected, true);
+  assert.equal(musicNode.stops, 1);
+  assert.equal(fieldAmbience.stops, 1);
+  assert.deepEqual(context.transitions, ['close']);
+  assert.equal(soundscape.ctx, null);
+  assert.equal(soundscape.musketQueue, 0);
+  assert.equal(soundscape.pageActive, false);
+
+  await soundscape.shutdown();
+  assert.deepEqual(context.transitions, ['close']);
+  assert.equal(fieldAmbience.stops, 1);
 });
 
 test('worker activities select distinct economic sounds', () => {

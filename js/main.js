@@ -16,6 +16,7 @@ import {
 import * as ui from './ui.js';
 import { sfx } from './audio.js';
 import { preloadProductionArt } from './gfx/art-assets.js';
+import { bindPageLifecycle } from './lifecycle.js';
 import {
   deleteCampaign, getCampaignSummary, loadCampaign, restoreGameSnapshot, saveCampaign,
 } from './savegame.js';
@@ -106,14 +107,31 @@ ui.bindControls({
 });
 refreshSavedCampaign();
 
-function syncAudioPageActivity() {
-  void sfx.setPageActive(document.visibilityState === 'visible');
+function saveActiveCampaignForPageExit() {
+  if (!world || !commander) return false;
+  try {
+    saveCampaign(world, commander, camera);
+    return true;
+  } catch (error) {
+    console.error('The active campaign could not be auto-saved before page exit.', error);
+    return false;
+  }
 }
 
-document.addEventListener('visibilitychange', syncAudioPageActivity);
-window.addEventListener('pagehide', () => { void sfx.setPageActive(false); });
-window.addEventListener('pageshow', syncAudioPageActivity);
-syncAudioPageActivity();
+function exitActiveCampaignForPageExit() {
+  void sfx.shutdown();
+  world = null;
+  commander = null;
+  resetForBattle();
+  ui.showStartMenu();
+  refreshSavedCampaign();
+}
+
+bindPageLifecycle({
+  onSave: saveActiveCampaignForPageExit,
+  onPageActivity: active => { void sfx.setPageActive(active); },
+  onExit: exitActiveCampaignForPageExit,
+});
 
 async function startBattle(opts) {
   sfx.ensure();
