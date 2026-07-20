@@ -589,12 +589,40 @@ function paintMeadowTexture(g) {
   // Preserve the low-frequency material field while replacing its flat fill
   // with real blade, clover and dead-grass structure from the seamless tile.
   g.globalCompositeOperation = 'source-over';
-  g.globalAlpha = 0.38;
+  g.filter = 'saturate(0.86) contrast(1.06)';
+  g.globalAlpha = 0.62;
   g.fillStyle = pattern;
   g.fillRect(0, 0, WORLD.w, WORLD.h);
+  g.filter = 'none';
   g.globalCompositeOperation = 'soft-light';
-  g.globalAlpha = 0.20;
+  g.globalAlpha = 0.12;
   g.fillRect(0, 0, WORLD.w, WORLD.h);
+  g.restore();
+}
+
+const COUNTRY_VEGETATION_CELL = 512;
+
+function drawCountryVegetation(g, image, frame, x, baseY, width, flip) {
+  const height = width;
+  g.save();
+  g.globalAlpha = 0.98;
+  if (flip) {
+    g.translate(x, 0);
+    g.scale(-1, 1);
+    g.drawImage(
+      image,
+      frame * COUNTRY_VEGETATION_CELL, 0,
+      COUNTRY_VEGETATION_CELL, COUNTRY_VEGETATION_CELL,
+      -width / 2, baseY - height, width, height,
+    );
+  } else {
+    g.drawImage(
+      image,
+      frame * COUNTRY_VEGETATION_CELL, 0,
+      COUNTRY_VEGETATION_CELL, COUNTRY_VEGETATION_CELL,
+      x - width / 2, baseY - height, width, height,
+    );
+  }
   g.restore();
 }
 
@@ -986,6 +1014,7 @@ function paintHedgeFast(g, pts, opts) {
   const width = opts.width || 1;
   const walk = makeWalker(pts);
   const len = walk(1).total;
+  const productionVegetation = getProductionArt('countryVegetation');
 
   g.save();
   g.lineCap = 'round';
@@ -993,16 +1022,17 @@ function paintHedgeFast(g, pts, opts) {
 
   g.save();
   g.translate(SUN.shadow.x * 10, SUN.shadow.y * 10);
-  g.strokeStyle = 'rgba(' + SUN.shadowRGB + ',0.28)';
-  g.lineWidth = 15 * width;
+  g.strokeStyle = 'rgba(' + SUN.shadowRGB + ','
+    + (productionVegetation ? '0.15' : '0.28') + ')';
+  g.lineWidth = (productionVegetation ? 10 : 15) * width;
   smoothOpenPath(g, pts);
   g.stroke();
   g.restore();
 
   g.save();
   g.translate(SUN.shadow.x * 5, SUN.shadow.y * 5);
-  g.strokeStyle = rgba(T.TURF_DEEP, 0.60);
-  g.lineWidth = 9 * width;
+  g.strokeStyle = rgba(T.TURF_DEEP, productionVegetation ? 0.34 : 0.60);
+  g.lineWidth = (productionVegetation ? 5 : 9) * width;
   smoothOpenPath(g, pts);
   g.stroke();
   g.restore();
@@ -1014,6 +1044,23 @@ function paintHedgeFast(g, pts, opts) {
     batchSeg(stakes, T.TRUNK_LIT, 1, q.x - 1, q.y + 3, q.x - 1 + rnd(-0.6, 0.6), q.y - rnd(8, 13));
   }
   flushBatch(g, stakes);
+
+  if (productionVegetation) {
+    const stampCount = Math.max(6, Math.round(len / (18 / dense)));
+    for (let i = 0; i < stampCount; i++) {
+      const q = walk((i + 0.35) / stampCount);
+      const frame = i % 6 === 0 ? 1 : 2;
+      drawCountryVegetation(
+        g, productionVegetation, frame,
+        q.x + rnd(-3.5, 3.5) * width,
+        q.y + rnd(2, 6) * width,
+        rnd(52, 66) * width,
+        (i & 1) === 1,
+      );
+    }
+    g.restore();
+    return;
+  }
 
   const count = Math.max(8, Math.round(len / (6 / dense)));
   // Per-lobe shiftHSL would mint a unique colour string per lobe, and the dot
@@ -2076,6 +2123,7 @@ function placeWoods(g, road, stream, parcels) {
 
 function placeUndergrowth(g, road, stream, trees) {
   const items = [];
+  const productionVegetation = getProductionArt('countryVegetation');
   const ok = function (x, y) {
     return !(x < 12 || x > WORLD.w - 12 || y < 12 || y > WORLD.h - 12
       || calmness(x, y) > 0.5 || distToPolyline(road, x, y) < 26);
@@ -2116,7 +2164,17 @@ function placeUndergrowth(g, road, stream, trees) {
 
   items.sort(function (a, b) { return a.y - b.y; });
   for (const it of items) {
-    if (it.k === 'bush') drawBush(g, it.x, it.y, it.r);
+    if (it.k === 'bush' && productionVegetation) {
+      drawCountryVegetation(
+        g, productionVegetation, 2, it.x, it.y + it.r * 0.55,
+        it.r * 3.2, ((it.x + it.y) | 0) % 2 === 0,
+      );
+    } else if (it.k === 'scrub' && productionVegetation) {
+      drawCountryVegetation(
+        g, productionVegetation, 1, it.x, it.y + it.r * 0.45,
+        it.r * 3.55, ((it.x * 3 + it.y) | 0) % 2 === 0,
+      );
+    } else if (it.k === 'bush') drawBush(g, it.x, it.y, it.r);
     else if (it.k === 'rock') drawRock(g, it.x, it.y, it.r);
     else drawScrub(g, it.x, it.y, it.r);
   }
