@@ -97,6 +97,7 @@ button, select { font: inherit; }
   pointer-events: auto;
 }
 #hud-timer { min-width: 42px; text-align: center; font: 14px Arial, sans-serif; color: #ddd4bb; }
+#view-direction { min-width: 38px; text-align: center; font: 9px Arial, sans-serif; text-transform: uppercase; letter-spacing: .08em; color: #bdb18b; }
 #time-controls button {
   min-width: 31px; padding: 2px 6px; color: var(--paper); background: #343222;
   border: 1px solid #5e5840; border-radius: 3px; cursor: pointer;

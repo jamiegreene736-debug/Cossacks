@@ -35,6 +35,9 @@
     </header>
 
     <div id="time-controls" class="hud hidden">
+      <button id="btn-view-left" title="Turn view left (Q)" aria-label="Turn view left">&#8634;</button>
+      <span id="view-direction" title="Current viewing direction">South</span>
+      <button id="btn-view-right" title="Turn view right (E)" aria-label="Turn view right">&#8635;</button>
       <span id="hud-timer">0:00</span>
       <button id="btn-pause" title="Pause (P)">&#10074;&#10074;</button>
       <button id="btn-speed" title="Toggle game speed">1&times;</button>
@@ -67,7 +70,7 @@
     <canvas id="minimap" class="hidden" width="244" height="150"></canvas>
 
     <div id="hint-bar" class="hud hidden">
-      Town Center: click a resource or worksite to rally new villagers · two-finger or Control-click ground for a waypoint · Villagers auto-continue nearby unfinished work · Musketeers: right-click an accessible wall to mount · WASD to pan · Wheel to zoom
+      Town Center: click a resource or worksite to rally new villagers · two-finger or Control-click ground for a waypoint · Villagers auto-continue nearby unfinished work · Select a gate to open or close it · Q/E turn view · WASD pan · Wheel zoom
     </div>
     <div id="placement-tip" class="hud hidden" role="status" aria-live="polite">
       <span id="placement-message">Move to place · Click terrain to build</span>

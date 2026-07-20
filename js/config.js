@@ -116,7 +116,7 @@ export const BUILDING_TYPES = {
     cost: { stone: 25 }, fortification: true, blocksUnits: true, hotkey: 'U',
   },
   gate: {
-    label: 'Stone Gate', description: 'A passable fortified opening for a stone wall.',
+    label: 'Stone Gate', description: 'A fortified passage that can be opened or barred on command.',
     w: 104, h: 26, radius: 54, hp: 1650, buildTime: 10,
     cost: { wood: 20, stone: 45 }, fortification: true, gate: true, hotkey: 'G',
   },

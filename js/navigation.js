@@ -29,7 +29,7 @@ function distanceToSegment(px, py, x0, y0, x1, y1) {
 function blocksNavigation(building) {
   if (!building.alive) return false;
   const def = BUILDING_TYPES[building.type];
-  return !def?.gate;
+  return !def?.gate || (building.complete && building.gateOpen === false);
 }
 
 export function pointBlocksVillager(world, x, y, clearance = 7) {

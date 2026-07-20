@@ -85,6 +85,7 @@ export function createBuilding(side, type, x, y, complete = false, options = {})
   };
   if (def.fortification) {
     building.orientation = normalizeFortificationOrientation(options.orientation);
+    if (type === 'gate') building.gateOpen = options.gateOpen !== false;
   }
   if (def.wallAttachment) {
     building.orientation = normalizeFortificationOrientation(options.orientation);

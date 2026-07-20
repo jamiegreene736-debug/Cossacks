@@ -1,7 +1,9 @@
 // Mouse + keyboard control for selection, orders, building placement,
 // formations, control groups, camera movement and minimap navigation.
 
-import { camera, screenToWorld, clampCamera, minimapToWorld } from './render.js';
+import {
+  camera, screenToWorld, screenPanToWorld, clampCamera, minimapToWorld,
+} from './render.js';
 import { WORLD } from './config.js';
 import { applyMoveOrder, applyAttackOrder, haltOrder } from './formations.js';
 import { BUILDING_TYPES } from './config.js';
@@ -104,8 +106,12 @@ export function initInput(canvas, minimap, worldGetter, cbs) {
     }
     else updateResourceHover(event.clientX, event.clientY);
     if (panDrag) {
-      camera.x = panDrag.camX - (event.clientX - panDrag.sx) / camera.zoom;
-      camera.y = panDrag.camY - (event.clientY - panDrag.sy) / camera.zoom;
+      const delta = screenPanToWorld(
+        (event.clientX - panDrag.sx) / camera.zoom,
+        (event.clientY - panDrag.sy) / camera.zoom,
+      );
+      camera.x = panDrag.camX - delta.x;
+      camera.y = panDrag.camY - delta.y;
       clampCamera();
     }
     if (mmDown) minimapJump(event);
@@ -155,6 +161,8 @@ export function initInput(canvas, minimap, worldGetter, cbs) {
     else if (key === 'b' && !getSelection().some(entity => entity.type === 'villager')) setFormation('square');
     else if (key === 'h') haltSelection();
     else if (key === 'p') callbacks.onPause?.();
+    else if (key === 'q') callbacks.onView?.(-1);
+    else if (key === 'e') callbacks.onView?.(1);
     else if (key === 'f' && !getSelection().some(entity => entity.type === 'villager')) selectAll();
     else if (/^[1-9]$/.test(event.key)) {
       if (event.ctrlKey || event.metaKey) {
@@ -220,8 +228,10 @@ function finishSelect(additive) {
       return;
     }
   } else {
+    const left = Math.min(start.x, end.x), right = Math.max(start.x, end.x);
+    const top = Math.min(start.y, end.y), bottom = Math.max(start.y, end.y);
     picked = world.units.filter(unit => unit.alive && unit.side === 0
-      && unit.x >= start.x && unit.x <= end.x && unit.y >= start.y && unit.y <= end.y);
+      && unit.x >= left && unit.x <= right && unit.y >= top && unit.y <= bottom);
   }
   if (additive) picked = getSelection().concat(picked.filter(entity => !entity.selected));
   setSelection(picked);
@@ -658,8 +668,9 @@ export function updateInput(dt) {
   }
   if (vx || vy) {
     const length = Math.hypot(vx, vy);
-    camera.x += vx / length * PAN_SPEED / camera.zoom * dt;
-    camera.y += vy / length * PAN_SPEED / camera.zoom * dt;
+    const delta = screenPanToWorld(vx / length, vy / length);
+    camera.x += delta.x * PAN_SPEED / camera.zoom * dt;
+    camera.y += delta.y * PAN_SPEED / camera.zoom * dt;
     clampCamera();
   }
 }

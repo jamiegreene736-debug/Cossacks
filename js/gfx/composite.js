@@ -1909,7 +1909,9 @@ function drawMinimap(world) {
 
   // ---- 3. dim the ground outside the camera viewport ----------------------
   // (before units, so off-screen threats stay at full brightness)
-  const vw = cw / camera.zoom * sx, vh = ch / camera.zoom * sy;
+  const turned = Math.abs(Math.sin(camera.rotation || 0)) > 0.5;
+  const vw = (turned ? ch : cw) / camera.zoom * sx;
+  const vh = (turned ? cw : ch) / camera.zoom * sy;
   let vx = inset + camera.x * sx - vw / 2, vy = inset + camera.y * sy - vh / 2;
   g.fillStyle = 'rgba(12,15,9,0.26)';
   const l = Math.max(inset, vx), t = Math.max(inset, vy);

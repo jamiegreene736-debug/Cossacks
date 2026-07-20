@@ -4090,6 +4090,22 @@ function bdDrawArchitectureCell(g, image, index, x, y, width, height, alpha, mir
   g.restore();
 }
 
+function bdDrawHorizontalSheetCell(g, image, index, x, y, width, height, alpha, mirror) {
+  const cellWidth = image.naturalWidth / 2;
+  g.save();
+  g.globalAlpha *= alpha == null ? 1 : alpha;
+  if (mirror) {
+    g.translate(x + width, 0);
+    g.scale(-1, 1);
+    g.drawImage(image, index * cellWidth, 0, cellWidth, image.naturalHeight,
+      0, y, width, height);
+  } else {
+    g.drawImage(image, index * cellWidth, 0, cellWidth, image.naturalHeight,
+      x, y, width, height);
+  }
+  g.restore();
+}
+
 function bdDrawConstructionSheet(g, image, building, alpha) {
   const presentation = getBuildingPresentation(building.type);
   const artWidth = Math.max(126, presentation.artWidth * 1.16);
@@ -4113,12 +4129,35 @@ function bdFortificationArtGeometry(building) {
   return { artWidth, top: ground - artWidth * anchor };
 }
 
+function bdFortificationArtView(building) {
+  if (building.orientation === 'diagonal') {
+    return { orientationIndex: 1, mirror: camera.rotation >= Math.PI / 2 };
+  }
+  if (!Number.isFinite(building.orientation)) {
+    return { orientationIndex: 0, mirror: camera.rotation >= Math.PI / 2 };
+  }
+  let angle = normalizeFortificationOrientation(building.orientation);
+  if (angle > Math.PI / 2) angle -= Math.PI;
+  if (angle <= -Math.PI / 2) angle += Math.PI;
+  const diagonal = Math.abs(angle) > 0.27;
+  const rearView = camera.rotation >= Math.PI / 2;
+  return { orientationIndex: diagonal ? 1 : 0, mirror: (angle < -0.27) !== rearView };
+}
+
 function bdDrawProductionFortification(g, building, image, alpha) {
-  const orientationIndex = building.orientation === 'diagonal' ? 1 : 0;
+  const { orientationIndex, mirror } = bdFortificationArtView(building);
   const index = building.type === 'gate' ? 2 + orientationIndex : orientationIndex;
   const geometry = bdFortificationArtGeometry(building);
+  if (building.type === 'gate' && building.gateOpen === false) {
+    const closed = getProductionArt('englishGateClosed');
+    if (closed) {
+      bdDrawHorizontalSheetCell(g, closed, orientationIndex, -geometry.artWidth / 2, geometry.top,
+        geometry.artWidth, geometry.artWidth, alpha == null ? 1 : alpha, mirror);
+      return;
+    }
+  }
   bdDrawArchitectureCell(g, image, index, -geometry.artWidth / 2, geometry.top,
-    geometry.artWidth, geometry.artWidth, alpha == null ? 1 : alpha, false);
+    geometry.artWidth, geometry.artWidth, alpha == null ? 1 : alpha, mirror);
 }
 
 function bdDrawProductionFortificationConstruction(g, building, image, completedImage) {
@@ -4131,7 +4170,7 @@ function bdDrawProductionFortificationConstruction(g, building, image, completed
   const mix = transition * transition * (3 - 2 * transition);
   const finish = completedImage && p > 0.80 ? bdClamp((p - 0.80) / 0.20, 0, 1) : 0;
   const constructionAlpha = 1 - finish;
-  const mirror = building.orientation === 'diagonal';
+  const mirror = bdFortificationArtView(building).mirror;
   bdDrawArchitectureCell(g, image, early, -geometry.artWidth / 2, geometry.top,
     geometry.artWidth, geometry.artWidth, (1 - mix) * constructionAlpha, mirror);
   bdDrawArchitectureCell(g, image, late, -geometry.artWidth / 2, geometry.top,
@@ -4869,7 +4908,7 @@ function drawFoundation(building, nation, worldTime) {
   if (isFortificationType(building.type)) {
     const constructionArt = getProductionArt('englishFortificationConstruction');
     const completedArt = getProductionArt('englishFortifications');
-    if (constructionArt && !Number.isFinite(building.orientation)) {
+    if (constructionArt) {
       bdDrawProductionFortificationConstruction(g, building, constructionArt, completedArt);
       return;
     }
@@ -5135,7 +5174,7 @@ function drawCompleteBuilding(building, nation, worldTime) {
   }
   if (isFortificationType(building.type)) {
     const productionArt = getProductionArt('englishFortifications');
-    if (productionArt && !Number.isFinite(building.orientation)) {
+    if (productionArt) {
       bdDrawProductionFortification(ctx, building, productionArt, 1);
       return;
     }
@@ -5178,6 +5217,10 @@ function drawCompleteBuilding(building, nation, worldTime) {
 
 function bdDrawFortificationJunctions(building, world) {
   if (!building.complete || !isFortificationType(building.type)) return;
+  // The production wall frames already include carved end piers. Layering the
+  // old procedural junction blocks over them reintroduced the flat geometry
+  // this authored masonry replaced.
+  if (getProductionArt('englishFortifications')) return;
   const neighbors = world.buildings.filter(candidate => candidate !== building
     && candidate.alive && candidate.complete && candidate.side === building.side
     && isFortificationType(candidate.type)
@@ -5223,7 +5266,11 @@ function bdDrawFortificationJunctions(building, world) {
 function drawResourceNode(resource) {
   const s = bdResourceSprite(resource);
   if (!s) return;
-  ctx.drawImage(s.c, resource.x + s.x, resource.y + s.y, s.w, s.h);
+  ctx.save();
+  ctx.translate(resource.x, resource.y);
+  ctx.rotate(-(camera.rotation || 0));
+  ctx.drawImage(s.c, s.x, s.y, s.w, s.h);
+  ctx.restore();
 }
 
 /**
@@ -5290,6 +5337,8 @@ function drawBuilding(building, world) {
       ctx.stroke();
     }
   }
+
+  if (building.type !== 'farm') ctx.rotate(-(camera.rotation || 0));
 
   if (building.complete) drawCompleteBuilding(building, nation, world.time);
   else drawFoundation(building, nation, world.time);

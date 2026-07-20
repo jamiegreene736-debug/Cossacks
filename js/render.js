@@ -21,6 +21,10 @@ import { getWorkerFrame } from './worker-animation.js';
 import {
   chooseRenderDpr, circleIntersectsBounds, getVisibleWorldBounds,
 } from './render-performance.js';
+import {
+  normalizeViewRotation, rotatedViewHalfExtents, screenPointToWorld,
+  screenVectorToWorld, turnView as nextViewRotation, worldViewDepth,
+} from './camera.js';
 import { setBuildingRefs, bdResetCaches, drawResourceNode, drawFarm,
          drawFarmForeground, drawFoundation, drawCompleteBuilding, drawBuilding } from './gfx/buildings.js';
 import { setCompositeRefs, setCompositeView, setCompositeTrampleLayer,
@@ -41,7 +45,7 @@ const PRODUCTION_WORKER_ART = Object.freeze({
   ottoman: 'ottomanVillager',
 });
 
-export const camera = { x: 660, y: WORLD.h / 2, zoom: 0.9 };
+export const camera = { x: 660, y: WORLD.h / 2, zoom: 0.9, rotation: 0 };
 
 let canvas, ctx, mmCanvas, mmCtx;
 let cw = 0, ch = 0, dpr = 1;
@@ -81,14 +85,22 @@ function resize() {
 export function getViewSize() { return { w: cw, h: ch }; }
 
 export function screenToWorld(sx, sy) {
-  return {
-    x: camera.x + (sx - cw / 2) / camera.zoom,
-    y: camera.y + (sy - ch / 2) / camera.zoom,
-  };
+  return screenPointToWorld(camera, cw, ch, sx, sy);
+}
+
+export function screenPanToWorld(dx, dy) {
+  return screenVectorToWorld(camera, dx, dy);
+}
+
+export function rotateView(direction) {
+  camera.rotation = nextViewRotation(camera.rotation, direction);
+  clampCamera();
+  return camera.rotation;
 }
 
 export function clampCamera() {
-  const halfW = cw / 2 / camera.zoom, halfH = ch / 2 / camera.zoom;
+  const extents = rotatedViewHalfExtents(camera, cw, ch);
+  const halfW = extents.x, halfH = extents.y;
   const m = 0;
   camera.x = Math.max(halfW - m, Math.min(WORLD.w - halfW + m, camera.x));
   camera.y = Math.max(halfH - m, Math.min(WORLD.h - halfH + m, camera.y));
@@ -126,6 +138,7 @@ export function startBattle(world) {
   camera.x = townCenter?.x || 660;
   camera.y = townCenter?.y || WORLD.h / 2;
   camera.zoom = Math.max(0.62, Math.min(1.15, ch / 1050));
+  camera.rotation = 0;
   clampCamera();
 }
 
@@ -497,10 +510,19 @@ export function draw(
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   const z = camera.zoom;
-  ctx.setTransform(dpr * z, 0, 0, dpr * z,
-    dpr * (cw / 2 - camera.x * z), dpr * (ch / 2 - camera.y * z));
+  const rotation = normalizeViewRotation(camera.rotation);
+  const cos = Math.cos(rotation), sin = Math.sin(rotation);
+  ctx.setTransform(
+    dpr * z * cos,
+    dpr * z * sin,
+    -dpr * z * sin,
+    dpr * z * cos,
+    dpr * (cw / 2 - z * (cos * camera.x - sin * camera.y)),
+    dpr * (ch / 2 - z * (sin * camera.x + cos * camera.y)),
+  );
 
-  drawTerrain(ctx, camera.x, camera.y, cw / z, ch / z);
+  const viewExtents = rotatedViewHalfExtents(camera, cw, ch);
+  drawTerrain(ctx, camera.x, camera.y, viewExtents.x * 2, viewExtents.y * 2);
 
   const visibleWorld = getVisibleWorldBounds(camera, cw, ch, 0, WORLD.w, WORLD.h);
 
@@ -540,7 +562,7 @@ export function draw(
       buildingSortBuf.push(building);
     }
   }
-  buildingSortBuf.sort((a, b) => a.y - b.y);
+  buildingSortBuf.sort((a, b) => worldViewDepth(camera, a.x, a.y) - worldViewDepth(camera, b.x, b.y));
 
   // Fields are parts of a mill complex, not unrelated map cards. Restrained
   // wheel ruts link every parcel to its parent mill beneath actors/structures.
@@ -695,7 +717,7 @@ export function draw(
     if (!circleIntersectsBounds(u, visibleWorld, 56)) continue;
     sortBuf.push(u);
   }
-  sortBuf.sort((a, b) => a.y - b.y);
+  sortBuf.sort((a, b) => worldViewDepth(camera, a.x, a.y) - worldViewDepth(camera, b.x, b.y));
 
   // Selection rings go under the sprites so they read as marks on the ground.
   drawSelection(ctx, sortBuf, alpha);
@@ -716,8 +738,13 @@ export function draw(
     } else {
       frame = 0;
     }
-    const dir = u.facing >= 0 ? 0 : 1;
-    ctx.drawImage(sp.frames[dir][frame], ix - sp.ax, iy - sp.ay, sp.w, sp.h);
+    const rearView = rotation >= Math.PI / 2;
+    const dir = (u.facing >= 0) !== rearView ? 0 : 1;
+    ctx.save();
+    ctx.translate(ix, iy);
+    ctx.rotate(-rotation);
+    ctx.drawImage(sp.frames[dir][frame], -sp.ax, -sp.ay, sp.w, sp.h);
+    ctx.restore();
   }
 
   // Near rows occlude boots and lower legs, making the hoeing villager read as
