@@ -356,6 +356,7 @@ function buildingIcon(type) {
   return {
     house: '⌂', farm: '≋', mill: '✣', lumber_camp: '♣', mine: '◆',
     barracks: '⚔', stable: '♞', foundry: '◉', tower: '♜',
+    wall: '▥', gate: '∩',
   }[type] || '▦';
 }
 
@@ -388,11 +389,13 @@ function updateObjective(world) {
   $('objective-text').textContent = body;
 }
 
-export function setPlacement(active, label = '', type = '') {
+export function setPlacement(active, label = '', type = '', orientation = '') {
   activePlacementType = active ? type : null;
   $('placement-tip').classList.toggle('hidden', !active);
   if (active && label) {
-    $('placement-message').textContent = `${label}: click terrain to build · Click any HUD panel to cancel`;
+    $('placement-message').textContent = BUILDING_TYPES[type]?.fortification
+      ? `${label}: click terrain · Shift-click to chain · R turns ${orientation === 'diagonal' ? 'diagonal' : 'straight'} · HUD or Esc cancels`
+      : `${label}: click terrain to build · Click any HUD panel to cancel`;
   }
   for (const button of $('command-grid').querySelectorAll('button[data-action="build"]')) {
     const selected = active && button.dataset.type === type;

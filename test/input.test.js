@@ -55,9 +55,13 @@ test('building placement supports one-action click-away, secondary-click, and Es
   try {
     const input = await import('../js/input.js');
     const placements = [];
+    let validationOptions = null;
     input.initInput(canvas, minimap, () => ({ state: 'running' }), {
       onPlacement: placement => placements.push(placement),
-      onValidatePlacement: () => ({ ok: false, message: 'Blocked terrain' }),
+      onValidatePlacement: (_type, _x, _y, options) => {
+        validationOptions = options;
+        return { ok: false, message: 'Blocked terrain' };
+      },
     });
 
     input.beginPlacement('house');
@@ -75,7 +79,14 @@ test('building placement supports one-action click-away, secondary-click, and Es
     input.beginPlacement('mill');
     fakeWindow.dispatchEvent(keyEvent('Escape'));
     assert.equal(input.getPlacementPreview(), null, 'Escape cancels');
-    assert.equal(placements.filter(placement => placement === null).length, 3);
+
+    input.beginPlacement('wall');
+    assert.equal(input.getPlacementPreview()?.orientation, 'horizontal');
+    fakeWindow.dispatchEvent(keyEvent('r'));
+    assert.equal(input.getPlacementPreview()?.orientation, 'diagonal');
+    assert.equal(validationOptions?.orientation, 'diagonal');
+    input.cancelPlacement();
+    assert.equal(placements.filter(placement => placement === null).length, 4);
   } finally {
     globalThis.window = previousWindow;
     globalThis.document = previousDocument;

@@ -8,6 +8,9 @@ import {
   assignBuilders, assignGatherers, clearWorkerJobs, findEntityAt,
   findResourceAt, setRallyPoint,
 } from './economy.js';
+import {
+  isFortificationType, rotateFortificationOrientation,
+} from './fortifications.js';
 
 let getWorld = () => null;
 let callbacks = {};
@@ -111,6 +114,11 @@ export function initInput(canvas, minimap, worldGetter, cbs) {
     if (!getWorld()) return;
     const key = event.key.toLowerCase();
     if (key === 'escape') cancelPlacement();
+    else if (key === 'r' && placement && isFortificationType(placement.type)) {
+      placement.orientation = rotateFortificationOrientation(placement.orientation);
+      updatePlacement(mouseX || window.innerWidth / 2, mouseY || window.innerHeight / 2);
+      callbacks.onPlacement?.(placement);
+    }
     else if (key === 'l') setFormation('line');
     else if (key === 'c') setFormation('column');
     else if (key === 'b' && !getSelection().some(entity => entity.type === 'villager')) setFormation('square');
@@ -342,7 +350,10 @@ export function haltSelection() {
 
 export function beginPlacement(type) {
   clearResourceHover();
-  placement = { type, x: camera.x, y: camera.y, valid: false, message: '' };
+  placement = {
+    type, x: camera.x, y: camera.y, valid: false, message: '',
+    orientation: isFortificationType(type) ? 'horizontal' : null,
+  };
   updatePlacement(mouseX || window.innerWidth / 2, mouseY || window.innerHeight / 2);
   callbacks.onPlacement?.(placement);
 }
@@ -357,10 +368,17 @@ export function cancelPlacement() {
 function updatePlacement(screenX, screenY) {
   if (!placement) return;
   const point = screenToWorld(screenX, screenY);
-  const validation = callbacks.onValidatePlacement?.(placement.type, point.x, point.y)
+  const validation = callbacks.onValidatePlacement?.(
+    placement.type,
+    point.x,
+    point.y,
+    { orientation: placement.orientation },
+  )
     || { ok: true, message: '' };
-  placement.x = point.x;
-  placement.y = point.y;
+  placement.x = Number.isFinite(validation.x) ? validation.x : point.x;
+  placement.y = Number.isFinite(validation.y) ? validation.y : point.y;
+  if (validation.orientation) placement.orientation = validation.orientation;
+  placement.snappedToId = validation.snappedToId ?? null;
   placement.valid = validation.ok;
   placement.message = validation.message;
 }
@@ -373,7 +391,13 @@ function placeAt(screenX, screenY, keepPlacing) {
     return;
   }
   const workers = getSelection().filter(entity => entity.type === 'villager');
-  const result = callbacks.onPlaceBuilding?.(placement.type, placement.x, placement.y, workers);
+  const result = callbacks.onPlaceBuilding?.(
+    placement.type,
+    placement.x,
+    placement.y,
+    workers,
+    { orientation: placement.orientation },
+  );
   if (!result?.ok) {
     callbacks.onToast?.(result?.message || 'Construction failed.', 'danger');
     return;

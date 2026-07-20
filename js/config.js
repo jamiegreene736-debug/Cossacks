@@ -108,6 +108,16 @@ export const BUILDING_TYPES = {
     w: 52, h: 52, radius: 29, hp: 1400, buildTime: 14,
     cost: { wood: 130, stone: 180 }, attack: 17, range: 330, reload: 3.2, hotkey: 'W',
   },
+  wall: {
+    label: 'Stone Wall', description: 'Heavy masonry that blocks troops and musket fire.',
+    w: 88, h: 22, radius: 46, hp: 1250, buildTime: 7,
+    cost: { stone: 25 }, fortification: true, blocksUnits: true, hotkey: 'U',
+  },
+  gate: {
+    label: 'Stone Gate', description: 'A passable fortified opening for a stone wall.',
+    w: 104, h: 26, radius: 54, hp: 1650, buildTime: 10,
+    cost: { wood: 20, stone: 45 }, fortification: true, gate: true, hotkey: 'G',
+  },
 };
 
 export const GATHER_RATES = { food: 8.5, wood: 7.5, gold: 5.8, stone: 5.2 };

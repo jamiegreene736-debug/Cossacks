@@ -12,6 +12,7 @@ import { getTrampleCanvas } from './gfx/decals.js';
 import { drawCavalry, drawCannon } from './gfx/mounted.js';
 import { drawWorker, VL_W, VL_H, VL_AX, VL_AY } from './gfx/villager.js';
 import { getProductionArt } from './gfx/art-assets.js';
+import { fortificationCorners, isFortificationType } from './fortifications.js';
 import { getWorkerFrame } from './worker-animation.js';
 import { setBuildingRefs, bdResetCaches, drawResourceNode, drawFarm,
          drawFoundation, drawCompleteBuilding, drawBuilding } from './gfx/buildings.js';
@@ -470,13 +471,51 @@ export function draw(
     const def = BUILDING_TYPES[placementPreview.type];
     if (def) {
       ctx.save();
-      ctx.translate(placementPreview.x, placementPreview.y);
       ctx.globalAlpha = 0.58;
       ctx.fillStyle = placementPreview.valid ? '#78c878' : '#d35d50';
-      ctx.fillRect(-def.w / 2, -def.h / 2, def.w, def.h);
       ctx.strokeStyle = placementPreview.valid ? '#b9efb9' : '#ffb0a7';
       ctx.lineWidth = 2 / z;
-      ctx.strokeRect(-def.w / 2, -def.h / 2, def.w, def.h);
+      if (isFortificationType(placementPreview.type)) {
+        const corners = fortificationCorners(
+          placementPreview.type,
+          placementPreview.x,
+          placementPreview.y,
+          placementPreview.orientation,
+        );
+        ctx.beginPath();
+        ctx.moveTo(corners[0].x, corners[0].y);
+        for (let i = 1; i < corners.length; i++) ctx.lineTo(corners[i].x, corners[i].y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        const axis = {
+          x: corners[1].x - corners[0].x,
+          y: corners[1].y - corners[0].y,
+        };
+        const length = Math.hypot(axis.x, axis.y) || 1;
+        const nx = axis.x / length, ny = axis.y / length;
+        for (const sign of [-1, 1]) {
+          const ex = placementPreview.x + nx * def.w * 0.5 * sign;
+          const ey = placementPreview.y + ny * def.w * 0.5 * sign;
+          ctx.beginPath();
+          ctx.arc(ex, ey, 3.5 / z, 0, Math.PI * 2);
+          ctx.fillStyle = placementPreview.valid ? '#d9f2ca' : '#ffd0c7';
+          ctx.fill();
+        }
+        if (placementPreview.type === 'gate') {
+          ctx.globalAlpha = 0.85;
+          ctx.strokeStyle = placementPreview.valid ? '#eff6de' : '#ffe3dc';
+          ctx.lineWidth = 4 / z;
+          ctx.beginPath();
+          ctx.moveTo(placementPreview.x - nx * 15, placementPreview.y - ny * 15);
+          ctx.lineTo(placementPreview.x + nx * 15, placementPreview.y + ny * 15);
+          ctx.stroke();
+        }
+      } else {
+        ctx.translate(placementPreview.x, placementPreview.y);
+        ctx.fillRect(-def.w / 2, -def.h / 2, def.w, def.h);
+        ctx.strokeRect(-def.w / 2, -def.h / 2, def.w, def.h);
+      }
       ctx.restore();
     }
   }
