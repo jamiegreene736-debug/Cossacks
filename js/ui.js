@@ -49,6 +49,8 @@ export function bindControls(cbs) {
   callbacks = cbs;
   $('btn-pause').addEventListener('click', cbs.onPause);
   $('btn-speed').addEventListener('click', cbs.onSpeed);
+  $('btn-view-left').addEventListener('click', () => cbs.onView?.(-1));
+  $('btn-view-right').addEventListener('click', () => cbs.onView?.(1));
   $('btn-halt').addEventListener('click', cbs.onHalt);
   $('btn-again').addEventListener('click', cbs.onAgain);
   $('btn-resume').addEventListener('click', cbs.onPause);
@@ -90,6 +92,10 @@ export function showBattleHud(world) {
 
 export function setPauseLabel(paused) {
   $('btn-pause').innerHTML = paused ? '&#9654;' : '&#10074;&#10074;';
+}
+
+export function setViewDirection(label) {
+  $('view-direction').textContent = label;
 }
 
 export function showPauseMenu(audioSettings) {
@@ -215,7 +221,7 @@ export function updateHud(world, selection) {
       ? `${entity.rallyTargetId ?? ''}:${entity.rallyX ?? ''}:${entity.rallyY ?? ''}` : '';
     return `${entity.entityKind || 'unit'}:${entity.id}:${entity.queue?.length || 0}:${queueProgress}`
       + `:${entity.complete ?? ''}:${buildProgress}:${Math.ceil(entity.hp || 0)}:${job}:${wallState}`
-      + `:${rally}`;
+      + `:${rally}:${entity.type === 'gate' ? entity.gateOpen !== false : ''}`;
   }).join('|');
   // Economy telemetry changes every 0.75 seconds. Rebuilding its cards faster
   // only creates DOM/layout work without showing the player newer information.
@@ -268,6 +274,16 @@ function renderSelection(world, selection) {
           remaining: building.resourceType === row.resourceType ? economy.remaining : null,
         });
       }
+    }
+    if (building.type === 'gate') {
+      const open = building.gateOpen !== false;
+      info.textContent = open ? 'Gate open — troops may pass' : 'Gate closed — passage barred';
+      context.textContent = 'Fortification controls';
+      addCommand(grid, {
+        action: 'gate', type: 'gate', icon: open ? '▥' : '∩',
+        label: open ? 'Close Gate' : 'Open Gate',
+        meta: open ? 'Bar the passage' : 'Clear the passage',
+      });
     }
     for (const unitType of def.trains || []) {
       const counts = unitType === 'villager' ? [1, 5] : [1, 5, 20];

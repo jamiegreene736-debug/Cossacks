@@ -20,6 +20,31 @@ export function isFortificationType(type) {
   return Boolean(BUILDING_TYPES[type]?.fortification);
 }
 
+export function isGateOpen(building) {
+  return building?.type === 'gate' && building.gateOpen !== false;
+}
+
+export function setGateOpen(world, building, open) {
+  if (!world || !building?.alive || !building.complete || building.type !== 'gate') {
+    return { ok: false, message: 'Select a completed friendly Stone Gate.' };
+  }
+  const next = Boolean(open);
+  if (building.gateOpen === next) {
+    return { ok: true, open: next, message: `Gate is already ${next ? 'open' : 'closed'}.` };
+  }
+  building.gateOpen = next;
+  world.navigationVersion = (world.navigationVersion || 0) + 1;
+  return {
+    ok: true,
+    open: next,
+    message: next ? 'Stone Gate opened. Passage is clear.' : 'Stone Gate closed. Passage is barred.',
+  };
+}
+
+export function toggleGate(world, building) {
+  return setGateOpen(world, building, !isGateOpen(building));
+}
+
 export function normalizeFortificationOrientation(orientation) {
   if (Number.isFinite(orientation)) {
     let angle = orientation % (Math.PI * 2);
@@ -446,7 +471,9 @@ export function lineIntersectsFortification(x0, y0, x1, y1, entity, padding = 0)
 export function resolveUnitFortificationCollision(unit, fortifications) {
   let resolved = false;
   for (const wall of fortifications) {
-    if (!wall.alive || wall.type !== 'wall' || (!wall.complete && wall.progress < 0.24)) continue;
+    const solidWall = wall.type === 'wall' && (wall.complete || wall.progress >= 0.24);
+    const closedGate = wall.type === 'gate' && wall.complete && !isGateOpen(wall);
+    if (!wall.alive || (!solidWall && !closedGate)) continue;
     const frame = fortificationFrame(wall.type, wall.x, wall.y, wall.orientation, unit.radius + 1.5);
     const local = pointLocal(frame, unit.x, unit.y);
     if (Math.abs(local.along) >= frame.halfLength || Math.abs(local.across) >= frame.halfThickness) continue;

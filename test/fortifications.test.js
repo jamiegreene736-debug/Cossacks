@@ -8,7 +8,7 @@ import {
 import {
   assignMusketeersToWall, dismountWallUnit, fortificationAxis,
   fortificationEndpoints, lineIntersectsFortification,
-  resolveUnitFortificationCollision, updateWallAssignment,
+  resolveUnitFortificationCollision, toggleGate, updateWallAssignment,
 } from '../js/fortifications.js';
 
 function makeWorld() {
@@ -155,7 +155,7 @@ test('one assigned villager constructs a dragged wall run in sequence', () => {
   assert.equal(worker.state, 'idle');
 });
 
-test('wall masonry blocks units and fire while a gate remains passable', () => {
+test('wall masonry blocks units while a player-controlled gate opens and closes', () => {
   const world = makeWorld();
   const wall = createBuilding(0, 'wall', 660, 1800, true, { orientation: 'horizontal' });
   const gate = createBuilding(0, 'gate', 820, 1800, true, { orientation: 'horizontal' });
@@ -170,6 +170,20 @@ test('wall masonry blocks units and fire while a gate remains passable', () => {
   const gateUnit = { x: gate.x, y: gate.y, radius: 5 };
   assert.equal(resolveUnitFortificationCollision(gateUnit, [gate]), false);
   assert.deepEqual(gateUnit, { x: gate.x, y: gate.y, radius: 5 });
+
+  const navigationVersion = world.navigationVersion || 0;
+  const closed = toggleGate(world, gate);
+  assert.equal(closed.ok, true);
+  assert.equal(closed.open, false);
+  assert.equal(world.navigationVersion, navigationVersion + 1);
+  const blockedGateUnit = { x: gate.x, y: gate.y, radius: 5 };
+  assert.equal(resolveUnitFortificationCollision(blockedGateUnit, [gate]), true);
+  assert.ok(Math.abs(blockedGateUnit.y - gate.y) >= 19.5);
+
+  const opened = toggleGate(world, gate);
+  assert.equal(opened.ok, true);
+  assert.equal(opened.open, true);
+  assert.equal(resolveUnitFortificationCollision({ x: gate.x, y: gate.y, radius: 5 }, [gate]), false);
 
   world.buildings.push(wall, gate);
   const moving = spawnUnit(world, 0, 'villager', 660, 1760);

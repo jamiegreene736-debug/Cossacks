@@ -1,6 +1,8 @@
 // Small, pure helpers for keeping the canvas renderer inside a predictable
 // pixel budget and excluding world objects that cannot affect this frame.
 
+import { rotatedViewHalfExtents } from './camera.js';
+
 export const MAX_RENDER_DPR = 1.5;
 
 export function chooseRenderDpr(devicePixelRatio) {
@@ -12,9 +14,9 @@ export function chooseRenderDpr(devicePixelRatio) {
 export function getVisibleWorldBounds(
   camera, viewWidth, viewHeight, margin = 0, worldWidth = Infinity, worldHeight = Infinity,
 ) {
-  const zoom = Math.max(0.01, Number(camera?.zoom) || 1);
-  const halfWidth = Math.max(0, Number(viewWidth) || 0) / (2 * zoom) + margin;
-  const halfHeight = Math.max(0, Number(viewHeight) || 0) / (2 * zoom) + margin;
+  const extents = rotatedViewHalfExtents(camera, viewWidth, viewHeight);
+  const halfWidth = extents.x + margin;
+  const halfHeight = extents.y + margin;
   return {
     left: Math.max(0, camera.x - halfWidth),
     right: Math.min(worldWidth, camera.x + halfWidth),

@@ -4,7 +4,8 @@ import { SIM_STEP, BUILDING_TYPES } from './config.js';
 import { createWorld, step } from './sim.js';
 import { Commander } from './ai.js';
 import { initRender, startBattle as startBattleRender, draw,
-         camera, clampCamera } from './render.js';
+         camera, clampCamera, rotateView } from './render.js';
+import { viewDirectionLabel } from './camera.js';
 import { initInput, updateInput, getSelection, getDragRect,
          getPlacementPreview, getResourceHoverTarget, getMovePreview, beginPlacement, setFormation,
          cancelPlacement, haltSelection, resetForBattle } from './input.js';
@@ -17,6 +18,7 @@ import { preloadProductionArt } from './gfx/art-assets.js';
 import {
   deleteCampaign, getCampaignSummary, loadCampaign, restoreGameSnapshot, saveCampaign,
 } from './savegame.js';
+import { toggleGate } from './fortifications.js';
 
 let world = null;
 let commander = null;
@@ -29,6 +31,7 @@ const productionArtReady = preloadProductionArt();
 initRender(canvas, minimap);
 initInput(canvas, minimap, () => world, {
   onPause: togglePause,
+  onView: turnBattleView,
   onFormation: formation => {
     ui.markFormation(formation);
     sfx.command('move');
@@ -71,6 +74,7 @@ ui.initMenu({
 });
 ui.bindControls({
   onPause: togglePause,
+  onView: turnBattleView,
   onSpeed: toggleSpeed,
   onHalt: () => {
     haltSelection();
@@ -119,6 +123,7 @@ async function startBattle(opts) {
   ui.showBattleHud(world);
   ui.setPauseLabel(false);
   ui.setSpeedLabel(1);
+  ui.setViewDirection(viewDirectionLabel(camera.rotation));
   ui.markFormation('line');
   sfx.startBattle(world);
   endShown = false;
@@ -143,7 +148,23 @@ function handleCommand(command) {
     if (result.ok) sfx.command('train');
     ui.toast(result.message, result.ok ? 'good' : 'danger');
     ui.updateHud(world, getSelection());
+    return;
   }
+  if (command.action === 'gate') {
+    const gate = getSelection().find(entity => entity.entityKind === 'building'
+      && entity.type === 'gate' && entity.side === 0);
+    const result = toggleGate(world, gate);
+    ui.toast(result.message, result.ok ? 'good' : 'danger');
+    if (result.ok) sfx.command('move');
+    ui.updateHud(world, getSelection());
+  }
+}
+
+function turnBattleView(direction) {
+  if (!world) return;
+  const rotation = rotateView(direction);
+  ui.setViewDirection(viewDirectionLabel(rotation));
+  ui.toast(`View turned ${direction < 0 ? 'left' : 'right'} — facing ${viewDirectionLabel(rotation)}.`, 'good');
 }
 
 function togglePause() {
@@ -197,7 +218,9 @@ async function resumeSavedCampaign() {
     camera.x = restored.camera?.x ?? camera.x;
     camera.y = restored.camera?.y ?? camera.y;
     camera.zoom = restored.camera?.zoom ?? camera.zoom;
+    camera.rotation = restored.camera?.rotation ?? camera.rotation;
     clampCamera();
+    ui.setViewDirection(viewDirectionLabel(camera.rotation));
     world.state = 'running';
     sfx.startBattle(world);
     ui.showBattleHud(world);
@@ -360,12 +383,12 @@ window.__tick = (secs = 1) => {
 };
 
 // Console/debug hook: park the camera for reproducible screenshots.
-window.__view = (x, y, zoom) => {
+window.__view = (x, y, zoom, rotation = camera.rotation) => {
   if (!world) return 'no battle running';
-  camera.x = x; camera.y = y; camera.zoom = zoom;
+  camera.x = x; camera.y = y; camera.zoom = zoom; camera.rotation = rotation;
   clampCamera();
   draw(world, 1, null, getPlacementPreview(), getResourceHoverTarget(), getMovePreview());
-  return `cam=(${camera.x | 0},${camera.y | 0}) zoom=${camera.zoom}`;
+  return `cam=(${camera.x | 0},${camera.y | 0}) zoom=${camera.zoom} rotation=${camera.rotation}`;
 };
 
 // Lightweight diagnostics used by the local browser checks and useful when

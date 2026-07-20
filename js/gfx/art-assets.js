@@ -38,6 +38,7 @@ const ART_URLS = Object.freeze({
   englishTower: new URL('../../assets/buildings/english-tower.webp', import.meta.url).href,
   englishConstruction: new URL('../../assets/buildings/english-construction.webp', import.meta.url).href,
   englishFortifications: new URL('../../assets/buildings/english-fortifications.webp', import.meta.url).href,
+  englishGateClosed: new URL('../../assets/buildings/english-gate-closed.png', import.meta.url).href,
   englishFortificationConstruction: new URL('../../assets/buildings/english-fortification-construction.webp', import.meta.url).href,
   woodland: new URL('../../assets/resources/woodland.webp', import.meta.url).href,
   berryBushes: new URL('../../assets/resources/berry-bushes.webp', import.meta.url).href,

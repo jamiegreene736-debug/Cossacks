@@ -103,6 +103,7 @@ export function createGameSnapshot(world, commander, camera, savedAt = Date.now(
       x: Number(camera?.x) || 660,
       y: Number(camera?.y) || 1600,
       zoom: Number(camera?.zoom) || 0.9,
+      rotation: Number(camera?.rotation) || 0,
     },
   };
 }
@@ -150,7 +151,10 @@ export function restoreGameSnapshot(snapshot) {
     delete unit.targetId;
     delete unit.orderTargetId;
   }
-  for (const building of world.buildings) building.selected = false;
+  for (const building of world.buildings) {
+    building.selected = false;
+    if (building.type === 'gate' && typeof building.gateOpen !== 'boolean') building.gateOpen = true;
+  }
   for (const projectile of world.projectiles) {
     projectile.target = entities.get(projectile.targetId) || null;
     delete projectile.targetId;
@@ -173,6 +177,7 @@ export function restoreGameSnapshot(snapshot) {
       x: Number(savedCamera.x) || 660,
       y: Number(savedCamera.y) || 1600,
       zoom: Number(savedCamera.zoom) || 0.9,
+      rotation: Number(savedCamera.rotation) || 0,
     },
   };
 }

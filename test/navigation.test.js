@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createBuilding } from '../js/economy.js';
-import { pointInsideFortification } from '../js/fortifications.js';
+import { pointInsideFortification, toggleGate } from '../js/fortifications.js';
 import { assignVillagerPath, findVillagerPath } from '../js/navigation.js';
 import { createWorld, spawnUnit, step } from '../js/sim.js';
 
@@ -31,7 +31,16 @@ test('villager navigation goes around walls while treating a stone gate as an op
   assert.ok(around.some(waypoint => waypoint.x > 1096 || waypoint.x < 656));
 
   world.buildings = world.buildings.filter(building => building.type === 'town_center');
-  world.buildings.push(createBuilding(0, 'gate', 876, 1600, true, { orientation: 'horizontal' }));
+  const gate = createBuilding(0, 'gate', 876, 1600, true, { orientation: 'horizontal' });
+  world.buildings.push(gate);
+  assert.deepEqual(findVillagerPath(world, 876, 1500, 876, 1700, 7), [{ x: 876, y: 1700 }]);
+
+  toggleGate(world, gate);
+  const barred = findVillagerPath(world, 876, 1500, 876, 1700, 7);
+  assert.ok(barred.length >= 3);
+  assert.ok(barred.some(waypoint => waypoint.x > 936 || waypoint.x < 816));
+
+  toggleGate(world, gate);
   assert.deepEqual(findVillagerPath(world, 876, 1500, 876, 1700, 7), [{ x: 876, y: 1700 }]);
 });
 

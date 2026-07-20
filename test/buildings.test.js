@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile, stat } from 'node:fs/promises';
 
 import { BUILDING_TYPES } from '../js/config.js';
 import { bdConstructionArtFrame, getBuildingPresentation } from '../js/gfx/buildings.js';
@@ -43,4 +44,12 @@ test('production construction art advances continuously through four authored st
   assert.equal(blend.from, 1);
   assert.equal(blend.to, 2);
   assert.ok(blend.mix > 0 && blend.mix < 1);
+});
+
+test('the closed gate uses a substantial transparent production render', async () => {
+  const url = new URL('../assets/buildings/english-gate-closed.png', import.meta.url);
+  const [metadata, header] = await Promise.all([stat(url), readFile(url)]);
+  assert.ok(metadata.size > 1_000_000, 'closed-gate source should retain high-resolution masonry detail');
+  assert.deepEqual([...header.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+  assert.equal(header[25], 6, 'closed-gate source must preserve an RGBA transparency channel');
 });

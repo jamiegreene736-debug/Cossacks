@@ -557,8 +557,11 @@ export function step(world, dt) {
 
   blockingFortifications.length = 0;
   for (const building of world.buildings) {
-    if (building.alive && building.type === 'wall'
-      && (building.complete || building.progress >= 0.24)) {
+    const blockingWall = building.type === 'wall'
+      && (building.complete || building.progress >= 0.24);
+    const blockingGate = building.type === 'gate' && building.complete
+      && building.gateOpen === false;
+    if (building.alive && (blockingWall || blockingGate)) {
       blockingFortifications.push(building);
     }
   }

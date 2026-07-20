@@ -51,7 +51,13 @@ test('a campaign round trip preserves economy, AI, camera and entity references'
   commander.committed.add(defender.id);
   commander.planCursor = { house: 4 };
 
-  const encoded = encodeSnapshot(createGameSnapshot(world, commander, { x: 777, y: 888, zoom: 1.4 }, 123456));
+  const gate = createBuilding(0, 'gate', 920, 1380, true, {
+    orientation: 'horizontal', gateOpen: false,
+  });
+  world.buildings.push(gate);
+  const encoded = encodeSnapshot(createGameSnapshot(
+    world, commander, { x: 777, y: 888, zoom: 1.4, rotation: Math.PI }, 123456,
+  ));
   const restored = restoreGameSnapshot(decodeSnapshot(encoded));
   const restoredAttacker = restored.world.units.find(unit => unit.id === attacker.id);
   const restoredDefender = restored.world.units.find(unit => unit.id === defender.id);
@@ -79,7 +85,8 @@ test('a campaign round trip preserves economy, AI, camera and entity references'
   assert.equal(getRallyTarget(restored.world, restoredTownCenter), restoredField);
   assert.equal(restoredField.millId, mill.id);
   assert.equal(restoredField.fieldSlot, 2);
-  assert.deepEqual(restored.camera, { x: 777, y: 888, zoom: 1.4 });
+  assert.deepEqual(restored.camera, { x: 777, y: 888, zoom: 1.4, rotation: Math.PI });
+  assert.equal(restored.world.buildings.find(building => building.id === gate.id).gateOpen, false);
 
   const maxUnitId = Math.max(...restored.world.units.map(unit => unit.id));
   assert.ok(restored.world.spawnUnit(0, 'villager', 700, 1500).id > maxUnitId);
