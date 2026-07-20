@@ -68,7 +68,7 @@ export function pausedMusicMultiplier(paused, pauseMusic) {
 }
 
 export function workerSoundKind(worker, target) {
-  if (worker?.job?.kind === 'build') return 'build';
+  if (worker?.job?.kind === 'build' || worker?.job?.kind === 'repair') return 'build';
   if (worker?.job?.kind !== 'gather' && worker?.job?.kind !== 'workplace') return null;
   const kind = worker.job.resourceType || target?.resourceType;
   return kind === 'food' ? 'harvest' : ['wood', 'gold', 'stone'].includes(kind) ? kind : null;

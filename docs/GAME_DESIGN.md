@@ -51,6 +51,9 @@ economy or entity interfaces introduced here.
 - The first villager emerges, can gather, establish a mill and fields, construct military
   infrastructure, and explicitly draw a low-powered civilian musket against a hovered enemy
   soldier or building.
+- Damaged completed buildings remain operational and can be explicitly repaired by selected
+  villagers. Multiple repairers stack their labor; active crews suppress flames while the
+  damage art, scaffolding, and working course visibly return the structure to full integrity.
 - Resource costs, population reservations, construction, and queues cannot go
   negative or exceed the cap.
 - England and the Ottoman Empire have distinct visuals and bonuses.

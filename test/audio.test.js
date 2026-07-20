@@ -105,6 +105,7 @@ test('worker activities select distinct economic sounds', () => {
   assert.equal(workerSoundKind(worker, { resourceType: 'gold' }), 'gold');
   assert.equal(workerSoundKind(worker, { resourceType: 'food' }), 'harvest');
   assert.equal(workerSoundKind({ job: { kind: 'build' } }, {}), 'build');
+  assert.equal(workerSoundKind({ job: { kind: 'repair' } }, {}), 'build');
   assert.equal(workerSoundKind({ job: { kind: 'workplace', resourceType: 'wood' } }, {}), 'wood');
   assert.equal(workerSoundKind({ job: null }, {}), null);
 });

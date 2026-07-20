@@ -69,6 +69,7 @@ does not alter unit combat stats or give the CPU free resources.
 - **Select infantry, cavalry, artillery, or villagers, then left-click open ground** — move the formation to a flagged waypoint
 - **Select units, then left-click an enemy** — focus the selection on that attack target
 - **Select villagers, then hover and left-click a deposit or economic building** — gather resources or work there
+- **Select villagers, then hover and left-click a damaged friendly building** — use the hammer cursor to assign repairs, suppress any fire, and rebuild it to full integrity
 - **Select villagers, then hover and left-click an enemy soldier or building** — draw civilian muskets and attack at reduced range, accuracy, fire rate, and damage
 - **Right-click / Mac two-finger click / Control-click** — alternate move, construct, attack, wall-mount, or rally command
 - **Town Center selected + primary click on a resource or worksite** — send newly trained villagers there to gather, work, or build

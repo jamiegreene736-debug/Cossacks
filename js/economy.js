@@ -32,6 +32,8 @@ export const MILL_FIELD_OFFSETS = Object.freeze([
 ]);
 const MILL_FIELD_PICK_RADIUS = 340;
 export const AUTO_BUILD_SEARCH_RADIUS = 420;
+const MIN_FULL_REPAIR_SECONDS = 18;
+const REPAIR_BUILD_TIME_MULTIPLIER = 1.5;
 
 const FIELD_WORK_POSITIONS = Object.freeze([
   [-0.34, 0.05], [-0.10, 0.06], [0.14, 0.08], [0.36, 0.10],
@@ -78,6 +80,7 @@ export function createBuilding(side, type, x, y, complete = false, options = {})
     hp: complete ? def.hp : Math.max(1, def.hp * 0.08), maxHp: def.hp,
     alive: true, selected: false, complete,
     progress: complete ? 1 : 0.02,
+    repairing: false, repairProgress: 0, repairStartHp: null,
     queue: [], rallyX: NaN, rallyY: NaN, rallyTargetId: null,
     reload: Math.random() * (def.reload || 0),
     resourceType: def.resource || null,
@@ -672,6 +675,40 @@ export function assignBuilders(world, workers, building) {
   return assigned;
 }
 
+export function isRepairableBuilding(building, side = null) {
+  return Boolean(building?.alive && building.entityKind === 'building' && building.complete
+    && building.hp < building.maxHp - 0.01
+    && (side === null || building.side === side));
+}
+
+export function buildingRepairDuration(building) {
+  const buildTime = BUILDING_TYPES[building?.type]?.buildTime || 0;
+  return Math.max(MIN_FULL_REPAIR_SECONDS, buildTime * REPAIR_BUILD_TIME_MULTIPLIER);
+}
+
+export function assignRepairers(world, workers, building) {
+  if (!world || !isRepairableBuilding(building)) return false;
+  const validWorkers = workers.filter(worker => worker?.alive && worker.type === 'villager'
+    && worker.side === building.side);
+  if (validWorkers.length === 0) return false;
+
+  const repairAlreadyActive = world.units.some(worker => worker.alive
+    && worker.job?.kind === 'repair' && worker.job.targetId === building.id);
+  if (!repairAlreadyActive) {
+    building.repairStartHp = building.hp;
+    building.repairProgress = 0;
+  }
+  building.repairing = true;
+  for (const worker of validWorkers) {
+    worker.job = { kind: 'repair', targetId: building.id };
+    worker.workAction = 'build';
+    worker.orderTarget = null;
+    worker.target = null;
+    clearVillagerPath(worker);
+  }
+  return true;
+}
+
 export function assignGatherers(world, workers, target) {
   const isFarm = target?.entityKind === 'building' && isOperationalField(world, target);
   const isDeposit = target?.entityKind === 'resource' && target.alive && target.amount > 0;
@@ -1052,6 +1089,8 @@ function advanceBuildQueue(world, worker, origin = null) {
 }
 
 function updateWorkers(world, dt) {
+  for (const building of world.buildings) building.repairing = false;
+
   for (const worker of world.units) {
     if (!worker.alive || worker.type !== 'villager' || !worker.job) continue;
     const target = findTarget(world, worker.job.targetId);
@@ -1069,6 +1108,13 @@ function updateWorkers(world, dt) {
       if (!worker.job && worker.state === 'work') worker.state = 'idle';
       continue;
     }
+    if (worker.job.kind === 'repair' && !isRepairableBuilding(target, worker.side)) {
+      worker.job = null;
+      worker.workAction = null;
+      if (worker.state === 'work') worker.state = 'idle';
+      continue;
+    }
+    if (worker.job.kind === 'repair') target.repairing = true;
     const point = nearestPoint(world, target, worker);
     // Movement stops within five pixels of its assigned slot, so the work
     // threshold includes that tolerance and avoids workers orbiting a site.
@@ -1096,6 +1142,41 @@ function updateWorkers(world, dt) {
       target.progress = Math.min(1, target.progress + dt / Math.max(1, def.buildTime));
       target.hp = Math.max(target.hp, target.maxHp * target.progress);
       if (target.progress >= 1) completeBuilding(world, target);
+      continue;
+    }
+
+    if (worker.job.kind === 'repair') {
+      const startHp = Number.isFinite(target.repairStartHp)
+        ? Math.min(target.repairStartHp, target.hp) : target.hp;
+      target.repairStartHp = startHp;
+      target.hp = Math.min(
+        target.maxHp,
+        target.hp + target.maxHp / buildingRepairDuration(target) * dt,
+      );
+      const repairSpan = Math.max(1, target.maxHp - startHp);
+      target.repairProgress = Math.max(0, Math.min(1, (target.hp - startHp) / repairSpan));
+      if (target.repairProgress >= 0.72) {
+        target.ignited = false;
+        target.fireImpactCount = 0;
+        target.fireEmitT = 0;
+      }
+      if (target.hp >= target.maxHp - 0.01) {
+        target.hp = target.maxHp;
+        target.repairProgress = 1;
+        target.repairing = false;
+        target.ignited = false;
+        target.fireImpactCount = 0;
+        target.fireEmitT = 0;
+        for (const repairer of world.units) {
+          if (repairer.job?.kind !== 'repair' || repairer.job.targetId !== target.id) continue;
+          repairer.job = null;
+          repairer.workAction = null;
+          if (repairer.state === 'work') repairer.state = 'idle';
+        }
+        const label = BUILDING_TYPES[target.type]?.label || 'Building';
+        sfx.buildingComplete(target.type, target.x);
+        world.events.push({ side: target.side, text: `${label} repaired.`, tone: 'good' });
+      }
       continue;
     }
 

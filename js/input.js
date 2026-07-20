@@ -7,8 +7,8 @@ import {
 import { WORLD, BUILDING_TYPES, UNIT_TYPES } from './config.js';
 import { applyMoveOrder, applyAttackOrder, haltOrder } from './formations.js';
 import {
-  assignBuilders, assignGatherers, clearWorkerJobs, findEntityAt,
-  findResourceAt, setRallyPoint,
+  assignBuilders, assignGatherers, assignRepairers, clearWorkerJobs, findEntityAt,
+  findResourceAt, isRepairableBuilding, setRallyPoint,
 } from './economy.js';
 import {
   assignMusketeersToWall, dismountWallUnits,
@@ -263,6 +263,13 @@ function issueOrder(screenX, screenY) {
     callbacks.onOrder?.('build');
     return;
   }
+  if (assignVillagersToRepair(world, workers, ownEntity)) {
+    world.flags.push({
+      x: ownEntity.x, y: ownEntity.y, life: 1.2, max: 1.2, repair: true,
+    });
+    callbacks.onOrder?.('build');
+    return;
+  }
 
   const musketeers = units.filter(unit => unit.type === 'musk');
   if (musketeers.length && ownEntity?.entityKind === 'building' && ownEntity.complete) {
@@ -431,9 +438,19 @@ function hoverableWorkerTargetAt(screenX, screenY) {
   const point = screenToWorld(screenX, screenY);
   const construction = findEntityAt(world, point.x, point.y, 0);
   if (construction?.entityKind === 'building' && !construction.complete) return construction;
+  if (isRepairableBuilding(construction, workers[0].side)) return construction;
   const target = findResourceAt(world, point.x, point.y);
   if (target?.entityKind === 'building' && !workers.some(worker => worker.side === target.side)) return null;
   return target;
+}
+
+export function getVillagerRepairTargetAt(world, selected, x, y) {
+  const workers = selected.filter(entity => entity?.alive && entity.type === 'villager');
+  if (!world || workers.length === 0) return null;
+  const side = workers[0].side;
+  if (workers.some(worker => worker.side !== side)) return null;
+  const target = findEntityAt(world, x, y, side);
+  return isRepairableBuilding(target, side) ? target : null;
 }
 
 export function getVillagerAttackTargetAt(world, selected, x, y) {
@@ -470,8 +487,10 @@ export function issueVillagerAttack(world, selected, target) {
 function updateResourceHover(screenX, screenY) {
   const attackTarget = hoverableVillagerAttackTargetAt(screenX, screenY);
   const target = attackTarget || hoverableWorkerTargetAt(screenX, screenY);
+  const repair = !attackTarget && target?.entityKind === 'building'
+    && isRepairableBuilding(target, target.side);
   resourceHover = target;
-  resourceHoverKind = attackTarget ? 'attack' : target ? 'work' : null;
+  resourceHoverKind = attackTarget ? 'attack' : repair ? 'repair' : target ? 'work' : null;
   const selected = getSelection();
   const hasMobileSelection = selected.some(entity => entity.alive && entity.side === 0
     && entity.entityKind !== 'building');
@@ -484,8 +503,9 @@ function updateResourceHover(screenX, screenY) {
       ? { kind: 'move', x: point.x, y: point.y }
       : null;
   const construction = target?.entityKind === 'building' && !target.complete;
-  inputCanvas?.classList.toggle('cursor-gather', Boolean(target) && !attackTarget && !construction);
-  inputCanvas?.classList.toggle('cursor-build', Boolean(construction) && !attackTarget);
+  const buildWork = construction || repair;
+  inputCanvas?.classList.toggle('cursor-gather', Boolean(target) && !attackTarget && !buildWork);
+  inputCanvas?.classList.toggle('cursor-build', Boolean(buildWork) && !attackTarget);
   inputCanvas?.classList.toggle('cursor-move', movePreview?.kind === 'move');
   inputCanvas?.classList.toggle('cursor-attack', Boolean(attackTarget)
     || movePreview?.kind === 'attack');
@@ -526,6 +546,17 @@ function gatherAt(screenX, screenY) {
     updateResourceHover(screenX, screenY);
     return true;
   }
+  if (assignVillagersToRepair(world, workers, target)) {
+    world.flags.push({
+      x: target.x, y: target.y, life: 1.2, max: 1.2, repair: true,
+    });
+    const label = BUILDING_TYPES[target.type].label;
+    callbacks.onToast?.(`${workers.length} villager${workers.length === 1 ? '' : 's'} repairing ${label}.`, 'good');
+    callbacks.onOrder?.('build');
+    callbacks.onSelection?.(getSelection());
+    updateResourceHover(screenX, screenY);
+    return true;
+  }
   if (!assignGatherers(world, workers, target)) return false;
   world.flags.push({ x: target.x, y: target.y, life: 1.2, max: 1.2, gather: true });
   const workplace = target.entityKind === 'building' && BUILDING_TYPES[target.type]?.workResources?.length;
@@ -544,6 +575,13 @@ function gatherAt(screenX, screenY) {
 export function assignVillagersToConstruction(world, workers, target) {
   return Boolean(world && target?.alive && target.entityKind === 'building' && !target.complete
     && target.side === 0 && assignBuilders(world, workers, target));
+}
+
+export function assignVillagersToRepair(world, workers, target) {
+  const repairers = workers.filter(worker => worker?.alive && worker.type === 'villager');
+  const side = repairers[0]?.side;
+  return Boolean(world && side !== undefined && repairers.every(worker => worker.side === side)
+    && isRepairableBuilding(target, side) && assignRepairers(world, repairers, target));
 }
 
 export function setFormation(formation) {

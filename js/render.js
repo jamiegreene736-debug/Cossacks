@@ -531,17 +531,20 @@ const sortBuf = [];
 function drawResourceHover(target, zoom, kind = 'resource') {
   if (!target?.alive) return;
   const construction = target.entityKind === 'building' && !target.complete;
-  if (kind !== 'attack' && !construction && target.amount <= 0) return;
+  const repair = kind === 'repair';
+  if (kind !== 'attack' && !repair && !construction && target.amount <= 0) return;
   const colors = {
     food: ['#f4d58a', '#9fc96b'],
     wood: ['#d7e8a8', '#6fa455'],
     gold: ['#fff0a4', '#d0a23d'],
     stone: ['#e5e7df', '#9fa8a6'],
     construction: ['#fff0bb', '#d2a34d'],
+    repair: ['#fff0bd', '#d1a83f'],
     attack: ['#ffd1c7', '#b74336'],
   };
   const [light, base] = kind === 'attack' ? colors.attack
-    : construction ? colors.construction : colors[target.resourceType] || colors.food;
+    : repair ? colors.repair
+      : construction ? colors.construction : colors[target.resourceType] || colors.food;
   const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.006);
   const rx = target.radius + 11 + pulse * 3;
   const ry = Math.max(15, target.radius * 0.48 + pulse * 2);
@@ -573,6 +576,30 @@ function drawResourceHover(target, zoom, kind = 'resource') {
         ctx.stroke();
       }
     }
+  } else if (repair) {
+    const iconX = target.x + rx * 0.62;
+    const iconY = target.y - ry * 0.76;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(22, 18, 12, 0.88)';
+    ctx.lineWidth = 5.5 / zoom;
+    ctx.beginPath();
+    ctx.moveTo(iconX - 6 / zoom, iconY + 7 / zoom);
+    ctx.lineTo(iconX + 5 / zoom, iconY - 4 / zoom);
+    ctx.stroke();
+    ctx.strokeStyle = '#d5a54a';
+    ctx.lineWidth = 2.4 / zoom;
+    ctx.stroke();
+    ctx.fillStyle = light;
+    ctx.strokeStyle = 'rgba(22, 18, 12, 0.9)';
+    ctx.lineWidth = 1.5 / zoom;
+    ctx.beginPath();
+    ctx.moveTo(iconX + 1 / zoom, iconY - 8 / zoom);
+    ctx.lineTo(iconX + 7 / zoom, iconY - 10 / zoom);
+    ctx.lineTo(iconX + 12 / zoom, iconY - 5 / zoom);
+    ctx.lineTo(iconX + 9 / zoom, iconY + 1 / zoom);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
   }
   ctx.fillStyle = base;
   ctx.strokeStyle = light;

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 
 import { createWorld, spawnUnit, step } from '../js/sim.js';
 import {
-  assignVillagersToConstruction, getVillagerAttackTargetAt, isOpenGroundMoveTarget,
+  assignVillagersToConstruction, assignVillagersToRepair, getVillagerAttackTargetAt,
+  getVillagerRepairTargetAt, isOpenGroundMoveTarget,
   isSecondaryPointerEvent, issuePrimaryUnitCommand, issueVillagerAttack,
   issueVillagerGroundMove, setBuildingRallyAt, setTownCenterPrimaryRallyAt,
 } from '../js/input.js';
@@ -325,6 +326,30 @@ test('selected villagers can take over any unfinished friendly construction', ()
   assert.equal(assignVillagersToConstruction(world, [first], enemyWall), false);
   wall.complete = true;
   assert.equal(assignVillagersToConstruction(world, [first], wall), false);
+});
+
+test('selected villagers can target and repair only damaged friendly completed buildings', () => {
+  const world = makeWorld();
+  const first = spawnUnit(world, 0, 'villager', 720, 1420);
+  const second = spawnUnit(world, 0, 'villager', 735, 1420);
+  const damaged = createBuilding(0, 'house', 980, 1700, true);
+  damaged.hp = damaged.maxHp * 0.35;
+  damaged.ignited = true;
+  const enemy = createBuilding(1, 'house', 1180, 1700, true);
+  enemy.hp = enemy.maxHp * 0.35;
+  const intact = createBuilding(0, 'house', 1380, 1700, true);
+  world.buildings.push(damaged, enemy, intact);
+
+  assert.equal(getVillagerRepairTargetAt(
+    world, [first, second], damaged.x, damaged.y,
+  ), damaged);
+  assert.equal(getVillagerRepairTargetAt(world, [first], enemy.x, enemy.y), null);
+  assert.equal(getVillagerRepairTargetAt(world, [first], intact.x, intact.y), null);
+  assert.equal(assignVillagersToRepair(world, [first, second], damaged), true);
+  assert.deepEqual(first.job, { kind: 'repair', targetId: damaged.id });
+  assert.deepEqual(second.job, { kind: 'repair', targetId: damaged.id });
+  assert.equal(assignVillagersToRepair(world, [first], enemy), false);
+  assert.equal(assignVillagersToRepair(world, [first], intact), false);
 });
 
 test('villager-only movement helper still requires a villager and refuses occupied terrain', () => {

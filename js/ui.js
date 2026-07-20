@@ -529,7 +529,9 @@ export function setPlacement(active, label = '', type = '', orientation = '') {
 export function setResourceHover(world, hover) {
   const tooltip = $('resource-tooltip');
   const attack = hover?.kind === 'attack' && hover.target?.alive && hover.workers?.length;
+  const repair = hover?.kind === 'repair' && hover.target?.alive && hover.workers?.length;
   tooltip.classList.toggle('attack', Boolean(attack));
+  tooltip.classList.toggle('repair', Boolean(repair));
   if (world && attack) {
     const targetDef = hover.target.entityKind === 'building'
       ? BUILDING_TYPES[hover.target.type] : UNIT_TYPES[hover.target.type];
@@ -540,6 +542,21 @@ export function setResourceHover(world, hover) {
     output.textContent = `${hover.workers.length} villager${hover.workers.length === 1 ? '' : 's'} · ${villager.dmg} damage · ${villager.range} range · ${Math.round(villager.acc * 100)}% accuracy`;
     const instruction = document.createElement('small');
     instruction.textContent = 'Click to draw muskets and fire · slower and weaker than trained musketeers.';
+    tooltip.replaceChildren(title, output, instruction);
+    tooltip.style.left = `${Math.max(12, Math.min(window.innerWidth - 294, hover.screenX + 18))}px`;
+    tooltip.style.top = `${Math.max(90, Math.min(window.innerHeight - 235, hover.screenY + 18))}px`;
+    tooltip.classList.remove('hidden');
+    return;
+  }
+  if (world && repair) {
+    const def = BUILDING_TYPES[hover.target.type];
+    const integrity = Math.max(0, Math.ceil(hover.target.hp / hover.target.maxHp * 100));
+    const title = document.createElement('strong');
+    title.textContent = `Repair ${def?.label || 'Building'}`;
+    const output = document.createElement('span');
+    output.textContent = `${hover.workers.length} villager${hover.workers.length === 1 ? '' : 's'} selected · ${integrity}% integrity${hover.target.ignited ? ' · burning' : ''}`;
+    const instruction = document.createElement('small');
+    instruction.textContent = 'Click to assign the selected villagers, suppress the fire, and rebuild the structure.';
     tooltip.replaceChildren(title, output, instruction);
     tooltip.style.left = `${Math.max(12, Math.min(window.innerWidth - 294, hover.screenX + 18))}px`;
     tooltip.style.top = `${Math.max(90, Math.min(window.innerHeight - 235, hover.screenY + 18))}px`;
@@ -565,6 +582,7 @@ export function setResourceHover(world, hover) {
   if (!stats || stats.workers === 0) {
     tooltip.classList.add('hidden');
     tooltip.classList.remove('attack');
+    tooltip.classList.remove('repair');
     return;
   }
   const labels = {

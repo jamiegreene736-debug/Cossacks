@@ -21,7 +21,7 @@ const RESOURCE_ACTIONS = Object.freeze({
 });
 
 export function resolveWorkerAction(job, target) {
-  if (job?.kind === 'build') return 'build';
+  if (job?.kind === 'build' || job?.kind === 'repair') return 'build';
   if (job?.kind === 'workplace') return RESOURCE_ACTIONS[job.resourceType] || null;
   if (job?.kind !== 'gather' || !target) return null;
   if (target.entityKind === 'building' && target.type === 'farm') return 'farm';
@@ -39,7 +39,7 @@ export function getWorkerFrame(worker, combatReady = false) {
   if (worker.state === 'work') {
     const action = WORK_FRAMES[worker.workAction]
       ? worker.workAction
-      : worker.job?.kind === 'build' ? 'build' : 'chop';
+      : worker.job?.kind === 'build' || worker.job?.kind === 'repair' ? 'build' : 'chop';
     const strikePhase = ((worker.animT * 2) | 0) & 1;
     return WORK_FRAMES[action] + strikePhase;
   }

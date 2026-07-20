@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { Commander } from '../js/ai.js';
-import { createBuilding } from '../js/economy.js';
+import { assignRepairers, buildingRepairDuration, createBuilding } from '../js/economy.js';
 import { createGameSnapshot, restoreGameSnapshot } from '../js/savegame.js';
 import {
   buildingFireIntensity, createWorld, damage, launchBuildingTorch, spawnUnit, step,
@@ -60,6 +60,43 @@ test('fire severity grows as an ignited structure loses health', () => {
   assert.ok(criticalIntensity <= 1);
 });
 
+test('repair crews stack their labor, suppress fire, rebuild damage, and stop at full integrity', () => {
+  const world = createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
+  const target = createBuilding(0, 'house', 980, 1750, true);
+  target.hp = target.maxHp * 0.24;
+  target.ignited = true;
+  target.fireImpactCount = 4;
+  world.buildings.push(target);
+  const first = spawnUnit(world, 0, 'villager', target.x - target.radius - 10, target.y);
+  const second = spawnUnit(world, 0, 'villager', target.x + target.radius + 10, target.y);
+  const startingHp = target.hp;
+  const startingFire = buildingFireIntensity(target);
+
+  assert.equal(assignRepairers(world, [first, second], target), true);
+  advance(world, 3);
+
+  const expectedPerWorker = target.maxHp / buildingRepairDuration(target) * 3;
+  assert.ok(target.hp >= startingHp + expectedPerWorker * 1.9,
+    'two villagers should contribute repair progress every tick');
+  assert.equal(target.repairing, true);
+  assert.ok(target.repairProgress > 0);
+  assert.ok(buildingFireIntensity(target) < startingFire);
+  assert.equal(first.workAction, 'build');
+  assert.equal(second.workAction, 'build');
+
+  advance(world, 2.2);
+  assert.equal(target.ignited, false, 'crews extinguish the fire before repairs finish');
+  assert.ok(target.hp < target.maxHp);
+
+  advance(world, buildingRepairDuration(target));
+  assert.equal(target.hp, target.maxHp);
+  assert.equal(target.repairProgress, 1);
+  assert.equal(target.repairing, false);
+  assert.equal(first.job, null);
+  assert.equal(second.job, null);
+  assert.ok(world.events.some(event => event.text === 'House repaired.'));
+});
+
 test('zero health creates a timed collapse and a persistent footprint-sized ruin', () => {
   const world = createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
   const target = makeTarget(world);
@@ -92,6 +129,14 @@ test('active torch, ignition, and collapse state survive a campaign round trip',
   target.ignited = true;
   target.fireImpactCount = 2;
   target.fireSeed = 991;
+  const repairTarget = createBuilding(0, 'house', 700, 1750, true);
+  repairTarget.hp = repairTarget.maxHp * 0.4;
+  repairTarget.ignited = true;
+  world.buildings.push(repairTarget);
+  const repairer = spawnUnit(
+    world, 0, 'villager', repairTarget.x - repairTarget.radius - 10, repairTarget.y,
+  );
+  assignRepairers(world, [repairer], repairTarget);
   world.destructions.push({
     id: 999, type: 'stable', side: 1, nation: 'ottoman', x: 1100, y: 1500,
     w: 120, h: 84, radius: 62, hp: 1, maxHp: 1000, complete: true,
@@ -103,10 +148,15 @@ test('active torch, ignition, and collapse state survive a campaign round trip',
   )).world;
   const restoredTarget = restored.buildings.find(building => building.id === target.id);
   const restoredTorch = restored.projectiles.find(projectile => projectile.kind === 'torch');
+  const restoredRepairTarget = restored.buildings.find(building => building.id === repairTarget.id);
+  const restoredRepairer = restored.units.find(unit => unit.id === repairer.id);
 
   assert.equal(restoredTarget.ignited, true);
   assert.equal(restoredTarget.fireImpactCount, 2);
   assert.equal(restoredTorch.target, restoredTarget);
   assert.equal(restoredTorch.attackerId, attacker.id);
+  assert.equal(restoredRepairTarget.repairStartHp, repairTarget.hp);
+  assert.equal(restoredRepairTarget.repairProgress, 0);
+  assert.deepEqual(restoredRepairer.job, { kind: 'repair', targetId: repairTarget.id });
   assert.equal(restored.destructions[0].age, 0.4);
 });

@@ -232,8 +232,11 @@ export function damage(world, victim, amount, attacker) {
 export function buildingFireIntensity(building) {
   if (!building?.alive || !building.complete || !building.ignited) return 0;
   const health = Math.max(0, building.hp / Math.max(1, building.maxHp));
-  return Math.min(1, 0.28 + (1 - health) * 0.88
+  const severity = Math.min(1, 0.28 + (1 - health) * 0.88
     + Math.min(0.2, (building.fireImpactCount || 1) * 0.025));
+  const suppression = building.repairing
+    ? Math.max(0, Math.min(0.9, (building.repairProgress || 0) * 0.9)) : 0;
+  return severity * (1 - suppression);
 }
 
 function igniteBuilding(building) {
