@@ -3614,9 +3614,11 @@ function bdFortBlock(g, axis, normal, along, across, halfLength, halfThickness,
 
   // The end plane is painted before the long face, then capped by the lit top.
   // That overlap order keeps connected sections visually continuous.
-  bdPoly(g, bdFortFlat([br, fr, tfr, tbr]), bdRamp(R.shade), {
-    litW: o.litW || 0.65, edge: true, edgeW: 0.32, lineW: o.lineW || 0.8,
-  });
+  if (o.endPlane !== false) {
+    bdPoly(g, bdFortFlat([br, fr, tfr, tbr]), bdRamp(R.shade), {
+      litW: o.litW || 0.65, edge: true, edgeW: 0.32, lineW: o.lineW || 0.8,
+    });
+  }
   bdPoly(g, bdFortFlat([fl, fr, tfr, tfl]), R, {
     litW: o.litW || 0.75, edge: true, edgeW: 0.38, lineW: o.lineW || 0.9,
     shadeY: 0.82,
@@ -4032,11 +4034,17 @@ function bdPaintWallStairs(g, building, progress, construction) {
   return { axis, normal, halfWidth, run };
 }
 
-function bdPaintFortification(g, type, side, orientation, progress, seed, construction) {
+function bdPaintFortification(
+  g, type, side, orientation, progress, seed, construction, joinedEnds = [false, false],
+) {
   const axis = fortificationAxis(orientation);
   const normal = { x: -axis.y, y: axis.x };
   const isGate = type === 'gate';
-  const halfLength = BUILDING_TYPES[type].w * 0.5;
+  const nominalHalfLength = BUILDING_TYPES[type].w * 0.5;
+  const connectedWall = !isGate && joinedEnds.some(Boolean);
+  // Adjacent sections overlap by a few pixels. Their thick top walks then
+  // mitre cleanly through a bend instead of exposing a triangular grass gap.
+  const halfLength = nominalHalfLength + (connectedWall ? 3 : 0);
   const halfThickness = BUILDING_TYPES[type].h * 0.5;
   const p = bdClamp(progress == null ? 1 : progress, 0, 1);
   const stone = bdRamp(BMAT.STONE);
@@ -4052,14 +4060,22 @@ function bdPaintFortification(g, type, side, orientation, progress, seed, constr
   if (!isGate) {
     const rise = construction ? bdClamp((p - 0.07) / 0.76, 0, 1) : 1;
     const builtHeight = 4 + 28 * rise;
-    bdFortBlock(g, axis, normal, 0, 0, halfLength, halfThickness, Math.min(5.5, builtHeight), 0, rough);
+    const seamlessEnd = { endPlane: !joinedEnds[1] };
+    bdFortBlock(g, axis, normal, 0, 0, halfLength, halfThickness,
+      Math.min(5.5, builtHeight), 0, rough, seamlessEnd);
     if (builtHeight > 4) {
       bdFortBlock(g, axis, normal, 0, -0.6, halfLength - 1.2, halfThickness - 1.4,
-        builtHeight - 4, 4, stone);
+        builtHeight - 4, 4, stone, seamlessEnd);
       bdFortStoneFace(g, axis, normal, 0, halfThickness - 2, halfLength - 1.4,
         4, builtHeight - 4, seed ^ 0x35a9, false);
     }
-    for (const along of [-halfLength + 7, -halfLength * 0.28, halfLength * 0.28, halfLength - 7]) {
+    const supports = connectedWall
+      ? [
+        ...(!joinedEnds[0] ? [-nominalHalfLength + 5] : []),
+        ...(!joinedEnds[1] ? [nominalHalfLength - 5] : []),
+      ]
+      : [-halfLength + 7, -halfLength * 0.28, halfLength * 0.28, halfLength - 7];
+    for (const along of supports) {
       bdFortBlock(g, axis, normal, along, 2.1, 3.4, halfThickness + 2.5,
         Math.max(4, builtHeight - 1.5), 0, rough, { lineW: 0.68, litW: 0.5 });
     }
@@ -4408,6 +4424,29 @@ function bdDrawProductionFortificationConstruction(g, building, image, completed
   }
 }
 
+export function usesFixedFortificationFrameArt(building) {
+  return !Number.isFinite(normalizeFortificationOrientation(building?.orientation));
+}
+
+function bdJoinedFortificationEnds(building, world) {
+  const endpoints = fortificationEndpoints(building);
+  if (!world || endpoints.length !== 2) return [false, false];
+  const neighbors = world.buildings.filter(candidate => candidate !== building
+    && candidate.alive && candidate.complete && candidate.side === building.side
+    && isFortificationType(candidate.type));
+  return endpoints.map(endpoint => neighbors.some(neighbor => fortificationEndpoints(neighbor)
+    .some(candidate => Math.hypot(candidate.x - endpoint.x, candidate.y - endpoint.y) <= 3.5)));
+}
+
+export function getFortificationRenderProfile(building, world) {
+  const joinedEnds = bdJoinedFortificationEnds(building, world);
+  const connectedWall = building?.type === 'wall' && joinedEnds.some(Boolean);
+  return {
+    joinedEnds,
+    useProductionFrame: usesFixedFortificationFrameArt(building) && !connectedWall,
+  };
+}
+
 /**
  * The British civic hall uses a pre-rendered source rather than the general
  * material-lining pipeline. Passing this art through bdPassLining or the hard
@@ -4573,20 +4612,21 @@ function bdFortificationDamage(g, structure, stage, seed) {
   }
 }
 
-function bdFortificationSprite(building, damageStage) {
+function bdFortificationSprite(building, damageStage, joinedEnds = [false, false]) {
   const type = building.type;
   const def = BUILDING_TYPES[type];
   const normalized = normalizeFortificationOrientation(building.orientation);
   const orientation = Number.isFinite(normalized) ? Math.round(normalized * 1000) / 1000 : normalized;
   const variant = ((building.id % 3) + 3) % 3;
-  const key = `fort|${type}|${building.side}|${orientation}|${variant}|${damageStage}`;
+  const joinMask = joinedEnds.map(joined => Number(Boolean(joined))).join('');
+  const key = `fort|${type}|${building.side}|${orientation}|${variant}|${damageStage}|${joinMask}`;
   let sprite = bdBuildingCache.get(key);
   if (sprite) return sprite;
   const box = bdBoxFor(type, def);
   const seed = variant * 7919 + building.side * 104729 + (type === 'gate' ? 9109 : 3011);
   sprite = bdBake(box, BD_SCALE, function (g, scale) {
     const structure = bdPaintFortification(
-      g, type, building.side, orientation, 1, seed, false,
+      g, type, building.side, orientation, 1, seed, false, joinedEnds,
     );
     bdFortificationDamage(g, structure, damageStage, seed);
     bdPassSurfacePatina(g, box, seed + damageStage * 101);
@@ -5179,7 +5219,7 @@ function drawFoundation(building, nation, worldTime) {
   if (isFortificationType(building.type)) {
     const constructionArt = getProductionArt('englishFortificationConstruction');
     const completedArt = getProductionArt('englishFortifications');
-    if (constructionArt) {
+    if (constructionArt && usesFixedFortificationFrameArt(building)) {
       bdDrawProductionFortificationConstruction(g, building, constructionArt, completedArt);
       return;
     }
@@ -5432,7 +5472,7 @@ function bdDrawWavingBritishFlag(g, worldTime) {
   g.restore();
 }
 
-function drawCompleteBuilding(building, nation, worldTime) {
+function drawCompleteBuilding(building, nation, worldTime, world = null) {
   const def = BUILDING_TYPES[building.type];
   if (building.type === 'farm') { drawFarm(building); return; }
 
@@ -5445,11 +5485,12 @@ function drawCompleteBuilding(building, nation, worldTime) {
   }
   if (isFortificationType(building.type)) {
     const productionArt = getProductionArt('englishFortifications');
-    if (productionArt) {
+    const renderProfile = getFortificationRenderProfile(building, world);
+    if (productionArt && renderProfile.useProductionFrame) {
       bdDrawProductionFortification(ctx, building, productionArt, 1);
       return;
     }
-    const fortification = bdFortificationSprite(building, damageStage);
+    const fortification = bdFortificationSprite(building, damageStage, renderProfile.joinedEnds);
     if (fortification) {
       ctx.drawImage(fortification.c, fortification.x, fortification.y,
         fortification.w, fortification.h);
@@ -5488,10 +5529,10 @@ function drawCompleteBuilding(building, nation, worldTime) {
 
 function bdDrawFortificationJunctions(building, world) {
   if (!building.complete || !isFortificationType(building.type)) return;
-  // The production wall frames already include carved end piers. Layering the
-  // old procedural junction blocks over them reintroduced the flat geometry
-  // this authored masonry replaced.
-  if (getProductionArt('englishFortifications')) return;
+  // Connected wall sprites overlap their body and walk at the exact shared
+  // endpoint, so adding another pier here would reintroduce a visible break.
+  if (building.type === 'wall' && bdJoinedFortificationEnds(building, world).some(Boolean)) return;
+  if (getProductionArt('englishFortifications') && usesFixedFortificationFrameArt(building)) return;
   const neighbors = world.buildings.filter(candidate => candidate !== building
     && candidate.alive && candidate.complete && candidate.side === building.side
     && isFortificationType(candidate.type)
@@ -5625,7 +5666,7 @@ function drawBuilding(building, world) {
     ctx.scale(visualScale, visualScale);
     ctx.translate(0, -visualGroundY);
   }
-  if (building.complete) drawCompleteBuilding(building, nation, world.time);
+  if (building.complete) drawCompleteBuilding(building, nation, world.time, world);
   else drawFoundation(building, nation, world.time);
   if (building.complete) bdDrawRepairOverlay(building, world.time);
   bdDrawFortificationJunctions(building, world);
