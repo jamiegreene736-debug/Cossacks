@@ -56,11 +56,29 @@ test('building placement supports one-action click-away, secondary-click, and Es
     const input = await import('../js/input.js');
     const placements = [];
     let validationOptions = null;
+    let wallPlanCalls = 0;
+    let placedWallRun = null;
     input.initInput(canvas, minimap, () => ({ state: 'running' }), {
       onPlacement: placement => placements.push(placement),
       onValidatePlacement: (_type, _x, _y, options) => {
         validationOptions = options;
         return { ok: false, message: 'Blocked terrain' };
+      },
+      onPlanWallRun: (startX, startY, endX, endY, orientation) => {
+        wallPlanCalls++;
+        return {
+          ok: true,
+          orientation,
+          requestedCount: 3,
+          segments: [0, 1, 2].map(index => ({
+            type: 'wall', x: startX + index * 88, y: endY, orientation, valid: true,
+          })),
+          message: '3 wall sections',
+        };
+      },
+      onPlaceWallRun: (...args) => {
+        placedWallRun = args;
+        return { ok: true, message: '3 wall foundations placed.' };
       },
     });
 
@@ -85,6 +103,13 @@ test('building placement supports one-action click-away, secondary-click, and Es
     fakeWindow.dispatchEvent(keyEvent('r'));
     assert.equal(input.getPlacementPreview()?.orientation, 'diagonal');
     assert.equal(validationOptions?.orientation, 'diagonal');
+    canvas.dispatchEvent(mouseEvent('mousedown', 0, { clientX: 200, clientY: 220 }));
+    fakeWindow.dispatchEvent(mouseEvent('mousemove', 0, { clientX: 480, clientY: 300 }));
+    assert.equal(input.getPlacementPreview()?.segments.length, 3);
+    fakeWindow.dispatchEvent(mouseEvent('mouseup', 0, { clientX: 480, clientY: 300 }));
+    assert.ok(wallPlanCalls >= 2);
+    assert.equal(placedWallRun?.at(-1), 'diagonal');
+    assert.equal(input.getPlacementPreview(), null);
     input.cancelPlacement();
     assert.equal(placements.filter(placement => placement === null).length, 4);
   } finally {
@@ -130,6 +155,7 @@ test('a villager ground click clears work and creates a routed destination flag'
   assert.equal(soldier.state, 'move');
   assert.equal(Number.isFinite(villager.orderX), true);
   assert.equal(Number.isFinite(villager.orderY), true);
+  assert.ok(villager.navigationPath?.length > 0);
 
   const flag = world.flags.at(-1);
   assert.equal(flag.kind, 'move');

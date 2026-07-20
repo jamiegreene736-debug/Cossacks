@@ -13,6 +13,9 @@ import { initializeEconomy, stepEconomy, onUnitKilled, onBuildingDestroyed } fro
 import {
   lineIntersectsFortification, resolveUnitFortificationCollision,
 } from './fortifications.js';
+import {
+  assignVillagerPath, clearVillagerPath, segmentBlocksVillager,
+} from './navigation.js';
 
 const PARTICLE_CAP = 900;
 const blockingFortifications = [];
@@ -105,6 +108,8 @@ function makeUnit(side, nationKey, type, x, y) {
     morale: 100, charge: 0,
     state: 'idle', alive: true, selected: false,
     orderX: NaN, orderY: NaN, orderTarget: null,
+    navigationPath: null, navigationIndex: 0,
+    navigationGoalX: NaN, navigationGoalY: NaN, navigationVersion: 0,
     target: null, acquireT: Math.random() * 0.5,
     formation: 'line',
     facing: side === 0 ? 1 : -1,
@@ -127,6 +132,7 @@ export function createWorld(opts) {
     pendingDecals: [], decals: [],
     time: 0, state: 'running', winner: -1, checkT: 1,
     speed: 1, killLog: {},
+    navigationVersion: 0,
     sepGrid: new FlatGrid(20, WORLD.w, WORLD.h),
     tgtGrid: new FlatGrid(64, WORLD.w, WORLD.h),
     sides: [
@@ -183,6 +189,7 @@ function flee(u) {
   u.target = null;
   u.charge = 0;
   u.fleeYDrift = (Math.random() - 0.5) * 0.9;
+  clearVillagerPath(u);
 }
 
 function maybeBreak(world, u) {
@@ -437,7 +444,26 @@ function updateUnit(world, u, dt) {
   } else if (t && isRanged && u.orderTarget === t) {
     destX = t.x; destY = t.y; stopAt = Math.max(u.range * 0.85, u.minRange + 20);
   } else if (!Number.isNaN(u.orderX)) {
-    destX = u.orderX; destY = u.orderY;
+    if (u.type === 'villager' && u.navigationPath?.length) {
+      let waypoint = u.navigationPath[u.navigationIndex];
+      if (u.navigationVersion !== world.navigationVersion) {
+        u.navigationVersion = world.navigationVersion;
+        if (segmentBlocksVillager(world, u.x, u.y, waypoint.x, waypoint.y, u.radius + 2)) {
+          if (!assignVillagerPath(world, u, u.navigationGoalX, u.navigationGoalY)) {
+            u.orderX = NaN;
+            u.orderY = NaN;
+            clearVillagerPath(u);
+            if (u.state === 'move') u.state = 'idle';
+            return;
+          }
+          waypoint = u.navigationPath[0];
+        }
+      }
+      destX = waypoint.x;
+      destY = waypoint.y;
+    } else {
+      destX = u.orderX; destY = u.orderY;
+    }
   } else if (t && isRanged && u.type !== 'gun' && d > u.range) {
     // No standing order and a foe just out of range: step up and engage,
     // otherwise lines deadlock staring at each other from 200 paces.
@@ -464,8 +490,15 @@ function updateUnit(world, u, dt) {
       if (Math.abs(nx) > 0.25) u.facing = nx > 0 ? 1 : -1;
       if (u.type === 'cav') u.charge = Math.min(1, u.charge + dt / 1.4);
     } else if (!Number.isNaN(u.orderX)) {
-      u.orderX = NaN; u.orderY = NaN;
-      if (u.state === 'move') u.state = 'idle';
+      const hasNextWaypoint = u.type === 'villager' && u.navigationPath?.length
+        && u.navigationIndex < u.navigationPath.length - 1;
+      if (hasNextWaypoint) {
+        u.navigationIndex++;
+      } else {
+        u.orderX = NaN; u.orderY = NaN;
+        clearVillagerPath(u);
+        if (u.state === 'move') u.state = 'idle';
+      }
     }
   } else if (u.type === 'cav') {
     u.charge = Math.max(0, u.charge - dt * 2);

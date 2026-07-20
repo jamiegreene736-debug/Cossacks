@@ -8,7 +8,9 @@ import { initRender, startBattle as startBattleRender, draw,
 import { initInput, updateInput, getSelection, getDragRect,
          getPlacementPreview, getResourceHoverTarget, getMovePreview, beginPlacement, setFormation,
          cancelPlacement, haltSelection, resetForBattle } from './input.js';
-import { placeBuilding, queueUnit, validatePlacement } from './economy.js';
+import {
+  placeBuilding, placeWallRun, planWallRun, queueUnit, validatePlacement,
+} from './economy.js';
 import * as ui from './ui.js';
 import { sfx } from './audio.js';
 import { preloadProductionArt } from './gfx/art-assets.js';
@@ -37,6 +39,14 @@ initInput(canvas, minimap, () => world, {
   },
   onOrder: kind => sfx.command(kind),
   onValidatePlacement: (type, x, y, options) => validatePlacement(world, 0, type, x, y, options),
+  onPlanWallRun: (startX, startY, endX, endY, orientation) => (
+    planWallRun(world, 0, startX, startY, endX, endY, orientation)
+  ),
+  onPlaceWallRun: (startX, startY, endX, endY, workers, orientation) => {
+    const result = placeWallRun(world, 0, startX, startY, endX, endY, workers, orientation);
+    if (result.ok) sfx.buildingPlaced(result.building.x);
+    return result;
+  },
   onPlaceBuilding: (type, x, y, workers, options) => {
     const result = placeBuilding(world, 0, type, x, y, workers, options);
     if (result.ok) sfx.buildingPlaced(result.building.x);

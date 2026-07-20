@@ -429,7 +429,9 @@ export function setPlacement(active, label = '', type = '', orientation = '') {
     $('placement-message').textContent = type === 'farm'
       ? 'Field: move beside a completed Mill · snaps to an open attached plot · HUD or Esc cancels'
       : BUILDING_TYPES[type]?.fortification
-      ? `${label}: click terrain · Shift-click to chain · R turns ${orientation === 'diagonal' ? 'diagonal' : 'straight'} · HUD or Esc cancels`
+      ? type === 'wall'
+        ? `${label}: press and drag for a continuous affordable run · R turns ${orientation === 'diagonal' ? 'diagonal' : 'straight'} · HUD or Esc cancels`
+        : `${label}: click terrain · R turns ${orientation === 'diagonal' ? 'diagonal' : 'straight'} · HUD or Esc cancels`
       : `${label}: click terrain to build · Click any HUD panel to cancel`;
   }
   for (const button of $('command-grid').querySelectorAll('button[data-action="build"]')) {

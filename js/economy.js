@@ -7,13 +7,14 @@ import {
 } from './config.js';
 import { applyMoveOrder } from './formations.js';
 import {
-  fortificationCorners, fortificationsOverlap, fortificationsShareEndpoint,
+  fortificationAxis, fortificationCorners, fortificationsOverlap, fortificationsShareEndpoint,
   isFortificationType, normalizeFortificationOrientation,
   pointDistanceToFortification, pointInsideFortification,
   snapFortificationPlacement,
 } from './fortifications.js';
 import { resolveWorkerAction } from './worker-animation.js';
 import { sfx } from './audio.js';
+import { clearVillagerPath } from './navigation.js';
 
 let nextEntityId = 100000;
 
@@ -340,6 +341,116 @@ export function validatePlacement(world, side, type, x, y, options = {}) {
   return { ok: true, message: '', ...placement };
 }
 
+function affordableCount(side, cost) {
+  let count = Infinity;
+  for (const resourceType of RESOURCE_KEYS) {
+    const price = cost[resourceType] || 0;
+    if (price > 0) count = Math.min(count, Math.floor((side.resources[resourceType] || 0) / price));
+  }
+  return Number.isFinite(count) ? Math.max(0, count) : 0;
+}
+
+export function planWallRun(world, sideIndex, startX, startY, endX, endY, orientation = 'horizontal') {
+  const def = BUILDING_TYPES.wall;
+  const side = world?.sides?.[sideIndex];
+  if (!side) return { ok: false, segments: [], message: 'The settlement is unavailable.' };
+  const maxAffordable = affordableCount(side, def.cost);
+  if (maxAffordable < 1) {
+    return { ok: false, segments: [], message: `Need ${formatCost(def.cost)} for a wall section.` };
+  }
+
+  const first = validatePlacement(world, sideIndex, 'wall', startX, startY, { orientation });
+  if (!first.ok) return { ...first, segments: [], requestedCount: 0 };
+  const axis = fortificationAxis(first.orientation);
+  const projection = (endX - first.x) * axis.x + (endY - first.y) * axis.y;
+  const direction = projection < 0 ? -1 : 1;
+  const requestedCount = Math.max(1, Math.min(256, Math.floor(Math.abs(projection) / def.w) + 1));
+  const limit = Math.min(requestedCount, maxAffordable);
+  const previewWorld = { ...world, buildings: world.buildings.slice() };
+  const segments = [];
+  let blockedMessage = '';
+
+  for (let index = 0; index < limit; index++) {
+    const x = first.x + axis.x * def.w * index * direction;
+    const y = first.y + axis.y * def.w * index * direction;
+    const validation = validatePlacement(previewWorld, sideIndex, 'wall', x, y, {
+      orientation: first.orientation,
+    });
+    if (!validation.ok) {
+      blockedMessage = validation.message;
+      break;
+    }
+    const segment = {
+      type: 'wall', x: validation.x, y: validation.y,
+      orientation: validation.orientation, valid: true,
+    };
+    segments.push(segment);
+    previewWorld.buildings.push({
+      id: -(index + 1), entityKind: 'building', side: sideIndex,
+      alive: true, complete: false, progress: 0.02, radius: def.radius,
+      ...segment,
+    });
+  }
+
+  if (!segments.length) {
+    return { ok: false, segments, requestedCount, message: blockedMessage || 'No wall section fits there.' };
+  }
+  const cost = { stone: segments.length * def.cost.stone };
+  const limitedByResources = requestedCount > maxAffordable;
+  const limitedByObstacle = segments.length < limit;
+  const suffix = limitedByResources
+    ? ' · run shortened to available stone'
+    : limitedByObstacle ? ` · stopped: ${blockedMessage}` : '';
+  return {
+    ok: true,
+    type: 'wall',
+    orientation: first.orientation,
+    segments,
+    requestedCount,
+    cost,
+    limitedByResources,
+    limitedByObstacle,
+    message: `${segments.length} wall section${segments.length === 1 ? '' : 's'} · ${cost.stone} stone${suffix}`,
+  };
+}
+
+function assignBuildersToRun(builders, buildings) {
+  if (!buildings.length) return;
+  const ids = buildings.map(building => building.id);
+  for (const worker of builders) {
+    if (!worker.alive || worker.side !== buildings[0].side || worker.type !== 'villager') continue;
+    worker.job = { kind: 'build', targetId: ids[0], queue: ids.slice(1) };
+    worker.workAction = 'build';
+    worker.orderTarget = null;
+    worker.target = null;
+    clearVillagerPath(worker);
+  }
+}
+
+export function placeWallRun(
+  world, sideIndex, startX, startY, endX, endY, builders, orientation = 'horizontal',
+) {
+  const validBuilders = builders.filter(unit => unit.alive && unit.side === sideIndex && unit.type === 'villager');
+  if (!validBuilders.length) return { ok: false, message: 'Select at least one villager.' };
+  const plan = planWallRun(world, sideIndex, startX, startY, endX, endY, orientation);
+  if (!plan.ok) return plan;
+  if (!spendResources(world.sides[sideIndex], plan.cost)) {
+    return { ok: false, message: `Need ${formatCost(plan.cost)}.` };
+  }
+  const buildings = plan.segments.map(segment => createBuilding(
+    sideIndex, 'wall', segment.x, segment.y, false, { orientation: segment.orientation },
+  ));
+  world.buildings.push(...buildings);
+  world.navigationVersion = (world.navigationVersion || 0) + 1;
+  assignBuildersToRun(validBuilders, buildings);
+  return {
+    ...plan,
+    buildings,
+    building: buildings[0],
+    message: `${buildings.length} wall foundation${buildings.length === 1 ? '' : 's'} placed · ${plan.cost.stone} stone.`,
+  };
+}
+
 export function placeBuilding(world, sideIndex, type, x, y, builders, options = {}) {
   const side = world.sides[sideIndex];
   const def = BUILDING_TYPES[type];
@@ -364,6 +475,7 @@ export function placeBuilding(world, sideIndex, type, x, y, builders, options = 
     },
   );
   world.buildings.push(building);
+  world.navigationVersion = (world.navigationVersion || 0) + 1;
   assignBuilders(world, validBuilders, building);
   const message = type === 'farm'
     ? `Field attached to Mill · plot ${building.fieldSlot + 1} of ${MILL_FIELD_OFFSETS.length}.`
@@ -380,6 +492,7 @@ export function assignBuilders(world, workers, building) {
     worker.workAction = 'build';
     worker.orderTarget = null;
     worker.target = null;
+    clearVillagerPath(worker);
     assigned = true;
   }
   return assigned;
@@ -406,6 +519,7 @@ export function assignGatherers(world, workers, target) {
       worker.job = { kind: 'gather', targetId: target.id };
     }
     worker.workAction = resolveWorkerAction(worker.job, target);
+    clearVillagerPath(worker);
     worker.orderTarget = null;
     worker.target = null;
     assigned = true;
@@ -418,6 +532,7 @@ export function clearWorkerJobs(units) {
     if (unit.type !== 'villager') continue;
     unit.job = null;
     unit.workAction = null;
+    clearVillagerPath(unit);
     if (unit.state === 'work') unit.state = 'idle';
   }
 }
@@ -652,18 +767,33 @@ export function getBuildingEconomyStats(world, building) {
   };
 }
 
+function advanceBuildQueue(world, worker) {
+  const queue = Array.isArray(worker.job?.queue) ? worker.job.queue : [];
+  while (queue.length) {
+    const targetId = queue.shift();
+    const target = world.buildings.find(building => building.id === targetId);
+    if (!target?.alive || target.complete) continue;
+    worker.job = { kind: 'build', targetId, queue };
+    worker.workAction = 'build';
+    return true;
+  }
+  return false;
+}
+
 function updateWorkers(world, dt) {
   for (const worker of world.units) {
     if (!worker.alive || worker.type !== 'villager' || !worker.job) continue;
     const target = findTarget(world, worker.job.targetId);
     if (!target || !target.alive) {
+      if (worker.job.kind === 'build' && advanceBuildQueue(world, worker)) continue;
       worker.job = null;
       worker.workAction = null;
       if (worker.state === 'work') worker.state = 'idle';
       continue;
     }
     if (worker.job.kind === 'build' && target.complete) {
-      worker.job = target.type === 'farm' ? { kind: 'gather', targetId: target.id } : null;
+      if (target.type === 'farm') worker.job = { kind: 'gather', targetId: target.id };
+      else if (!advanceBuildQueue(world, worker)) worker.job = null;
       worker.workAction = resolveWorkerAction(worker.job, target);
       if (!worker.job && worker.state === 'work') worker.state = 'idle';
       continue;
@@ -825,6 +955,7 @@ export function onUnitKilled(world, unit) {
 }
 
 export function onBuildingDestroyed(world, building) {
+  world.navigationVersion = (world.navigationVersion || 0) + 1;
   const side = world.sides[building.side];
   side.buildingsLost++;
   const def = BUILDING_TYPES[building.type];

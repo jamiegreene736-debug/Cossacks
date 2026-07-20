@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createWorld, spawnUnit, step } from '../js/sim.js';
-import { createBuilding, placeBuilding, validatePlacement } from '../js/economy.js';
+import {
+  createBuilding, placeBuilding, placeWallRun, planWallRun, validatePlacement,
+} from '../js/economy.js';
 import {
   fortificationAxis, fortificationEndpoints, lineIntersectsFortification,
   resolveUnitFortificationCollision,
@@ -68,6 +70,51 @@ test('a rotated wall snaps to an endpoint to form an isometric corner', () => {
   assert.equal(preview.snappedToId, first.id);
   assert.ok(Math.abs(preview.x - expected.x) < 0.001);
   assert.ok(Math.abs(preview.y - expected.y) < 0.001);
+});
+
+test('dragged wall runs place the longest affordable contiguous prefix', () => {
+  const world = makeWorld();
+  const worker = builder();
+  const plan = planWallRun(world, 0, 660, 1900, 1660, 1900, 'horizontal');
+
+  assert.equal(plan.ok, true);
+  assert.equal(plan.requestedCount, 12);
+  assert.equal(plan.segments.length, 4, '120 starting stone affords four 25-stone sections');
+  assert.equal(plan.limitedByResources, true);
+  assert.deepEqual(plan.segments.map(segment => segment.x), [660, 748, 836, 924]);
+
+  const placed = placeWallRun(world, 0, 660, 1900, 1660, 1900, [worker], 'horizontal');
+  assert.equal(placed.ok, true);
+  assert.equal(placed.buildings.length, 4);
+  assert.equal(world.sides[0].resources.stone, 20);
+  assert.equal(worker.job.targetId, placed.buildings[0].id);
+  assert.deepEqual(worker.job.queue, placed.buildings.slice(1).map(building => building.id));
+});
+
+test('a dragged wall stops before the first obstructed section', () => {
+  const world = makeWorld();
+  world.sides[0].resources.stone = 500;
+  world.resources.push({
+    id: 999001, entityKind: 'resource', type: 'stone', resourceType: 'stone',
+    x: 850, y: 1900, radius: 18, amount: 500, alive: true,
+  });
+  const plan = planWallRun(world, 0, 660, 1900, 1200, 1900, 'horizontal');
+
+  assert.equal(plan.ok, true);
+  assert.equal(plan.segments.length, 2);
+  assert.equal(plan.limitedByObstacle, true);
+  assert.match(plan.message, /accessible/i);
+});
+
+test('one assigned villager constructs a dragged wall run in sequence', () => {
+  const world = makeWorld();
+  const worker = spawnUnit(world, 0, 'villager', 650, 1840);
+  const placed = placeWallRun(world, 0, 660, 1900, 1100, 1900, [worker], 'horizontal');
+  for (let tick = 0; tick < 1500; tick++) step(world, 1 / 30);
+
+  assert.equal(placed.buildings.every(building => building.complete), true);
+  assert.equal(worker.job, null);
+  assert.equal(worker.state, 'idle');
 });
 
 test('wall masonry blocks units and fire while a gate remains passable', () => {

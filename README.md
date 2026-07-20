@@ -55,7 +55,9 @@ then sends progressively larger, staged formations into battle.
 - **Select villagers, then left-click open ground** — move them to a flagged destination
 - **Select villagers, then hover and left-click a deposit or economic building** — gather resources or work there
 - **Right-click** — move, construct, attack, or set a production rally point
-- **Build card, then click terrain** — place a foundation; Shift-click places another
+- **Build card, then click terrain** — place a foundation
+- **Stone Wall, then press-drag-release** — preview and place the longest connected run your stone and open terrain allow
+- **Villager + open-ground click** — move to the waypoint using a route around walls, buildings, and deposits
 - **Cancel placement** — click the placement button or any HUD panel; Esc and secondary-click also work
 - **L / C / B** — line, column, or square formation
 - **H** — halt; **P** — pause; **F** — select all military units
