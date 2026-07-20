@@ -216,6 +216,7 @@ function issueOrder(screenX, screenY) {
     clearWorkerJobs(units);
     applyAttackOrder(units, enemy);
     world.flags.push({ x: enemy.x, y: enemy.y, life: 1.2, max: 1.2, attack: true });
+    callbacks.onOrder?.('attack');
     return;
   }
 
@@ -223,12 +224,14 @@ function issueOrder(screenX, screenY) {
   if (workers.length && ownEntity?.entityKind === 'building' && !ownEntity.complete) {
     assignBuilders(world, workers, ownEntity);
     world.flags.push({ x: ownEntity.x, y: ownEntity.y, life: 1.2, max: 1.2 });
+    callbacks.onOrder?.('build');
     return;
   }
 
   const resource = findResourceAt(world, point.x, point.y);
   if (workers.length && resource && assignGatherers(world, workers, resource)) {
     world.flags.push({ x: resource.x, y: resource.y, life: 1.2, max: 1.2, gather: true });
+    callbacks.onOrder?.('gather');
     return;
   }
 
@@ -238,6 +241,7 @@ function issueOrder(screenX, screenY) {
     if (changed) {
       world.flags.push({ x: point.x, y: point.y, life: 1.2, max: 1.2, rally: true });
       callbacks.onToast?.('Rally point set.', 'good');
+      callbacks.onOrder?.('rally');
       return;
     }
   }
@@ -264,6 +268,7 @@ function moveUnitsTo(world, units, x, y, formation) {
     x, y, fromX, fromY,
     life: MOVE_FEEDBACK_LIFE, max: MOVE_FEEDBACK_LIFE,
   });
+  callbacks.onOrder?.('move');
   return true;
 }
 
@@ -332,6 +337,7 @@ function gatherAt(screenX, screenY) {
   const label = resourceType === 'wood' ? 'timber' : resourceType;
   const action = workplace ? `working at ${BUILDING_TYPES[target.type].label}` : `gathering ${label}`;
   callbacks.onToast?.(`${workers.length} villager${workers.length === 1 ? '' : 's'} ${action}.`, 'good');
+  callbacks.onOrder?.('gather');
   callbacks.onSelection?.(getSelection());
   updateResourceHover(screenX, screenY);
   return true;

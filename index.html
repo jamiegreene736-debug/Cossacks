@@ -141,6 +141,16 @@
           <input id="volume-master" type="range" min="0" max="100" step="1" value="70">
           <label for="volume-effects"><span>Battle effects</span><output id="volume-effects-value">72%</output></label>
           <input id="volume-effects" type="range" min="0" max="100" step="1" value="72">
+          <label for="volume-music"><span>Campaign music</span><output id="volume-music-value">42%</output></label>
+          <input id="volume-music" type="range" min="0" max="100" step="1" value="42">
+          <div class="pause-music-row">
+            <label for="pause-music"><span>Music while paused</span></label>
+            <select id="pause-music">
+              <option value="duck">Lower music</option>
+              <option value="mute">Mute music</option>
+            </select>
+          </div>
+          <p class="music-now"><span>Now playing</span><b id="music-status">Campaign score preparing…</b></p>
         </section>
       </div>
     </div>

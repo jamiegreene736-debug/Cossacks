@@ -27,10 +27,21 @@ const productionArtReady = preloadProductionArt();
 initRender(canvas, minimap);
 initInput(canvas, minimap, () => world, {
   onPause: togglePause,
-  onFormation: ui.markFormation,
-  onSelection: () => world && ui.updateHud(world, getSelection()),
+  onFormation: formation => {
+    ui.markFormation(formation);
+    sfx.command('move');
+  },
+  onSelection: () => {
+    sfx.command('select');
+    if (world) ui.updateHud(world, getSelection());
+  },
+  onOrder: kind => sfx.command(kind),
   onValidatePlacement: (type, x, y, options) => validatePlacement(world, 0, type, x, y, options),
-  onPlaceBuilding: (type, x, y, workers, options) => placeBuilding(world, 0, type, x, y, workers, options),
+  onPlaceBuilding: (type, x, y, workers, options) => {
+    const result = placeBuilding(world, 0, type, x, y, workers, options);
+    if (result.ok) sfx.buildingPlaced(result.building.x);
+    return result;
+  },
   onPlacement: placement => ui.setPlacement(
     Boolean(placement),
     placement ? BUILDING_TYPES[placement.type].label : '',
@@ -49,7 +60,10 @@ ui.initMenu({
 ui.bindControls({
   onPause: togglePause,
   onSpeed: toggleSpeed,
-  onHalt: haltSelection,
+  onHalt: () => {
+    haltSelection();
+    sfx.command('move');
+  },
   onFormation: setFormation,
   onCommand: handleCommand,
   onCancelPlacement: cancelPlacement,
@@ -64,6 +78,7 @@ ui.bindControls({
     ui.setAudioControls(sfx.getSettings());
   },
   onAgain: () => {
+    sfx.stopBattle();
     world = null;
     commander = null;
     resetForBattle();
@@ -84,6 +99,7 @@ async function startBattle(opts) {
   ui.setPauseLabel(false);
   ui.setSpeedLabel(1);
   ui.markFormation('line');
+  sfx.startBattle(world);
   endShown = false;
   acc = 0;
 }
@@ -96,11 +112,13 @@ function handleCommand(command) {
       return;
     }
     beginPlacement(command.type);
+    sfx.command('build');
     return;
   }
   if (command.action === 'train') {
     const building = getSelection().find(entity => entity.entityKind === 'building');
     const result = queueUnit(world, building, command.type, command.count);
+    if (result.ok) sfx.command('train');
     ui.toast(result.message, result.ok ? 'good' : 'danger');
     ui.updateHud(world, getSelection());
   }
@@ -110,6 +128,7 @@ function togglePause() {
   if (!world || world.state === 'ended') return;
   world.state = world.state === 'paused' ? 'running' : 'paused';
   const paused = world.state === 'paused';
+  sfx.setPaused(paused);
   ui.setPauseLabel(paused);
   if (paused) ui.showPauseMenu(sfx.getSettings());
   else ui.hidePauseMenu();
@@ -126,6 +145,7 @@ function saveCurrentCampaign(exitToMap = false) {
     refreshSavedCampaign();
     ui.setPauseSaveStatus(`Campaign saved at ${new Date(summary.savedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.`);
     if (exitToMap) {
+      sfx.stopBattle();
       world = null;
       commander = null;
       resetForBattle();
@@ -157,6 +177,7 @@ async function resumeSavedCampaign() {
     camera.zoom = restored.camera?.zoom ?? camera.zoom;
     clampCamera();
     world.state = 'running';
+    sfx.startBattle(world);
     ui.showBattleHud(world);
     ui.setPauseLabel(false);
     ui.setSpeedLabel(world.speed);
@@ -203,6 +224,9 @@ function frame(now) {
     }
     if (steps === 5) acc = 0; // can't keep up — drop time rather than spiral
   }
+
+  sfx.update(dt, world, camera.x);
+  ui.setMusicStatus(sfx.getNowPlaying(), world.state === 'paused');
 
   updateInput(dt);
   draw(
@@ -260,3 +284,5 @@ window.__state = () => {
     incomePerHour: world.sides.map(side => Object.fromEntries(Object.entries(side.incomePerHour).map(([key, value]) => [key, Math.round(value)]))),
   };
 };
+
+window.__audioState = () => sfx.getDiagnostics();

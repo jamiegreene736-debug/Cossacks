@@ -13,6 +13,7 @@ import {
   snapFortificationPlacement,
 } from './fortifications.js';
 import { resolveWorkerAction } from './worker-animation.js';
+import { sfx } from './audio.js';
 
 let nextEntityId = 100000;
 
@@ -348,6 +349,7 @@ function completeBuilding(world, building) {
       }
     }
   }
+  sfx.buildingComplete(building.type, building.x);
   world.events.push({ side: building.side, text: `${def.label} completed.`, tone: 'good' });
 }
 
@@ -600,6 +602,7 @@ function spawnFromQueue(world, building, unitType) {
   const x = building.x + dir * (building.radius + 24) + Math.cos(angle) * 18;
   const y = building.y + Math.sin(angle) * (building.radius + 14);
   const unit = world.spawnUnit(building.side, unitType, x, y);
+  sfx.unitReady(building.x);
   if (!Number.isNaN(building.rallyX)) {
     applyMoveOrder([unit], building.rallyX, building.rallyY, 'line');
   }
@@ -636,6 +639,7 @@ function updateTowers(world, dt) {
     if (!target) continue;
     tower.reload = def.reload;
     world.damage(target, def.attack, tower);
+    sfx.towerShot(tower.x);
     world.projectiles.push({
       kind: 'tower', sx: tower.x, sy: tower.y - 42,
       x: tower.x, y: tower.y - 42, px: tower.x, py: tower.y - 42,

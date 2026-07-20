@@ -101,10 +101,10 @@ test('a maximum-scale army remains within a normal localStorage budget', () => {
 });
 
 test('audio settings clamp invalid values and preserve mute state', () => {
-  assert.deepEqual(normalizeAudioSettings({ master: 2, effects: -1, muted: true }), {
-    master: 1, effects: 0, muted: true,
+  assert.deepEqual(normalizeAudioSettings({ master: 2, effects: -1, music: 0.55, pauseMusic: 'mute', muted: true }), {
+    master: 1, effects: 0, music: 0.55, pauseMusic: 'mute', muted: true,
   });
   assert.deepEqual(normalizeAudioSettings({ master: 'bad' }), {
-    master: 0.7, effects: 0.72, muted: false,
+    master: 0.7, effects: 0.72, music: 0.42, pauseMusic: 'duck', muted: false,
   });
 });
