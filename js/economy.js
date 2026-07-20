@@ -15,7 +15,7 @@ import {
 } from './fortifications.js';
 import { resolveWorkerAction } from './worker-animation.js';
 import { sfx } from './audio.js';
-import { clearVillagerPath } from './navigation.js';
+import { assignVillagerPath, clearVillagerPath } from './navigation.js';
 
 let nextEntityId = 100000;
 
@@ -76,7 +76,7 @@ export function createBuilding(side, type, x, y, complete = false, options = {})
     hp: complete ? def.hp : Math.max(1, def.hp * 0.08), maxHp: def.hp,
     alive: true, selected: false, complete,
     progress: complete ? 1 : 0.02,
-    queue: [], rallyX: NaN, rallyY: NaN,
+    queue: [], rallyX: NaN, rallyY: NaN, rallyTargetId: null,
     reload: Math.random() * (def.reload || 0),
     resourceType: def.resource || null,
     amount: def.amount || 0,
@@ -599,16 +599,57 @@ export function queueUnit(world, building, unitType, count = 1, options = {}) {
   return { ok: true, queued, message: `${queued} ${def.label.toLowerCase()} queued.` };
 }
 
-export function setRallyPoint(building, x, y) {
+function validRallyTarget(building, target) {
+  if (!target?.alive) return false;
+  if (target.entityKind === 'resource') return target.amount > 0;
+  return target.entityKind === 'building' && target.side === building.side;
+}
+
+export function setRallyPoint(building, x, y, target = null) {
   if (!building?.alive || !BUILDING_TYPES[building.type]?.trains) return false;
-  building.rallyX = x;
-  building.rallyY = y;
+  const durableTarget = validRallyTarget(building, target) ? target : null;
+  building.rallyX = durableTarget?.x ?? x;
+  building.rallyY = durableTarget?.y ?? y;
+  building.rallyTargetId = durableTarget?.id ?? null;
   return true;
 }
 
 function findTarget(world, targetId) {
   return world.resources.find(r => r.id === targetId)
     || world.buildings.find(b => b.id === targetId) || null;
+}
+
+export function getRallyTarget(world, building) {
+  if (!world || !building || !Number.isFinite(building.rallyTargetId)) return null;
+  const target = findTarget(world, building.rallyTargetId);
+  return validRallyTarget(building, target) ? target : null;
+}
+
+function rallyDestination(unit, target, x, y) {
+  if (!target) return { x, y };
+  const dx = unit.x - target.x;
+  const dy = unit.y - target.y;
+  const distance = Math.hypot(dx, dy) || 1;
+  const reach = target.radius + unit.radius + 8;
+  return {
+    x: target.x + dx / distance * reach,
+    y: target.y + dy / distance * reach,
+  };
+}
+
+function applyRallyOrder(world, building, unit) {
+  if (Number.isNaN(building.rallyX) || Number.isNaN(building.rallyY)) return 'idle';
+  const target = getRallyTarget(world, building);
+  if (unit.type === 'villager' && target) {
+    if (target.entityKind === 'building' && !target.complete
+      && assignBuilders(world, [unit], target)) return 'build';
+    if (assignGatherers(world, [unit], target)) return 'work';
+  }
+
+  const destination = rallyDestination(unit, target, building.rallyX, building.rallyY);
+  applyMoveOrder([unit], destination.x, destination.y, 'line');
+  if (unit.type === 'villager') assignVillagerPath(world, unit, destination.x, destination.y);
+  return 'move';
 }
 
 function wallStairConstructionPoint(world, target, worker) {
@@ -957,9 +998,7 @@ function spawnFromQueue(world, building, unitType) {
   const y = building.y + Math.sin(angle) * (building.radius + 14);
   const unit = world.spawnUnit(building.side, unitType, x, y);
   sfx.unitReady(building.x);
-  if (!Number.isNaN(building.rallyX)) {
-    applyMoveOrder([unit], building.rallyX, building.rallyY, 'line');
-  }
+  applyRallyOrder(world, building, unit);
   if (unitType === 'villager') {
     world.events.push({ side: building.side, text: 'A villager is ready.', tone: 'good' });
   }

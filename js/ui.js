@@ -3,7 +3,7 @@
 import { NATIONS, UNIT_TYPES, BUILDING_TYPES, RESOURCE_KEYS } from './config.js';
 import {
   formatCost, getBuildingEconomyStats, getEconomyBreakdown,
-  getFieldAttachmentStatus, getGatherAssignmentStats,
+  getFieldAttachmentStatus, getGatherAssignmentStats, getRallyTarget,
 } from './economy.js';
 
 const $ = id => document.getElementById(id);
@@ -211,8 +211,11 @@ export function updateHud(world, selection) {
     const wallState = entity.wallMount
       ? `mounted:${entity.wallMount.wallId}`
       : entity.wallOrder ? `mounting:${entity.wallOrder.wallId}` : '';
+    const rally = entity.entityKind === 'building'
+      ? `${entity.rallyTargetId ?? ''}:${entity.rallyX ?? ''}:${entity.rallyY ?? ''}` : '';
     return `${entity.entityKind || 'unit'}:${entity.id}:${entity.queue?.length || 0}:${queueProgress}`
-      + `:${entity.complete ?? ''}:${buildProgress}:${Math.ceil(entity.hp || 0)}:${job}:${wallState}`;
+      + `:${entity.complete ?? ''}:${buildProgress}:${Math.ceil(entity.hp || 0)}:${job}:${wallState}`
+      + `:${rally}`;
   }).join('|');
   // Economy telemetry changes every 0.75 seconds. Rebuilding its cards faster
   // only creates DOM/layout work without showing the player newer information.
@@ -251,9 +254,11 @@ function renderSelection(world, selection) {
     const economy = getBuildingEconomyStats(world, building);
     title.textContent = def.label;
     info.textContent = building.complete ? def.description : `Under construction — ${Math.floor(building.progress * 100)}%`;
-    detail.textContent = economy
+    const rally = building.complete && def.trains?.length ? rallyDescription(world, building) : '';
+    const status = economy
       ? `${Math.ceil(building.hp).toLocaleString()} / ${building.maxHp.toLocaleString()} integrity · ${economy.workers} assigned · ${formatHourly(economy.projectedPerHour)} projected`
       : `${Math.ceil(building.hp).toLocaleString()} / ${building.maxHp.toLocaleString()} integrity`;
+    detail.textContent = rally ? `${status} · ${rally}` : status;
     context.textContent = building.complete ? (economy ? 'Building output per hour' : 'Production') : 'Construction';
     if (!building.complete) return;
     if (economy) {
@@ -322,6 +327,23 @@ function renderSelection(world, selection) {
     : 'Right-click ground to march, an enemy to attack, or an accessible wall to mount musketeers.';
   context.textContent = 'Formation and movement';
   formations.classList.remove('hidden');
+}
+
+function rallyDescription(world, building) {
+  if (Number.isNaN(building.rallyX) || Number.isNaN(building.rallyY)) {
+    return building.type === 'town_center'
+      ? 'Right-click a resource, workplace, construction, building, or ground to rally new villagers.'
+      : 'Right-click a building or ground to set the rally point.';
+  }
+  const target = getRallyTarget(world, building);
+  if (!target) return 'Rally: ground waypoint';
+  if (target.entityKind === 'resource') return `Rally: ${target.resourceType} · new villagers auto-gather`;
+  const def = BUILDING_TYPES[target.type];
+  if (!target.complete) return `Rally: ${def.label} construction · new villagers auto-build`;
+  if (target.type === 'farm' || def.workResources?.length) {
+    return `Rally: ${def.label} · new villagers auto-work`;
+  }
+  return `Rally: ${def.label} waypoint`;
 }
 
 function addEconomyMetric(grid, row, options = {}) {

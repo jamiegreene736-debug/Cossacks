@@ -7,7 +7,7 @@ import {
   assignGatherers, createBuilding, findNearestResource, findResourceAt, placeBuilding,
   getBuildingEconomyStats, getEconomyBreakdown, getFieldAttachmentStatus,
   getFieldWorkPoint, getGatherAssignmentStats, getMillFieldSlots,
-  queueUnit, stepEconomy, validatePlacement,
+  getRallyTarget, queueUnit, setRallyPoint, stepEconomy, validatePlacement,
 } from '../js/economy.js';
 
 function makeWorld() {
@@ -36,6 +36,75 @@ test('the free first villager emerges and regular training spends resources', ()
   assert.equal(result.queued, 4);
   assert.equal(world.sides[0].resources.food, 40);
   assert.equal(world.sides[0].queuedPopulation, 4);
+});
+
+function clearOpeningQueue(world) {
+  const townCenter = world.buildings.find(building => building.side === 0 && building.type === 'town_center');
+  world.sides[0].queuedPopulation = 0;
+  townCenter.queue.length = 0;
+  return townCenter;
+}
+
+function trainRalliedVillager(world, townCenter) {
+  const result = queueUnit(world, townCenter, 'villager', 1, { free: true, trainTime: 0.01 });
+  assert.equal(result.ok, true);
+  stepEconomy(world, 0.02);
+  return world.units.findLast(unit => unit.side === 0 && unit.type === 'villager');
+}
+
+test('Town Center resource rallies send newly trained villagers directly to gather', () => {
+  const world = makeWorld();
+  const townCenter = clearOpeningQueue(world);
+  const forest = findNearestResource(world, townCenter.x, townCenter.y, 'wood', 0);
+
+  assert.equal(setRallyPoint(townCenter, forest.x, forest.y, forest), true);
+  assert.equal(getRallyTarget(world, townCenter), forest);
+  const villager = trainRalliedVillager(world, townCenter);
+
+  assert.deepEqual(villager.job, { kind: 'gather', targetId: forest.id });
+  assert.equal(villager.workAction, 'chop');
+  assert.equal(Number.isNaN(villager.orderX), true);
+});
+
+test('Town Center workplace and construction rallies automatically assign new villagers', () => {
+  const world = makeWorld();
+  const townCenter = clearOpeningQueue(world);
+  const mine = createBuilding(0, 'mine', townCenter.x + 260, townCenter.y + 120, true);
+  const house = createBuilding(0, 'house', townCenter.x + 320, townCenter.y - 140, false);
+  world.buildings.push(mine, house);
+
+  setRallyPoint(townCenter, mine.x, mine.y, mine);
+  const miner = trainRalliedVillager(world, townCenter);
+  assert.deepEqual(miner.job, { kind: 'workplace', targetId: mine.id, resourceType: 'gold' });
+  assert.equal(miner.workAction, 'mine');
+
+  setRallyPoint(townCenter, house.x, house.y, house);
+  const builder = trainRalliedVillager(world, townCenter);
+  assert.deepEqual(builder.job, { kind: 'build', targetId: house.id });
+  assert.equal(builder.workAction, 'build');
+});
+
+test('ordinary buildings remain waypoints and invalid rally targets fall back to their saved position', () => {
+  const world = makeWorld();
+  const townCenter = clearOpeningQueue(world);
+  const mill = createBuilding(0, 'mill', townCenter.x + 260, townCenter.y, true);
+  world.buildings.push(mill);
+
+  setRallyPoint(townCenter, mill.x, mill.y, mill);
+  const walker = trainRalliedVillager(world, townCenter);
+  assert.equal(walker.job, null);
+  assert.equal(walker.state, 'move');
+  assert.ok(walker.navigationPath?.length > 0);
+
+  const forest = findNearestResource(world, townCenter.x, townCenter.y, 'wood', 0);
+  setRallyPoint(townCenter, forest.x, forest.y, forest);
+  forest.amount = 0;
+  forest.alive = false;
+  assert.equal(getRallyTarget(world, townCenter), null);
+  const fallback = trainRalliedVillager(world, townCenter);
+  assert.equal(fallback.job, null);
+  assert.equal(fallback.orderX, forest.x);
+  assert.equal(fallback.orderY, forest.y);
 });
 
 test('villagers gather from deposits without allowing resource values to go negative', () => {
