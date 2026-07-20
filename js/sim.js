@@ -10,8 +10,12 @@ import { WORLD, NATIONS, UNIT_TYPES,
          PIKE_VS_CAV, CAV_CHARGE_BONUS, SQUARE_VS_CAV } from './config.js';
 import { sfx } from './audio.js';
 import { initializeEconomy, stepEconomy, onUnitKilled, onBuildingDestroyed } from './economy.js';
+import {
+  lineIntersectsFortification, resolveUnitFortificationCollision,
+} from './fortifications.js';
 
 const PARTICLE_CAP = 900;
+const blockingFortifications = [];
 
 class FlatGrid {
   constructor(cell, w, h) {
@@ -250,6 +254,9 @@ function kill(world, entity) {
 // fire (mostly): only the leading ranks of a deep formation shoot freely.
 // This is what makes wide Lines beat deep blobs, as it did historically.
 function fireBlocked(world, u, t, d) {
+  for (const wall of blockingFortifications) {
+    if (wall !== t && lineIntersectsFortification(u.x, u.y, t.x, t.y, wall, 1)) return true;
+  }
   const nx = (t.x - u.x) / d, ny = (t.y - u.y) / d;
   const active = world.active;
   let blocked = false;
@@ -496,9 +503,20 @@ export function step(world, dt) {
 
   stepEconomy(world, dt);
 
+  blockingFortifications.length = 0;
+  for (const building of world.buildings) {
+    if (building.alive && building.type === 'wall'
+      && (building.complete || building.progress >= 0.24)) {
+      blockingFortifications.push(building);
+    }
+  }
+
   for (let i = 0; i < active.length; i++) {
     const u = active[i];
-    if (u.alive) updateUnit(world, u, dt);
+    if (u.alive) {
+      updateUnit(world, u, dt);
+      if (u.moving) resolveUnitFortificationCollision(u, blockingFortifications);
+    }
   }
 
   // Separation: only movers get pushed, so standing lines stay crisp.
@@ -523,6 +541,7 @@ export function step(world, dt) {
         }
       }
     });
+    resolveUnitFortificationCollision(u, blockingFortifications);
     clampPos(u);
   }
 

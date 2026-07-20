@@ -6,6 +6,12 @@ import {
   STARTING_RESOURCES, GATHER_RATES, MAX_POPULATION,
 } from './config.js';
 import { applyMoveOrder } from './formations.js';
+import {
+  fortificationCorners, fortificationsOverlap, fortificationsShareEndpoint,
+  isFortificationType, normalizeFortificationOrientation,
+  pointDistanceToFortification, pointInsideFortification,
+  snapFortificationPlacement,
+} from './fortifications.js';
 
 let nextEntityId = 100000;
 
@@ -39,10 +45,10 @@ function refundResources(side, cost = {}, fraction = 1) {
   for (const key of RESOURCE_KEYS) side.resources[key] += (cost[key] || 0) * fraction;
 }
 
-export function createBuilding(side, type, x, y, complete = false) {
+export function createBuilding(side, type, x, y, complete = false, options = {}) {
   const def = BUILDING_TYPES[type];
   if (!def) throw new Error(`Unknown building type: ${type}`);
-  return {
+  const building = {
     id: nextEntityId++, entityKind: 'building', side, type,
     x, y, radius: def.radius, w: def.w, h: def.h,
     hp: complete ? def.hp : Math.max(1, def.hp * 0.08), maxHp: def.hp,
@@ -53,6 +59,10 @@ export function createBuilding(side, type, x, y, complete = false) {
     resourceType: def.resource || null,
     amount: def.amount || 0,
   };
+  if (def.fortification) {
+    building.orientation = normalizeFortificationOrientation(options.orientation);
+  }
+  return building;
 }
 
 function createResource(type, x, y, amount, radius = 38) {
@@ -131,31 +141,63 @@ export function getTownCenter(world, side) {
   return world.buildings.find(b => b.id === world.sides[side].townCenterId && b.alive) || null;
 }
 
-export function validatePlacement(world, side, type, x, y) {
+export function validatePlacement(world, side, type, x, y, options = {}) {
   const def = BUILDING_TYPES[type];
   if (!def || type === 'town_center') return { ok: false, message: 'That building cannot be placed.' };
-  const margin = def.radius + 35;
-  if (x < margin || y < margin || x > WORLD.w - margin || y > WORLD.h - margin) {
-    return { ok: false, message: 'Build inside the map boundary.' };
+  const fortification = isFortificationType(type);
+  const snapped = fortification
+    ? snapFortificationPlacement(world, side, type, x, y, options.orientation)
+    : { x, y, orientation: null, snappedToId: null };
+  const candidate = { type, x: snapped.x, y: snapped.y, orientation: snapped.orientation };
+  const placement = {
+    x: candidate.x,
+    y: candidate.y,
+    orientation: candidate.orientation,
+    snappedToId: snapped.snappedToId,
+  };
+  const reject = message => ({ ok: false, message, ...placement });
+  const outsideMap = fortification
+    ? fortificationCorners(type, candidate.x, candidate.y, candidate.orientation, 35)
+      .some(point => point.x < 0 || point.y < 0 || point.x > WORLD.w || point.y > WORLD.h)
+    : candidate.x < def.radius + 35 || candidate.y < def.radius + 35
+      || candidate.x > WORLD.w - def.radius - 35 || candidate.y > WORLD.h - def.radius - 35;
+  if (outsideMap) {
+    return reject('Build inside the map boundary.');
   }
   for (const b of world.buildings) {
     if (!b.alive) continue;
-    if (Math.hypot(x - b.x, y - b.y) < def.radius + b.radius + 18) {
-      return { ok: false, message: 'Too close to another building.' };
+    const existingFortification = isFortificationType(b.type);
+    if (fortification && existingFortification) {
+      if (fortificationsOverlap(candidate, b, 1)
+        && !(b.side === side && fortificationsShareEndpoint(candidate, b))) {
+        return reject('That wall section overlaps another fortification.');
+      }
+      continue;
+    }
+    const blocked = fortification
+      ? pointDistanceToFortification(candidate, b.x, b.y) < b.radius + 18
+      : existingFortification
+        ? pointDistanceToFortification(b, candidate.x, candidate.y) < def.radius + 18
+        : Math.hypot(candidate.x - b.x, candidate.y - b.y) < def.radius + b.radius + 18;
+    if (blocked) {
+      return reject('Too close to another building.');
     }
   }
   for (const r of world.resources) {
     if (!r.alive || r.amount <= 0) continue;
-    if (Math.hypot(x - r.x, y - r.y) < def.radius + r.radius + 10) {
-      return { ok: false, message: 'Resource deposits must remain accessible.' };
+    const distance = fortification
+      ? pointDistanceToFortification(candidate, r.x, r.y)
+      : Math.hypot(candidate.x - r.x, candidate.y - r.y);
+    if (distance < (fortification ? r.radius + 10 : def.radius + r.radius + 10)) {
+      return reject('Resource deposits must remain accessible.');
     }
   }
   const nearestOwn = world.buildings.reduce((best, b) => {
     if (!b.alive || b.side !== side) return best;
-    return Math.min(best, Math.hypot(x - b.x, y - b.y));
+    return Math.min(best, Math.hypot(candidate.x - b.x, candidate.y - b.y));
   }, Infinity);
-  if (nearestOwn > 900) return { ok: false, message: 'Build within your settlement frontier.' };
-  return { ok: true, message: '' };
+  if (nearestOwn > 900) return reject('Build within your settlement frontier.');
+  return { ok: true, message: '', ...placement };
 }
 
 export function placeBuilding(world, sideIndex, type, x, y, builders, options = {}) {
@@ -164,12 +206,19 @@ export function placeBuilding(world, sideIndex, type, x, y, builders, options = 
   const validBuilders = builders.filter(u => u.alive && u.side === sideIndex && u.type === 'villager');
   if (!def) return { ok: false, message: 'Unknown building.' };
   if (!options.ai && validBuilders.length === 0) return { ok: false, message: 'Select at least one villager.' };
-  const placement = validatePlacement(world, sideIndex, type, x, y);
+  const placement = validatePlacement(world, sideIndex, type, x, y, options);
   if (!placement.ok) return placement;
   if (!spendResources(side, def.cost)) {
     return { ok: false, message: `Need ${formatCost(def.cost)}.` };
   }
-  const building = createBuilding(sideIndex, type, x, y, false);
+  const building = createBuilding(
+    sideIndex,
+    type,
+    placement.x ?? x,
+    placement.y ?? y,
+    false,
+    { orientation: placement.orientation },
+  );
   world.buildings.push(building);
   assignBuilders(world, validBuilders, building);
   return { ok: true, building, message: `${def.label} foundation placed.` };
@@ -574,7 +623,10 @@ export function findEntityAt(world, x, y, sideFilter = null) {
   for (const building of world.buildings) {
     if (!building.alive || (sideFilter !== null && building.side !== sideFilter)) continue;
     const distance = Math.hypot(building.x - x, building.y - y);
-    if (distance <= building.radius && distance < bestDistance + 20) {
+    const contains = isFortificationType(building.type)
+      ? pointInsideFortification(building, x, y, 8)
+      : distance <= building.radius;
+    if (contains && distance < bestDistance + 20) {
       best = building; bestDistance = distance;
     }
   }
