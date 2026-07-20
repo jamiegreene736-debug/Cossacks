@@ -11,7 +11,10 @@ export const SAVE_KEY = 'empires1700.campaign.v1';
 export const SAVE_VERSION = 1;
 
 const NUMBER_TAG = '__empires1700_number__';
-const WORLD_ARRAYS = ['buildings', 'resources', 'particles', 'flags', 'pendingDecals', 'decals', 'events'];
+const WORLD_ARRAYS = [
+  'buildings', 'resources', 'particles', 'flags', 'destructions',
+  'pendingDecals', 'decals', 'events',
+];
 const WORLD_VALUES = ['time', 'winner', 'checkT', 'speed', 'killLog', 'sides', 'navigationVersion'];
 
 function encodeNumber(value) {

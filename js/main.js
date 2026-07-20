@@ -1,7 +1,7 @@
 // Entry point: wires up modules and runs the fixed-timestep game loop.
 
 import { SIM_STEP, BUILDING_TYPES } from './config.js';
-import { createWorld, step } from './sim.js';
+import { createWorld, spawnUnit, step } from './sim.js';
 import { Commander } from './ai.js';
 import { initRender, startBattle as startBattleRender, draw,
          camera, clampCamera, rotateView } from './render.js';
@@ -10,7 +10,7 @@ import { initInput, updateInput, getSelection, getDragRect,
          getPlacementPreview, getResourceHoverTarget, getMovePreview, beginPlacement, setFormation,
          cancelPlacement, haltSelection, resetForBattle } from './input.js';
 import {
-  placeBuilding, placeWallRun, planWallRun, queueUnit, validatePlacement,
+  createBuilding, placeBuilding, placeWallRun, planWallRun, queueUnit, validatePlacement,
 } from './economy.js';
 import * as ui from './ui.js';
 import { sfx } from './audio.js';
@@ -120,6 +120,7 @@ async function startBattle(opts) {
   commander = new Commander(world, 1);
   resetForBattle();
   startBattleRender(world);
+  setupLocalBuildingFirePreview(world);
   ui.showBattleHud(world);
   ui.setPauseLabel(false);
   ui.setSpeedLabel(1);
@@ -129,6 +130,36 @@ async function startBattle(opts) {
   endShown = false;
   acc = 0;
   resetFrameMetrics();
+}
+
+function setupLocalBuildingFirePreview(activeWorld) {
+  const debugName = new URLSearchParams(window.location.search).get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'building-fire') return;
+
+  const target = createBuilding(1, 'stable', 1120, 1500, true);
+  target.maxHp = 170;
+  target.hp = 170;
+  activeWorld.buildings.push(target);
+  activeWorld.resources = activeWorld.resources.filter(resource => (
+    Math.hypot(resource.x - target.x, resource.y - target.y) > target.radius + resource.radius + 34
+  ));
+  const attackers = [
+    spawnUnit(activeWorld, 0, 'musk', 980, 1458),
+    spawnUnit(activeWorld, 0, 'pike', 1054, 1510),
+    spawnUnit(activeWorld, 0, 'cav', 1048, 1555),
+  ];
+  for (const attacker of attackers) {
+    attacker.reload = 0;
+    attacker.meleeCd = 0;
+    attacker.target = target;
+    attacker.orderTarget = target;
+  }
+  camera.x = target.x;
+  camera.y = target.y;
+  camera.zoom = 1.65;
+  clampCamera();
 }
 
 function handleCommand(command) {
