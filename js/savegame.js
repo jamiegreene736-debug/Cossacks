@@ -12,7 +12,7 @@ export const SAVE_VERSION = 1;
 
 const NUMBER_TAG = '__empires1700_number__';
 const WORLD_ARRAYS = ['buildings', 'resources', 'particles', 'flags', 'pendingDecals', 'decals', 'events'];
-const WORLD_VALUES = ['time', 'winner', 'checkT', 'speed', 'killLog', 'sides'];
+const WORLD_VALUES = ['time', 'winner', 'checkT', 'speed', 'killLog', 'sides', 'navigationVersion'];
 
 function encodeNumber(value) {
   if (Number.isNaN(value)) return { [NUMBER_TAG]: 'nan' };
@@ -128,7 +128,9 @@ export function restoreGameSnapshot(snapshot) {
   });
 
   for (const key of WORLD_ARRAYS) world[key] = clone(data[key] || []);
-  for (const key of WORLD_VALUES) world[key] = clone(data[key]);
+  for (const key of WORLD_VALUES) {
+    if (data[key] !== undefined) world[key] = clone(data[key]);
+  }
   world.units = clone(data.units);
   world.projectiles = clone(data.projectiles || []);
   world.active = [];

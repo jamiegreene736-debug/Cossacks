@@ -12,12 +12,14 @@ import {
 import {
   isFortificationType, rotateFortificationOrientation,
 } from './fortifications.js';
+import { assignVillagerPath, clearVillagerPath } from './navigation.js';
 
 let getWorld = () => null;
 let callbacks = {};
 let selection = [];
 let currentFormation = 'line';
 let placement = null;
+let wallDrag = null;
 const groups = {};
 const keys = new Set();
 
@@ -44,6 +46,7 @@ export function initInput(canvas, minimap, worldGetter, cbs) {
     if (!world || world.state === 'ended') return;
     if (placement) {
       if (event.button === 2) cancelPlacement();
+      else if (event.button === 0 && placement.type === 'wall') beginWallDrag(event.clientX, event.clientY);
       else if (event.button === 0) placeAt(event.clientX, event.clientY, event.shiftKey);
       return;
     }
@@ -73,7 +76,10 @@ export function initInput(canvas, minimap, worldGetter, cbs) {
     mouseX = event.clientX;
     mouseY = event.clientY;
     if (drag) { drag.x1 = event.clientX; drag.y1 = event.clientY; }
-    if (placement) updatePlacement(event.clientX, event.clientY);
+    if (placement) {
+      if (wallDrag) updateWallDrag(event.clientX, event.clientY);
+      else updatePlacement(event.clientX, event.clientY);
+    }
     else updateResourceHover(event.clientX, event.clientY);
     if (panDrag) {
       camera.x = panDrag.camX - (event.clientX - panDrag.sx) / camera.zoom;
@@ -84,6 +90,7 @@ export function initInput(canvas, minimap, worldGetter, cbs) {
   });
 
   window.addEventListener('mouseup', event => {
+    if (event.button === 0 && wallDrag) finishWallDrag(event.clientX, event.clientY);
     if (event.button === 0 && drag) { finishSelect(event.shiftKey); drag = null; }
     if (panDrag && (event.button === 0 || event.button === 1)) panDrag = null;
     if (event.button === 0) mmDown = false;
@@ -117,7 +124,8 @@ export function initInput(canvas, minimap, worldGetter, cbs) {
     if (key === 'escape') cancelPlacement();
     else if (key === 'r' && placement && isFortificationType(placement.type)) {
       placement.orientation = rotateFortificationOrientation(placement.orientation);
-      updatePlacement(mouseX || window.innerWidth / 2, mouseY || window.innerHeight / 2);
+      if (wallDrag) updateWallDrag(mouseX || window.innerWidth / 2, mouseY || window.innerHeight / 2);
+      else updatePlacement(mouseX || window.innerWidth / 2, mouseY || window.innerHeight / 2);
       callbacks.onPlacement?.(placement);
     }
     else if (key === 'l') setFormation('line');
@@ -263,6 +271,10 @@ function moveUnitsTo(world, units, x, y, formation) {
   fromY /= units.length;
   clearWorkerJobs(units);
   applyMoveOrder(units, x, y, formation);
+  for (const unit of units) {
+    if (unit.type === 'villager') assignVillagerPath(world, unit, unit.orderX, unit.orderY);
+    else clearVillagerPath(unit);
+  }
   world.flags.push({
     kind: 'move', route: true,
     x, y, fromX, fromY,
@@ -374,6 +386,7 @@ export function beginPlacement(type) {
 
 export function cancelPlacement() {
   if (!placement) return;
+  wallDrag = null;
   placement = null;
   callbacks.onPlacement?.(null);
   updateResourceHover(mouseX, mouseY);
@@ -397,6 +410,64 @@ function updatePlacement(screenX, screenY) {
   placement.fieldSlot = validation.fieldSlot ?? null;
   placement.valid = validation.ok;
   placement.message = validation.message;
+  placement.segments = null;
+}
+
+function beginWallDrag(screenX, screenY) {
+  const point = screenToWorld(screenX, screenY);
+  wallDrag = {
+    startX: point.x,
+    startY: point.y,
+    endX: point.x,
+    endY: point.y,
+  };
+  updateWallDrag(screenX, screenY);
+}
+
+function updateWallDrag(screenX, screenY) {
+  if (!placement || !wallDrag) return;
+  const point = screenToWorld(screenX, screenY);
+  wallDrag.endX = point.x;
+  wallDrag.endY = point.y;
+  const plan = callbacks.onPlanWallRun?.(
+    wallDrag.startX, wallDrag.startY, point.x, point.y, placement.orientation,
+  ) || { ok: false, segments: [], message: 'Wall planning is unavailable.' };
+  const last = plan.segments?.at(-1);
+  placement.valid = plan.ok;
+  placement.message = plan.message;
+  placement.segments = plan.segments || [];
+  placement.requestedCount = plan.requestedCount || 0;
+  placement.limitedByResources = Boolean(plan.limitedByResources);
+  placement.limitedByObstacle = Boolean(plan.limitedByObstacle);
+  placement.dragEndX = point.x;
+  placement.dragEndY = point.y;
+  if (last) {
+    placement.x = last.x;
+    placement.y = last.y;
+    placement.orientation = last.orientation;
+  }
+}
+
+function finishWallDrag(screenX, screenY) {
+  if (!placement || !wallDrag) return;
+  updateWallDrag(screenX, screenY);
+  const dragState = wallDrag;
+  wallDrag = null;
+  if (!placement.valid) {
+    callbacks.onToast?.(placement.message || 'Cannot build that wall run.', 'danger');
+    return;
+  }
+  const workers = getSelection().filter(entity => entity.type === 'villager');
+  const result = callbacks.onPlaceWallRun?.(
+    dragState.startX, dragState.startY, dragState.endX, dragState.endY,
+    workers, placement.orientation,
+  );
+  if (!result?.ok) {
+    callbacks.onToast?.(result?.message || 'Wall construction failed.', 'danger');
+    return;
+  }
+  callbacks.onToast?.(result.message, 'good');
+  cancelPlacement();
 }
 
 function placeAt(screenX, screenY, keepPlacing) {
@@ -441,6 +512,7 @@ export function getDragRect() {
 export function resetForBattle() {
   selection = [];
   placement = null;
+  wallDrag = null;
   for (const key of Object.keys(groups)) delete groups[key];
   drag = null;
   panDrag = null;

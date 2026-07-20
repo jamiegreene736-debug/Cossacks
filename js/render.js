@@ -539,40 +539,62 @@ export function draw(
         }
       }
       if (isFortificationType(placementPreview.type)) {
-        const corners = fortificationCorners(
-          placementPreview.type,
-          placementPreview.x,
-          placementPreview.y,
-          placementPreview.orientation,
-        );
-        ctx.beginPath();
-        ctx.moveTo(corners[0].x, corners[0].y);
-        for (let i = 1; i < corners.length; i++) ctx.lineTo(corners[i].x, corners[i].y);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        const axis = {
-          x: corners[1].x - corners[0].x,
-          y: corners[1].y - corners[0].y,
-        };
-        const length = Math.hypot(axis.x, axis.y) || 1;
-        const nx = axis.x / length, ny = axis.y / length;
-        for (const sign of [-1, 1]) {
-          const ex = placementPreview.x + nx * def.w * 0.5 * sign;
-          const ey = placementPreview.y + ny * def.w * 0.5 * sign;
+        const previews = placementPreview.segments?.length
+          ? placementPreview.segments : [placementPreview];
+        for (const preview of previews) {
+          ctx.globalAlpha = 0.58;
+          ctx.fillStyle = placementPreview.valid ? '#78c878' : '#d35d50';
+          ctx.strokeStyle = placementPreview.valid ? '#b9efb9' : '#ffb0a7';
+          ctx.lineWidth = 2 / z;
+          const corners = fortificationCorners(
+            preview.type,
+            preview.x,
+            preview.y,
+            preview.orientation,
+          );
           ctx.beginPath();
-          ctx.arc(ex, ey, 3.5 / z, 0, Math.PI * 2);
-          ctx.fillStyle = placementPreview.valid ? '#d9f2ca' : '#ffd0c7';
+          ctx.moveTo(corners[0].x, corners[0].y);
+          for (let i = 1; i < corners.length; i++) ctx.lineTo(corners[i].x, corners[i].y);
+          ctx.closePath();
           ctx.fill();
-        }
-        if (placementPreview.type === 'gate') {
-          ctx.globalAlpha = 0.85;
-          ctx.strokeStyle = placementPreview.valid ? '#eff6de' : '#ffe3dc';
-          ctx.lineWidth = 4 / z;
-          ctx.beginPath();
-          ctx.moveTo(placementPreview.x - nx * 15, placementPreview.y - ny * 15);
-          ctx.lineTo(placementPreview.x + nx * 15, placementPreview.y + ny * 15);
           ctx.stroke();
+          const axis = {
+            x: corners[1].x - corners[0].x,
+            y: corners[1].y - corners[0].y,
+          };
+          const length = Math.hypot(axis.x, axis.y) || 1;
+          const nx = axis.x / length, ny = axis.y / length;
+          for (const sign of [-1, 1]) {
+            const ex = preview.x + nx * def.w * 0.5 * sign;
+            const ey = preview.y + ny * def.w * 0.5 * sign;
+            ctx.beginPath();
+            ctx.arc(ex, ey, 3.5 / z, 0, Math.PI * 2);
+            ctx.fillStyle = placementPreview.valid ? '#d9f2ca' : '#ffd0c7';
+            ctx.fill();
+          }
+          if (placementPreview.type === 'gate') {
+            ctx.globalAlpha = 0.85;
+            ctx.strokeStyle = placementPreview.valid ? '#eff6de' : '#ffe3dc';
+            ctx.lineWidth = 4 / z;
+            ctx.beginPath();
+            ctx.moveTo(preview.x - nx * 15, preview.y - ny * 15);
+            ctx.lineTo(preview.x + nx * 15, preview.y + ny * 15);
+            ctx.stroke();
+          }
+        }
+        if (placementPreview.segments?.length
+          && (placementPreview.limitedByResources || placementPreview.limitedByObstacle)) {
+          const last = placementPreview.segments.at(-1);
+          ctx.save();
+          ctx.globalAlpha = 0.8;
+          ctx.strokeStyle = placementPreview.limitedByResources ? '#e4bf65' : '#e27a67';
+          ctx.setLineDash([9 / z, 6 / z]);
+          ctx.lineWidth = 2 / z;
+          ctx.beginPath();
+          ctx.moveTo(last.x, last.y);
+          ctx.lineTo(placementPreview.dragEndX, placementPreview.dragEndY);
+          ctx.stroke();
+          ctx.restore();
         }
       } else {
         ctx.translate(placementPreview.x, placementPreview.y);

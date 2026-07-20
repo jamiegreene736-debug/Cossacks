@@ -112,6 +112,14 @@ test('legacy standalone fields attach to the nearest completed mill on restore',
   assert.deepEqual({ x: field.x, y: field.y }, { x: expected.x, y: expected.y });
 });
 
+test('campaigns saved before navigation versioning still restore', () => {
+  const world = createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
+  const snapshot = createGameSnapshot(world, new Commander(world, 1), { x: 900, y: 1500, zoom: 1 });
+  delete snapshot.world.navigationVersion;
+
+  assert.equal(restoreGameSnapshot(snapshot).world.navigationVersion, 0);
+});
+
 test('a maximum-scale army remains within a normal localStorage budget', () => {
   const world = createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
   for (let index = 0; index < 2400; index++) {
