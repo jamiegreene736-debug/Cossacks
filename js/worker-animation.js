@@ -6,6 +6,13 @@ const WORK_FRAMES = Object.freeze({
   forage: 11,
 });
 
+const COMBAT_FRAMES = Object.freeze({
+  ready: 13,
+  advance: 14,
+  fire: 15,
+  reload: 16,
+});
+
 const RESOURCE_ACTIONS = Object.freeze({
   wood: 'chop',
   gold: 'mine',
@@ -21,7 +28,14 @@ export function resolveWorkerAction(job, target) {
   return RESOURCE_ACTIONS[target.resourceType] || null;
 }
 
-export function getWorkerFrame(worker) {
+export function getWorkerFrame(worker, combatReady = false) {
+  if (worker.fireT > 0) return COMBAT_FRAMES.fire;
+  if (worker.orderTarget) {
+    if (worker.moving) return COMBAT_FRAMES.advance;
+    if (worker.reload > 0) return COMBAT_FRAMES.reload;
+    return COMBAT_FRAMES.ready;
+  }
+  if (combatReady) return COMBAT_FRAMES.ready;
   if (worker.state === 'work') {
     const action = WORK_FRAMES[worker.workAction]
       ? worker.workAction
@@ -33,4 +47,4 @@ export function getWorkerFrame(worker) {
   return 0;
 }
 
-export { WORK_FRAMES };
+export { COMBAT_FRAMES, WORK_FRAMES };

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { resolveWorkerAction, getWorkerFrame } from '../js/worker-animation.js';
+import { COMBAT_FRAMES, resolveWorkerAction, getWorkerFrame } from '../js/worker-animation.js';
 
 test('worker jobs resolve to historically legible tool actions', () => {
   const gather = { kind: 'gather', targetId: 7 };
@@ -34,4 +34,26 @@ test('walking and idle workers keep the established civilian frames', () => {
   assert.equal(getWorkerFrame({ state: 'idle', moving: false, animT: 0 }), 0);
   assert.equal(getWorkerFrame({ state: 'move', moving: true, animT: 0 }), 1);
   assert.equal(getWorkerFrame({ state: 'move', moving: true, animT: 0.2 }), 2);
+});
+
+test('villagers visibly draw, advance, fire, reload and holster their muskets', () => {
+  const worker = {
+    state: 'idle', moving: false, animT: 0, fireT: 0, reload: 0, orderTarget: null,
+  };
+  assert.equal(getWorkerFrame(worker, true), COMBAT_FRAMES.ready);
+
+  worker.orderTarget = { alive: true };
+  worker.moving = true;
+  assert.equal(getWorkerFrame(worker), COMBAT_FRAMES.advance);
+
+  worker.moving = false;
+  worker.fireT = 0.1;
+  assert.equal(getWorkerFrame(worker), COMBAT_FRAMES.fire);
+
+  worker.fireT = 0;
+  worker.reload = 4;
+  assert.equal(getWorkerFrame(worker), COMBAT_FRAMES.reload);
+
+  worker.orderTarget = null;
+  assert.equal(getWorkerFrame(worker), 0, 'a completed or replaced attack order holsters the musket');
 });

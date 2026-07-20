@@ -315,8 +315,8 @@ function renderSelection(world, selection) {
     const working = villagers.filter(worker => worker.job).length;
     info.textContent = `${working} working · ${villagers.length - working} ready for orders`;
     detail.textContent = gatherers
-      ? `${gatherers} working · ${formatHourly(projected)} assigned · click open ground to move or another resource or workplace to redirect`
-      : 'Click open ground to move, or hover and click a resource, workplace, or unfinished structure to work.';
+      ? `${gatherers} working · ${formatHourly(projected)} assigned · hover an enemy and click to draw muskets`
+      : 'Click open ground to move; hover and click work targets or enemies to gather, build, or draw muskets.';
     context.textContent = gatherers ? 'Selected output and construction' : 'Construct a building';
     for (const resourceType of RESOURCE_KEYS) {
       if (economy[resourceType].workers) addEconomyMetric(grid, economy[resourceType]);
@@ -489,6 +489,24 @@ export function setPlacement(active, label = '', type = '', orientation = '') {
 
 export function setResourceHover(world, hover) {
   const tooltip = $('resource-tooltip');
+  const attack = hover?.kind === 'attack' && hover.target?.alive && hover.workers?.length;
+  tooltip.classList.toggle('attack', Boolean(attack));
+  if (world && attack) {
+    const targetDef = hover.target.entityKind === 'building'
+      ? BUILDING_TYPES[hover.target.type] : UNIT_TYPES[hover.target.type];
+    const villager = UNIT_TYPES.villager;
+    const title = document.createElement('strong');
+    title.textContent = `Attack Enemy ${targetDef?.short || targetDef?.label || 'Target'}`;
+    const output = document.createElement('span');
+    output.textContent = `${hover.workers.length} villager${hover.workers.length === 1 ? '' : 's'} · ${villager.dmg} damage · ${villager.range} range · ${Math.round(villager.acc * 100)}% accuracy`;
+    const instruction = document.createElement('small');
+    instruction.textContent = 'Click to draw muskets and fire · slower and weaker than trained musketeers.';
+    tooltip.replaceChildren(title, output, instruction);
+    tooltip.style.left = `${Math.max(12, Math.min(window.innerWidth - 294, hover.screenX + 18))}px`;
+    tooltip.style.top = `${Math.max(90, Math.min(window.innerHeight - 235, hover.screenY + 18))}px`;
+    tooltip.classList.remove('hidden');
+    return;
+  }
   const construction = hover?.target?.entityKind === 'building' && !hover.target.complete;
   if (world && construction && hover.workers?.length) {
     const title = document.createElement('strong');
@@ -507,6 +525,7 @@ export function setResourceHover(world, hover) {
     ? getGatherAssignmentStats(world, hover.workers || [], hover.target) : null;
   if (!stats || stats.workers === 0) {
     tooltip.classList.add('hidden');
+    tooltip.classList.remove('attack');
     return;
   }
   const labels = {

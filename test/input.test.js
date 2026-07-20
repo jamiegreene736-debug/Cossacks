@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 
 import { createWorld, spawnUnit, step } from '../js/sim.js';
 import {
-  assignVillagersToConstruction, isOpenGroundMoveTarget, isSecondaryPointerEvent,
-  issuePrimaryUnitCommand, issueVillagerGroundMove, setBuildingRallyAt,
-  setTownCenterPrimaryRallyAt,
+  assignVillagersToConstruction, getVillagerAttackTargetAt, isOpenGroundMoveTarget,
+  isSecondaryPointerEvent, issuePrimaryUnitCommand, issueVillagerAttack,
+  issueVillagerGroundMove, setBuildingRallyAt, setTownCenterPrimaryRallyAt,
 } from '../js/input.js';
 import { createBuilding } from '../js/economy.js';
 
@@ -283,6 +283,32 @@ test('primary enemy clicks focus the whole mobile selection on that target', () 
   assert.equal(world.flags.at(-1).kind, 'attack');
   assert.equal(world.flags.at(-1).x, enemy.x);
   assert.equal(world.flags.at(-1).y, enemy.y);
+});
+
+test('selected villagers can explicitly attack enemy soldiers and buildings', () => {
+  const world = makeWorld();
+  const villager = spawnUnit(world, 0, 'villager', 720, 1420);
+  const friendlySoldier = spawnUnit(world, 0, 'musk', 735, 1440);
+  const enemySoldier = spawnUnit(world, 1, 'musk', 900, 1420);
+  const enemyBuilding = createBuilding(1, 'house', 1100, 1420, true);
+  world.buildings.push(enemyBuilding);
+  villager.job = { kind: 'gather', targetId: world.resources[0].id };
+  villager.navigationPath = [{ x: 800, y: 1420 }];
+
+  assert.equal(getVillagerAttackTargetAt(world, [villager], enemySoldier.x, enemySoldier.y), enemySoldier);
+  assert.equal(getVillagerAttackTargetAt(world, [villager], enemyBuilding.x, enemyBuilding.y), enemyBuilding);
+  assert.equal(getVillagerAttackTargetAt(world, [villager], friendlySoldier.x, friendlySoldier.y), null);
+
+  assert.equal(issueVillagerAttack(world, [villager, friendlySoldier], enemySoldier), 1);
+  assert.equal(villager.job, null);
+  assert.equal(villager.navigationPath, null);
+  assert.equal(villager.orderTarget, enemySoldier);
+  assert.equal(villager.target, enemySoldier);
+  assert.equal(villager.state, 'move');
+  assert.equal(friendlySoldier.orderTarget, null, 'the primary-click interaction arms villagers only');
+  assert.equal(world.flags.at(-1).attack, true);
+
+  assert.equal(issueVillagerAttack(world, [villager], friendlySoldier), 0);
 });
 
 test('selected villagers can take over any unfinished friendly construction', () => {

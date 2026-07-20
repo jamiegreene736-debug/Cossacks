@@ -321,7 +321,7 @@ function fireBlocked(world, u, t, d) {
 }
 
 function fireMusket(world, u, t, d, accMul = 1) {
-  if (t.entityKind === 'building') {
+  if (t.entityKind === 'building' && u.type !== 'villager') {
     launchBuildingTorch(world, u, t, u.dmg * (0.85 + Math.random() * 0.3), true);
     return;
   }
@@ -460,7 +460,11 @@ function updateUnit(world, u, dt) {
 
   // -- Target upkeep / acquisition (staggered) --
   if (u.target && !u.target.alive) u.target = null;
-  if (u.orderTarget && !u.orderTarget.alive) u.orderTarget = null;
+  if (u.orderTarget && !u.orderTarget.alive) {
+    u.orderTarget = null;
+    if (u.type === 'villager') clearVillagerPath(u);
+    if (u.state === 'move' && Number.isNaN(u.orderX)) u.state = 'idle';
+  }
   u.acquireT -= dt;
   if (u.acquire > 0 && u.acquireT <= 0) {
     u.acquireT = 0.35 + Math.random() * 0.35;

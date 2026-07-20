@@ -15,6 +15,7 @@ import { drawWorker, VL_W, VL_H, VL_AX, VL_AY } from './gfx/villager.js';
 import {
   MILITARY_ART_ROWS,
   MILITARY_ART_SPECS,
+  VILLAGER_COMBAT_ART_SPEC,
   getProductionArt,
 } from './gfx/art-assets.js';
 import { fortificationCorners, isFortificationType } from './fortifications.js';
@@ -359,6 +360,32 @@ function paintProductionWorkerTool(g, nationKey, action, phase) {
   g.restore();
 }
 
+function paintFallbackWorkerMusket(g, phase, w, h) {
+  const aim = phase === 'fire';
+  const reload = phase === 'reload';
+  const y = aim ? h * 0.39 : reload ? h * 0.45 : h * 0.57;
+  const x0 = reload ? w * 0.41 : w * 0.18;
+  const x1 = reload ? w * 0.73 : w * 0.91;
+  g.save();
+  g.lineCap = 'round';
+  g.strokeStyle = '#211810';
+  g.lineWidth = 2.4;
+  g.beginPath();
+  g.moveTo(x0, y + (reload ? 5 : 1.4));
+  g.lineTo(x1, y - (reload ? 12 : 1.4));
+  g.stroke();
+  g.strokeStyle = '#795331';
+  g.lineWidth = 1.35;
+  g.stroke();
+  g.strokeStyle = '#b7b9b1';
+  g.lineWidth = 0.65;
+  g.beginPath();
+  g.moveTo(reload ? w * 0.5 : w * 0.46, y - (reload ? 2 : 0.3));
+  g.lineTo(x1 + (reload ? 0 : 2), y - (reload ? 14 : 1.8));
+  g.stroke();
+  g.restore();
+}
+
 
 
 
@@ -368,6 +395,7 @@ function buildNationSprites(nationKey, side = 0) {
   const nat = { ...NATIONS[nationKey], rim: SIDE_RIM[side] };
   const out = {};
   const productionWorker = getProductionArt(PRODUCTION_WORKER_ART[nationKey]);
+  const productionWorkerCombat = getProductionArt(VILLAGER_COMBAT_ART_SPEC.key);
   const workerFrames = [
     ['idle', 0, null, 0], ['idle', 1, null, 1], ['idle', 2, null, 2],
     ['build', 0, 'build', 3], ['build', 1, 'build', 0],
@@ -375,8 +403,12 @@ function buildNationSprites(nationKey, side = 0) {
     ['work', 0, 'mine', 3], ['work', 1, 'mine', 0],
     ['work', 0, 'farm', 3], ['work', 1, 'farm', 0],
     ['work', 0, 'forage', 3], ['work', 1, 'forage', 0],
+    ['combat', 0, 'ready', 0, 'combat'],
+    ['combat', 1, 'advance', 1, 'combat'],
+    ['combat', 0, 'fire', 2, 'combat'],
+    ['combat', 0, 'reload', 3, 'combat'],
   ];
-  const workerDef = productionWorker ? {
+  const workerDefBase = productionWorker ? {
     w: PRODUCTION_WORKER.w,
     h: PRODUCTION_WORKER.h,
     ax: PRODUCTION_WORKER.ax,
@@ -395,6 +427,15 @@ function buildNationSprites(nationKey, side = 0) {
     ay: VL_AY,
     frames: workerFrames,
     painter: (g, pose, leg, action) => drawWorker(g, nat, pose, leg, action),
+  };
+  const workerDef = {
+    ...workerDefBase,
+    combatProduction: productionWorkerCombat ? {
+      image: productionWorkerCombat,
+      sourceW: VILLAGER_COMBAT_ART_SPEC.sourceW,
+      sourceH: VILLAGER_COMBAT_ART_SPEC.sourceH,
+      sourceRow: MILITARY_ART_ROWS[nationKey],
+    } : null,
   };
 
   const proceduralDefs = {
@@ -427,22 +468,34 @@ function buildNationSprites(nationKey, side = 0) {
   for (const [type, def] of Object.entries(defs)) {
     const right = [], left = [];
     for (let frameIndex = 0; frameIndex < def.frames.length; frameIndex++) {
-      const [pose, leg, action = null, sourceFrame = frameIndex] = def.frames[frameIndex];
+      const [pose, leg, action = null, sourceFrame = frameIndex, sourceKind = 'default'] = def.frames[frameIndex];
       const [c, g] = frameCanvas(def.w, def.h);
-      if (def.production) {
+      const production = sourceKind === 'combat' ? def.combatProduction : def.production;
+      if (production) {
         if (def.military) paintProductionMilitaryBase(g, def, side);
         g.imageSmoothingEnabled = true;
         g.imageSmoothingQuality = 'high';
         g.drawImage(
+          production.image,
+          sourceFrame * production.sourceW,
+          production.sourceRow * production.sourceH,
+          production.sourceW, production.sourceH,
+          0, 0, def.w, def.h,
+        );
+        if (!def.military && action && sourceKind !== 'combat') {
+          paintProductionWorkerTool(g, nationKey, action, leg);
+        }
+      } else if (sourceKind === 'combat' && def.production) {
+        g.drawImage(
           def.production.image,
-          sourceFrame * def.production.sourceW,
-          def.production.sourceRow * def.production.sourceH,
+          0, def.production.sourceRow * def.production.sourceH,
           def.production.sourceW, def.production.sourceH,
           0, 0, def.w, def.h,
         );
-        if (!def.military && action) paintProductionWorkerTool(g, nationKey, action, leg);
+        paintFallbackWorkerMusket(g, action, def.w, def.h);
       } else {
         def.painter(g, pose, leg, action);
+        if (sourceKind === 'combat') paintFallbackWorkerMusket(g, action, def.w, def.h);
       }
       right.push(c);
       left.push(mirror(c));
@@ -467,19 +520,20 @@ function buildNationSprites(nationKey, side = 0) {
 
 const sortBuf = [];
 
-function drawResourceHover(target, zoom) {
+function drawResourceHover(target, zoom, kind = 'resource') {
   if (!target?.alive) return;
   const construction = target.entityKind === 'building' && !target.complete;
-  if (!construction && target.amount <= 0) return;
+  if (kind !== 'attack' && !construction && target.amount <= 0) return;
   const colors = {
     food: ['#f4d58a', '#9fc96b'],
     wood: ['#d7e8a8', '#6fa455'],
     gold: ['#fff0a4', '#d0a23d'],
     stone: ['#e5e7df', '#9fa8a6'],
     construction: ['#fff0bb', '#d2a34d'],
+    attack: ['#ffd1c7', '#b74336'],
   };
-  const [light, base] = construction
-    ? colors.construction : colors[target.resourceType] || colors.food;
+  const [light, base] = kind === 'attack' ? colors.attack
+    : construction ? colors.construction : colors[target.resourceType] || colors.food;
   const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.006);
   const rx = target.radius + 11 + pulse * 3;
   const ry = Math.max(15, target.radius * 0.48 + pulse * 2);
@@ -497,6 +551,21 @@ function drawResourceHover(target, zoom) {
   ctx.ellipse(target.x, target.y + target.radius * 0.28, rx, ry, 0, 0, Math.PI * 2);
   ctx.stroke();
   ctx.setLineDash([]);
+  if (kind === 'attack') {
+    const cy = target.y + target.radius * 0.28;
+    ctx.lineWidth = 2.4 / zoom;
+    for (const sx of [-1, 1]) {
+      for (const sy of [-1, 1]) {
+        const x = target.x + sx * (rx + 5 / zoom);
+        const y = cy + sy * (ry + 4 / zoom);
+        ctx.beginPath();
+        ctx.moveTo(x - sx * 8 / zoom, y);
+        ctx.lineTo(x, y);
+        ctx.lineTo(x, y - sy * 6 / zoom);
+        ctx.stroke();
+      }
+    }
+  }
   ctx.fillStyle = base;
   ctx.strokeStyle = light;
   ctx.lineWidth = 1.2 / zoom;
@@ -554,6 +623,7 @@ function drawMovePreview(preview, zoom, time) {
 
 export function draw(
   world, alpha, dragRect, placementPreview = null, resourceHover = null, movePreview = null,
+  hoverKind = null,
 ) {
   // margins outside the world
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -658,7 +728,7 @@ export function draw(
     }
   }
 
-  drawResourceHover(resourceHover, z);
+  drawResourceHover(resourceHover, z, hoverKind);
 
   if (placementPreview) {
     const def = BUILDING_TYPES[placementPreview.type];
@@ -785,7 +855,7 @@ export function draw(
     const iy = u.py + (u.y - u.py) * alpha - (u.wallElevation || 0);
     let frame;
     if (u.type === 'villager') {
-      frame = getWorkerFrame(u);
+      frame = getWorkerFrame(u, hoverKind === 'attack' && u.selected);
     } else {
       frame = getMilitaryFrame(u);
     }

@@ -4,9 +4,8 @@
 import {
   camera, screenToWorld, screenPanToWorld, clampCamera, minimapToWorld,
 } from './render.js';
-import { WORLD } from './config.js';
+import { WORLD, BUILDING_TYPES, UNIT_TYPES } from './config.js';
 import { applyMoveOrder, applyAttackOrder, haltOrder } from './formations.js';
-import { BUILDING_TYPES } from './config.js';
 import {
   assignBuilders, assignGatherers, clearWorkerJobs, findEntityAt,
   findResourceAt, setRallyPoint,
@@ -33,6 +32,7 @@ let mmDown = false;
 let mouseX = 0, mouseY = 0, mouseIn = false;
 let inputCanvas = null;
 let resourceHover = null;
+let resourceHoverKind = null;
 let movePreview = null;
 
 const EDGE = 26;
@@ -381,12 +381,21 @@ function moveUnitsTo(world, units, x, y, formation) {
 function attackUnits(world, units, target) {
   if (!units.length || !target?.alive || target.side === units[0].side) return false;
   clearWorkerJobs(units);
+  const villagers = units.filter(unit => unit.type === 'villager');
+  for (const villager of villagers) clearVillagerPath(villager);
   applyAttackOrder(units, target);
   world.flags.push({
     kind: 'attack', attack: true,
     x: target.x, y: target.y,
     life: 1.2, max: 1.2,
   });
+  if (villagers.length) {
+    const def = target.entityKind === 'building' ? BUILDING_TYPES[target.type] : UNIT_TYPES[target.type];
+    callbacks.onToast?.(
+      `${villagers.length} villager${villagers.length === 1 ? '' : 's'} armed and attacking ${def?.short || def?.label || 'the enemy'}.`,
+      'danger',
+    );
+  }
   callbacks.onOrder?.('attack');
   return true;
 }
@@ -427,9 +436,42 @@ function hoverableWorkerTargetAt(screenX, screenY) {
   return target;
 }
 
+export function getVillagerAttackTargetAt(world, selected, x, y) {
+  const workers = selected.filter(entity => entity?.alive && entity.type === 'villager');
+  if (!world || workers.length === 0) return null;
+  const side = workers[0].side;
+  if (workers.some(worker => worker.side !== side)) return null;
+  const target = findEntityAt(world, x, y, side === 0 ? 1 : 0);
+  return target?.alive && target.side !== side ? target : null;
+}
+
+function hoverableVillagerAttackTargetAt(screenX, screenY) {
+  if (placement) return null;
+  const world = getWorld();
+  const point = world ? screenToWorld(screenX, screenY) : null;
+  return point ? getVillagerAttackTargetAt(world, getSelection(), point.x, point.y) : null;
+}
+
+export function issueVillagerAttack(world, selected, target) {
+  const workers = selected.filter(entity => entity?.alive && entity.type === 'villager'
+    && target?.alive && entity.side !== target.side);
+  if (!world || !target?.alive || workers.length === 0) return 0;
+  clearWorkerJobs(workers);
+  for (const worker of workers) clearVillagerPath(worker);
+  applyAttackOrder(workers, target);
+  world.flags.push({
+    kind: 'attack', attack: true,
+    x: target.x, y: target.y,
+    life: 1.2, max: 1.2,
+  });
+  return workers.length;
+}
+
 function updateResourceHover(screenX, screenY) {
-  const target = hoverableWorkerTargetAt(screenX, screenY);
+  const attackTarget = hoverableVillagerAttackTargetAt(screenX, screenY);
+  const target = attackTarget || hoverableWorkerTargetAt(screenX, screenY);
   resourceHover = target;
+  resourceHoverKind = attackTarget ? 'attack' : target ? 'work' : null;
   const selected = getSelection();
   const hasMobileSelection = selected.some(entity => entity.alive && entity.side === 0
     && entity.entityKind !== 'building');
@@ -442,12 +484,13 @@ function updateResourceHover(screenX, screenY) {
       ? { kind: 'move', x: point.x, y: point.y }
       : null;
   const construction = target?.entityKind === 'building' && !target.complete;
-  inputCanvas?.classList.toggle('cursor-gather', Boolean(target) && !construction);
-  inputCanvas?.classList.toggle('cursor-build', Boolean(construction));
+  inputCanvas?.classList.toggle('cursor-gather', Boolean(target) && !attackTarget && !construction);
+  inputCanvas?.classList.toggle('cursor-build', Boolean(construction) && !attackTarget);
   inputCanvas?.classList.toggle('cursor-move', movePreview?.kind === 'move');
-  inputCanvas?.classList.toggle('cursor-attack', movePreview?.kind === 'attack');
+  inputCanvas?.classList.toggle('cursor-attack', Boolean(attackTarget)
+    || movePreview?.kind === 'attack');
   callbacks.onResourceHover?.({
-    target,
+    target, kind: resourceHoverKind,
     workers: getSelection().filter(entity => entity.type === 'villager'),
     screenX,
     screenY,
@@ -461,12 +504,13 @@ function clearResourceHover() {
       && !inputCanvas?.classList.contains('cursor-move')
       && !inputCanvas?.classList.contains('cursor-attack')) return;
   resourceHover = null;
+  resourceHoverKind = null;
   movePreview = null;
+  inputCanvas?.classList.remove('cursor-attack');
   inputCanvas?.classList.remove('cursor-gather');
   inputCanvas?.classList.remove('cursor-build');
   inputCanvas?.classList.remove('cursor-move');
-  inputCanvas?.classList.remove('cursor-attack');
-  callbacks.onResourceHover?.({ target: null, workers: [], screenX: mouseX, screenY: mouseY });
+  callbacks.onResourceHover?.({ target: null, kind: null, workers: [], screenX: mouseX, screenY: mouseY });
 }
 
 function gatherAt(screenX, screenY) {
@@ -662,6 +706,7 @@ function placeAt(screenX, screenY, keepPlacing) {
 
 export function getPlacementPreview() { return placement; }
 export function getResourceHoverTarget() { return resourceHover; }
+export function getResourceHoverKind() { return resourceHoverKind; }
 export function getMovePreview() { return movePreview; }
 
 export function getDragRect() {

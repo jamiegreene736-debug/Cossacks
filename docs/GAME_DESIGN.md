@@ -32,8 +32,9 @@ economy or entity interfaces introduced here.
 ## Acceptance checks
 
 - A new match visibly starts with one Town Center and no units.
-- The first villager emerges, can gather, establish a mill and fields, and construct military
-  buildings.
+- The first villager emerges, can gather, establish a mill and fields, construct military
+  infrastructure, and explicitly draw a low-powered civilian musket against a hovered enemy
+  soldier or building.
 - Resource costs, population reservations, construction, and queues cannot go
   negative or exceed the cap.
 - England and the Ottoman Empire have distinct visuals and bonuses.

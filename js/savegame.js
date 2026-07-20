@@ -3,7 +3,7 @@
 // stored as ids and rehydrated after the fresh world has been constructed.
 
 import { Commander } from './ai.js';
-import { NATIONS } from './config.js';
+import { NATIONS, UNIT_TYPES } from './config.js';
 import { repairFieldAttachments, reserveEntityIds } from './economy.js';
 import { createWorld, reserveUnitIds } from './sim.js';
 
@@ -144,6 +144,14 @@ export function restoreGameSnapshot(snapshot) {
   const entities = new Map();
   for (const entity of [...world.units, ...world.buildings, ...world.resources]) entities.set(entity.id, entity);
   for (const unit of world.units) {
+    if (unit.type === 'villager') {
+      const civilian = UNIT_TYPES.villager;
+      unit.range = civilian.range;
+      unit.acquire = civilian.acquire;
+      unit.reloadTime = civilian.reload;
+      unit.dmg = civilian.dmg;
+      unit.acc = civilian.acc;
+    }
     unit.selected = false;
     unit.target = entities.get(unit.targetId) || null;
     unit.orderTarget = entities.get(unit.orderTargetId) || null;

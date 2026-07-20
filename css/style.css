@@ -27,7 +27,9 @@ button, select { font: inherit; }
 #game.cursor-gather { cursor: pointer; }
 #game.cursor-build { cursor: crosshair; }
 #game.cursor-move { cursor: move; }
-#game.cursor-attack { cursor: crosshair; }
+#game.cursor-attack {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%23181310' stroke-width='5'/%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%23f06b5c' stroke-width='2'/%3E%3Cpath d='M16 2v8M16 22v8M2 16h8M22 16h8' stroke='%23f8d0c7' stroke-width='2'/%3E%3C/svg%3E") 16 16, crosshair;
+}
 .hidden { display: none !important; }
 .hud { position: absolute; z-index: 10; }
 .eyebrow {
@@ -229,6 +231,15 @@ button, select { font: inherit; }
 #resource-tooltip strong { display: block; color: #e8dbad; font-size: 13px; }
 #resource-tooltip span { display: block; margin-top: 3px; color: #bcd68e; font: 700 12px Arial, sans-serif; }
 #resource-tooltip small { display: block; margin-top: 4px; color: #a59d83; font: 9px/1.3 Arial, sans-serif; }
+#resource-tooltip.attack {
+  background: linear-gradient(145deg, rgba(57,25,21,.98), rgba(24,15,13,.98));
+  border-color: #c65b4d;
+}
+#resource-tooltip.attack::before {
+  background: #321b17; border-color: #c65b4d;
+}
+#resource-tooltip.attack strong { color: #ffd9d0; }
+#resource-tooltip.attack span { color: #e98677; }
 
 #toast {
   position: absolute; z-index: 70; left: 50%; bottom: 176px; transform: translateX(-50%);

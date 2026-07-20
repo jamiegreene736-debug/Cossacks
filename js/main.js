@@ -7,7 +7,8 @@ import { initRender, startBattle as startBattleRender, draw,
          camera, clampCamera, rotateView } from './render.js';
 import { viewDirectionLabel } from './camera.js';
 import { initInput, updateInput, getSelection, getDragRect,
-         getPlacementPreview, getResourceHoverTarget, getMovePreview, beginPlacement, setFormation,
+         getPlacementPreview, getResourceHoverTarget, getResourceHoverKind, getMovePreview,
+         beginPlacement, setFormation,
          cancelPlacement, haltSelection, resetForBattle } from './input.js';
 import {
   createBuilding, placeBuilding, placeWallRun, planWallRun, queueUnit, validatePlacement,
@@ -377,7 +378,7 @@ function frame(now) {
   }
   draw(
     world, Math.min(1, acc / SIM_STEP), getDragRect(),
-    getPlacementPreview(), getResourceHoverTarget(), getMovePreview(),
+    getPlacementPreview(), getResourceHoverTarget(), getMovePreview(), getResourceHoverKind(),
   );
   if (shouldSample) {
     const next = performance.now();
@@ -404,7 +405,10 @@ window.__tick = (secs = 1) => {
     step(world, SIM_STEP);
     commander.update(SIM_STEP);
   }
-  draw(world, 1, null, getPlacementPreview(), getResourceHoverTarget(), getMovePreview());
+  draw(
+    world, 1, null, getPlacementPreview(), getResourceHoverTarget(), getMovePreview(),
+    getResourceHoverKind(),
+  );
   ui.updateHud(world, getSelection());
   if (world.state === 'ended' && !endShown) {
     endShown = true;
@@ -418,7 +422,10 @@ window.__view = (x, y, zoom, rotation = camera.rotation) => {
   if (!world) return 'no battle running';
   camera.x = x; camera.y = y; camera.zoom = zoom; camera.rotation = rotation;
   clampCamera();
-  draw(world, 1, null, getPlacementPreview(), getResourceHoverTarget(), getMovePreview());
+  draw(
+    world, 1, null, getPlacementPreview(), getResourceHoverTarget(), getMovePreview(),
+    getResourceHoverKind(),
+  );
   return `cam=(${camera.x | 0},${camera.y | 0}) zoom=${camera.zoom} rotation=${camera.rotation}`;
 };
 
