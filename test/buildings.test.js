@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { BUILDING_TYPES } from '../js/config.js';
-import { getBuildingPresentation } from '../js/gfx/buildings.js';
+import { bdConstructionArtFrame, getBuildingPresentation } from '../js/gfx/buildings.js';
 
 const BUILT_STRUCTURE_TYPES = Object.keys(BUILDING_TYPES).filter(type => type !== 'farm');
 
@@ -28,4 +28,19 @@ test('building silhouettes preserve the settlement scale hierarchy', () => {
   assert.ok(width('stable') > width('lumber_camp') * 1.5);
   assert.ok(width('barracks') > width('house') * 1.7);
   assert.ok(width('tower') < width('house'));
+});
+
+test('production construction art advances continuously through four authored stages', () => {
+  assert.deepEqual(bdConstructionArtFrame(-1), { from: 0, to: 1, mix: 0 });
+  assert.deepEqual(bdConstructionArtFrame(1), { from: 3, to: 3, mix: 0 });
+
+  const firstHandoff = bdConstructionArtFrame(0.25);
+  assert.equal(firstHandoff.from, 1);
+  assert.equal(firstHandoff.to, 2);
+  assert.equal(firstHandoff.mix, 0);
+
+  const blend = bdConstructionArtFrame(0.49);
+  assert.equal(blend.from, 1);
+  assert.equal(blend.to, 2);
+  assert.ok(blend.mix > 0 && blend.mix < 1);
 });

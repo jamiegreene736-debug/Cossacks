@@ -5,7 +5,11 @@ where fine masonry, weathering, glazing, foliage, carved ornament, cloth, and
 human anatomy need to survive close gameplay zoom. England's complete building
 roster, both nations' civilians, natural resource nodes, meadow, mature trees,
 rock and riverbank accents, deadwood, road aggregate, water, cultivated soil,
-and country vegetation use coordinated production-art sets. Those assets are preloaded
+country vegetation, progressive Georgian construction sites, and English
+stone walls/gates use coordinated production-art sets. Construction sheets
+crossfade through authored masonry/scaffold stages, while fortifications carry
+separate completed and under-construction states for both board orientations.
+Those assets are preloaded
 before battle setup and enter the same caches as procedural art, so a completed
 building, resource, or unit still costs one runtime blit. Procedural paths
 remain as resilient fallbacks.
@@ -84,7 +88,7 @@ Measured at 1,625 living units: 0.4ms median frame draw against a 16.7ms budget.
 | `art-assets.js` | Central URL registry, preload lifecycle and lookup for production art. |
 | `terrain.js` | The board: production meadow, trees, rocks, deadwood, river reeds, road/water/soil materials, hedgerow and scrub art; material field and parcels. Bakes 1:1 into frustum-culled tiles; `drawTerrain()` is ≤12 blits. |
 | `buildings.js` | Nation-specific 18th-century architecture, farms, production and procedural resource nodes, scene props, waving Union flag, and cached damage/depletion states. |
-| `assets/buildings/` | Transparent high-resolution sources for every completed England structure. |
+| `assets/buildings/` | Transparent high-resolution sources for completed England structures, four-stage construction, and completed/in-progress stone fortifications. |
 | `assets/resources/` | Transparent woodland, berry, stone, and gold sources. |
 | `assets/terrain/` | Seamless meadow, road, water, soil and stubble materials plus alpha tree, rock, reed, deadwood and country-vegetation sources. |
 | `assets/units/` | Four-frame English and Ottoman civilian production sheets. |
