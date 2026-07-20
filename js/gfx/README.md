@@ -83,7 +83,8 @@ Measured at 1,625 living units: 0.4ms median frame draw against a 16.7ms budget.
 | `assets/units/` | Four-frame English and Ottoman civilian production sheets. |
 | `infantry.js` | `drawSoldier()` — musketeers and pikemen. |
 | `mounted.js` | `drawCavalry()`, `drawCannon()`. |
-| `villager.js` | `drawWorker()` — resilient procedural civilian fallback. |
+| `villager.js` | `drawWorker()` — resilient procedural civilian fallback with axe, pickaxe, hoe, sickle, and mallet poses. |
+| `worker-animation.js` | Shared job-to-tool action mapping and cached atlas-frame selection. |
 | `decals.js` | Persistent aftermath: corpses, craters, wrecks, ruins, trample. |
 | `effects.js` | Powder smoke, muzzle flash, projectiles, blood, dust. |
 | `composite.js` | Frame composition: haze, grade, vignette, selection, health bars, order flags, minimap. |

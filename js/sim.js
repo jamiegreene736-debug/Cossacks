@@ -111,6 +111,7 @@ function makeUnit(side, nationKey, type, x, y) {
     moving: false, animT: Math.random() * 10, fireT: 0,
     fleeYDrift: 0,
     job: null,
+    workAction: null,
   };
 }
 

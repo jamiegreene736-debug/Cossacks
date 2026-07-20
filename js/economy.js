@@ -12,6 +12,7 @@ import {
   pointDistanceToFortification, pointInsideFortification,
   snapFortificationPlacement,
 } from './fortifications.js';
+import { resolveWorkerAction } from './worker-animation.js';
 
 let nextEntityId = 100000;
 
@@ -230,6 +231,7 @@ export function assignBuilders(world, workers, building) {
   for (const worker of workers) {
     if (!worker.alive || worker.type !== 'villager' || worker.side !== building.side) continue;
     worker.job = { kind: 'build', targetId: building.id };
+    worker.workAction = 'build';
     worker.orderTarget = null;
     worker.target = null;
     assigned = true;
@@ -246,6 +248,7 @@ export function assignGatherers(world, workers, target) {
     if (!worker.alive || worker.type !== 'villager') continue;
     if (isFarm && worker.side !== target.side) continue;
     worker.job = { kind: 'gather', targetId: target.id };
+    worker.workAction = resolveWorkerAction(worker.job, target);
     worker.orderTarget = null;
     worker.target = null;
   }
@@ -254,7 +257,10 @@ export function assignGatherers(world, workers, target) {
 
 export function clearWorkerJobs(units) {
   for (const unit of units) {
-    if (unit.type === 'villager') unit.job = null;
+    if (unit.type !== 'villager') continue;
+    unit.job = null;
+    unit.workAction = null;
+    if (unit.state === 'work') unit.state = 'idle';
   }
 }
 
@@ -454,9 +460,16 @@ function updateWorkers(world, dt) {
   for (const worker of world.units) {
     if (!worker.alive || worker.type !== 'villager' || !worker.job) continue;
     const target = findTarget(world, worker.job.targetId);
-    if (!target || !target.alive) { worker.job = null; continue; }
+    if (!target || !target.alive) {
+      worker.job = null;
+      worker.workAction = null;
+      if (worker.state === 'work') worker.state = 'idle';
+      continue;
+    }
     if (worker.job.kind === 'build' && target.complete) {
       worker.job = target.type === 'farm' ? { kind: 'gather', targetId: target.id } : null;
+      worker.workAction = resolveWorkerAction(worker.job, target);
+      if (!worker.job && worker.state === 'work') worker.state = 'idle';
       continue;
     }
     const point = nearestPoint(target, worker);
@@ -466,11 +479,14 @@ function updateWorkers(world, dt) {
       worker.orderX = point.x;
       worker.orderY = point.y;
       worker.state = 'move';
+      worker.workAction = null;
       continue;
     }
     worker.orderX = NaN;
     worker.orderY = NaN;
     worker.state = 'work';
+    worker.workAction = resolveWorkerAction(worker.job, target);
+    if (Math.abs(target.x - worker.x) > 0.5) worker.facing = target.x > worker.x ? 1 : -1;
     worker.animT += dt * 1.4;
 
     if (worker.job.kind === 'build') {
@@ -486,6 +502,8 @@ function updateWorkers(world, dt) {
       const resourceType = target.resourceType;
       if (!resourceType || target.amount <= 0 || (target.entityKind === 'building' && !target.complete)) {
         worker.job = null;
+        worker.workAction = null;
+        worker.state = 'idle';
         continue;
       }
       const profile = gatherProfileAt(world, worker, target, worker.x, worker.y);
@@ -498,6 +516,8 @@ function updateWorkers(world, dt) {
         target.amount = 0;
         if (target.entityKind === 'resource') target.alive = false;
         worker.job = null;
+        worker.workAction = null;
+        worker.state = 'idle';
       }
     }
   }

@@ -1099,6 +1099,74 @@ function vlDrawAxe(g, wood, steel, x0, y0, x1, y1) {
   g.restore();
 }
 
+function vlDrawPickaxe(g, wood, steel, x0, y0, x1, y1) {
+  const a = Math.atan2(y1 - y0, x1 - x0);
+  const ux = Math.cos(a), uy = Math.sin(a);
+  const nx = -uy, ny = ux;
+  vlBone(g, wood, x0, y0, x1 + ux * 0.55, y1 + uy * 0.55, 0.92);
+
+  g.save();
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  g.strokeStyle = steel.line;
+  g.lineWidth = 1.55;
+  g.beginPath();
+  g.moveTo(x1 - nx * 3.15 - ux * 0.45, y1 - ny * 3.15 - uy * 0.45);
+  g.quadraticCurveTo(x1 + ux * 0.45, y1 + uy * 0.45,
+    x1 + nx * 3.15 - ux * 0.20, y1 + ny * 3.15 - uy * 0.20);
+  g.stroke();
+  g.strokeStyle = steel.base;
+  g.lineWidth = 0.95;
+  g.stroke();
+  g.strokeStyle = steel.edge;
+  g.globalAlpha = 0.8;
+  g.lineWidth = 0.22;
+  g.beginPath();
+  g.moveTo(x1 - nx * 2.90 - ux * 0.48, y1 - ny * 2.90 - uy * 0.48);
+  g.lineTo(x1 + nx * 2.90 - ux * 0.22, y1 + ny * 2.90 - uy * 0.22);
+  g.stroke();
+  g.restore();
+}
+
+function vlDrawHoe(g, wood, steel, x0, y0, x1, y1) {
+  const a = Math.atan2(y1 - y0, x1 - x0);
+  const ux = Math.cos(a), uy = Math.sin(a);
+  const nx = -uy, ny = ux;
+  vlBone(g, wood, x0, y0, x1 + ux * 0.55, y1 + uy * 0.55, 0.88);
+
+  const P = (dU, dN) => [x1 + ux * dU + nx * dN, y1 + uy * dU + ny * dN];
+  vlLitPath(g, (c) => {
+    const p0 = P(-0.25, -0.40), p1 = P(1.30, -0.55);
+    const p2 = P(1.65, 2.65), p3 = P(0.15, 2.75);
+    c.moveTo(p0[0], p0[1]);
+    c.lineTo(p1[0], p1[1]);
+    c.lineTo(p2[0], p2[1]);
+    c.quadraticCurveTo(P(0.75, 3.05)[0], P(0.75, 3.05)[1], p3[0], p3[1]);
+    c.closePath();
+  }, x1 - 3.5, y1 - 3.5, 7, 7, steel, { deep: true, edgeW: 0.24, edgeA: 0.95 });
+}
+
+function vlDrawSickle(g, wood, steel, x0, y0, x1, y1) {
+  const a = Math.atan2(y1 - y0, x1 - x0);
+  const ux = Math.cos(a), uy = Math.sin(a);
+  const nx = -uy, ny = ux;
+  vlBone(g, wood, x0, y0, x1 + ux * 0.35, y1 + uy * 0.35, 0.78);
+
+  g.save();
+  g.lineCap = 'round';
+  g.strokeStyle = steel.line;
+  g.lineWidth = 1.45;
+  g.beginPath();
+  g.moveTo(x1 - nx * 0.25, y1 - ny * 0.25);
+  g.quadraticCurveTo(x1 + ux * 2.8 + nx * 2.5, y1 + uy * 2.8 + ny * 2.5,
+    x1 + ux * 0.6 + nx * 3.25, y1 + uy * 0.6 + ny * 3.25);
+  g.stroke();
+  g.strokeStyle = steel.lit;
+  g.lineWidth = 0.72;
+  g.stroke();
+  g.restore();
+}
+
 /**
  * CARPENTER'S MALLET — the build tool.
  * Short haft, a barrel head of end-grain beech with two iron hoops. Reads as a
@@ -1247,7 +1315,7 @@ function vlDrawBundle(g, sack, rope, wood, cx, cy) {
 
 /* ---------------------------------------------------------------------------
    7. drawWorker — THE ENTRY POINT
-   Signature preserved exactly:  (g, nat, pose, legPhase)
+   Signature remains backward compatible: (g, nat, pose, legPhase, workAction)
 
      pose      'idle' | 'work' | 'build' | 'carry'
      legPhase  'idle'  : 0 stand, 1 stride A, 2 stride B
@@ -1262,7 +1330,7 @@ function vlDrawBundle(g, sack, rope, wood, cx, cy) {
    Neither is required; the painter degrades gracefully without them.
    ------------------------------------------------------------------------ */
 
-function drawWorker(g, nat, pose, legPhase) {
+function drawWorker(g, nat, pose, legPhase, workAction = 'chop') {
   const gathering = pose === 'work';
   const building  = pose === 'build';
   const carrying  = pose === 'carry';
@@ -1620,17 +1688,24 @@ function drawWorker(g, nat, pose, legPhase) {
      grips it — the same layering rule drawSoldier uses for the musket.     */
   let nearHand, nearElb;
 
+  const drawGatherTool = (x0, y0, x1, y1) => {
+    if (workAction === 'mine') vlDrawPickaxe(g, wood, steel, x0, y0, x1, y1);
+    else if (workAction === 'farm') vlDrawHoe(g, wood, steel, x0, y0, x1, y1);
+    else if (workAction === 'forage') vlDrawSickle(g, wood, steel, x0, y0, x1, y1);
+    else vlDrawAxe(g, wood, steel, x0, y0, x1, y1);
+  };
+
   if (gathering) {
     if (strike) {
       // DOWNSWING: the axe has come through and the bit is at the work, low
       // and forward. Haft runs from high-left grip to low-right head.
-      vlDrawAxe(g, wood, steel, 16.10, 12.60, 22.10, 16.30);
+      drawGatherTool(16.10, 12.60, 22.10, 16.30);
       nearElb  = [VL_BX + 3.05 + leanS, shY + 1.55];
       nearHand = [18.35, 14.05];
     } else {
       // WIND-UP: the axe is overhead and slightly back, the body opened out.
       // The near hand has choked up the haft toward the head.
-      vlDrawAxe(g, wood, steel, 14.90, 11.10, 19.30, 5.60);
+      drawGatherTool(14.90, 11.10, 19.30, 5.60);
       nearElb  = [VL_BX + 2.55 + leanS, shY - 0.85];
       nearHand = [16.85, 8.55];
     }

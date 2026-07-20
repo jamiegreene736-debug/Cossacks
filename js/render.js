@@ -13,6 +13,7 @@ import { drawCavalry, drawCannon } from './gfx/mounted.js';
 import { drawWorker, VL_W, VL_H, VL_AX, VL_AY } from './gfx/villager.js';
 import { getProductionArt } from './gfx/art-assets.js';
 import { fortificationCorners, isFortificationType } from './fortifications.js';
+import { getWorkerFrame } from './worker-animation.js';
 import { setBuildingRefs, bdResetCaches, drawResourceNode, drawFarm,
          drawFoundation, drawCompleteBuilding, drawBuilding } from './gfx/buildings.js';
 import { setCompositeRefs, setCompositeView, setCompositeTrampleLayer,
@@ -141,6 +142,124 @@ function mirror(c) {
   return m;
 }
 
+const PRODUCTION_TOOL_CLEAR = Object.freeze({
+  england: [[6.8, 4.5], [30.2, 23.6]],
+  ottoman: [[6.7, 4.8], [14.5, 25.0]],
+});
+
+function paintProductionToolHead(g, action, grip, head) {
+  const angle = Math.atan2(head[1] - grip[1], head[0] - grip[0]);
+  const steel = '#9da49e';
+  const steelEdge = '#e8e0c7';
+  const steelLine = '#292b29';
+
+  g.save();
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  g.strokeStyle = '#2b2117';
+  g.lineWidth = 1.45;
+  g.beginPath();
+  g.moveTo(grip[0], grip[1]);
+  g.lineTo(head[0], head[1]);
+  g.stroke();
+  g.strokeStyle = '#8a5b30';
+  g.lineWidth = 0.8;
+  g.stroke();
+
+  g.translate(head[0], head[1]);
+  g.rotate(angle);
+  g.strokeStyle = steelLine;
+  g.fillStyle = steel;
+
+  if (action === 'mine') {
+    g.lineWidth = 1.65;
+    g.beginPath();
+    g.moveTo(-0.35, -3.5);
+    g.quadraticCurveTo(0.75, 0, -0.05, 3.5);
+    g.stroke();
+    g.strokeStyle = steelEdge;
+    g.lineWidth = 0.45;
+    g.stroke();
+  } else if (action === 'farm') {
+    g.lineWidth = 0.8;
+    g.strokeRect(-0.35, 0.1, 2.6, 3.15);
+    g.fillRect(-0.35, 0.1, 2.6, 3.15);
+    g.strokeStyle = steelEdge;
+    g.lineWidth = 0.35;
+    g.beginPath();
+    g.moveTo(1.95, 0.45);
+    g.lineTo(1.95, 2.9);
+    g.stroke();
+  } else if (action === 'forage') {
+    g.lineWidth = 1.55;
+    g.beginPath();
+    g.moveTo(0, 0.1);
+    g.quadraticCurveTo(3.6, 2.6, 0.5, 3.8);
+    g.stroke();
+    g.strokeStyle = steelEdge;
+    g.lineWidth = 0.45;
+    g.stroke();
+  } else if (action === 'build') {
+    g.lineWidth = 0.8;
+    g.strokeRect(-0.7, -2.8, 3.2, 5.6);
+    g.fillStyle = '#745137';
+    g.fillRect(-0.7, -2.8, 3.2, 5.6);
+    g.strokeStyle = steelEdge;
+    g.lineWidth = 0.35;
+    g.beginPath();
+    g.moveTo(0, -2.5);
+    g.lineTo(0, 2.5);
+    g.stroke();
+  } else {
+    g.lineWidth = 0.85;
+    g.beginPath();
+    g.moveTo(-0.25, -0.55);
+    g.lineTo(2.9, -2.25);
+    g.quadraticCurveTo(3.75, 0.3, 2.2, 2.85);
+    g.lineTo(-0.2, 0.8);
+    g.closePath();
+    g.fill();
+    g.stroke();
+    g.strokeStyle = steelEdge;
+    g.lineWidth = 0.35;
+    g.beginPath();
+    g.moveTo(2.65, -1.9);
+    g.quadraticCurveTo(3.45, 0.3, 2.05, 2.45);
+    g.stroke();
+  }
+  g.restore();
+}
+
+function paintProductionWorkerTool(g, nationKey, action, phase) {
+  const oldHead = PRODUCTION_TOOL_CLEAR[nationKey]?.[phase];
+  if (oldHead) {
+    g.save();
+    g.globalCompositeOperation = 'destination-out';
+    g.beginPath();
+    g.ellipse(oldHead[0], oldHead[1], 3.8, 3.8, 0, 0, Math.PI * 2);
+    g.fill();
+    g.restore();
+  }
+
+  const grip = phase === 0 ? [17.6, 13.2] : [21.0, 23.8];
+  const head = phase === 0 ? [6.7, 4.7] : [32.4, 30.2];
+  paintProductionToolHead(g, action, grip, head);
+
+  if (phase === 0) return;
+  const chip = action === 'farm' ? '#725632'
+    : action === 'forage' ? '#8ba052'
+      : action === 'chop' || action === 'build' ? '#c09a61' : '#c8c2ab';
+  g.save();
+  g.fillStyle = chip;
+  g.globalAlpha = 0.9;
+  for (const [x, y, r] of [[35.1, 27.8, 0.7], [36.0, 30.7, 0.55], [34.8, 33.0, 0.45]]) {
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.restore();
+}
+
 
 
 
@@ -150,20 +269,28 @@ function buildNationSprites(nationKey, side = 0) {
   const nat = { ...NATIONS[nationKey], rim: SIDE_RIM[side] };
   const out = {};
   const productionWorker = getProductionArt(PRODUCTION_WORKER_ART[nationKey]);
+  const workerFrames = [
+    ['idle', 0, null, 0], ['idle', 1, null, 1], ['idle', 2, null, 2],
+    ['build', 0, 'build', 3], ['build', 1, 'build', 0],
+    ['work', 0, 'chop', 3], ['work', 1, 'chop', 0],
+    ['work', 0, 'mine', 3], ['work', 1, 'mine', 0],
+    ['work', 0, 'farm', 3], ['work', 1, 'farm', 0],
+    ['work', 0, 'forage', 3], ['work', 1, 'forage', 0],
+  ];
   const workerDef = productionWorker ? {
     w: PRODUCTION_WORKER.w,
     h: PRODUCTION_WORKER.h,
     ax: PRODUCTION_WORKER.ax,
     ay: PRODUCTION_WORKER.ay,
     production: productionWorker,
-    frames: [['idle', 0], ['idle', 1], ['idle', 2], ['work', 0]],
+    frames: workerFrames,
   } : {
     w: VL_W,
     h: VL_H,
     ax: VL_AX,
     ay: VL_AY,
-    frames: [['idle', 0], ['idle', 1], ['idle', 2], ['work', 0]],
-    painter: (g, pose, leg) => drawWorker(g, nat, pose, leg),
+    frames: workerFrames,
+    painter: (g, pose, leg, action) => drawWorker(g, nat, pose, leg, action),
   };
 
   const defs = {
@@ -189,19 +316,20 @@ function buildNationSprites(nationKey, side = 0) {
   for (const [type, def] of Object.entries(defs)) {
     const right = [], left = [];
     for (let frameIndex = 0; frameIndex < def.frames.length; frameIndex++) {
-      const [pose, leg] = def.frames[frameIndex];
+      const [pose, leg, action = null, sourceFrame = frameIndex] = def.frames[frameIndex];
       const [c, g] = frameCanvas(def.w, def.h);
       if (def.production) {
         g.imageSmoothingEnabled = true;
         g.imageSmoothingQuality = 'high';
         g.drawImage(
           def.production,
-          frameIndex * PRODUCTION_WORKER.sourceW, 0,
+          sourceFrame * PRODUCTION_WORKER.sourceW, 0,
           PRODUCTION_WORKER.sourceW, PRODUCTION_WORKER.sourceH,
           0, 0, def.w, def.h,
         );
+        if (action) paintProductionWorkerTool(g, nationKey, action, leg);
       } else {
-        def.painter(g, pose, leg);
+        def.painter(g, pose, leg, action);
       }
       right.push(c);
       left.push(mirror(c));
@@ -415,8 +543,8 @@ export function draw(
     let frame;
     if (u.type === 'gun') {
       frame = u.fireT > 0 ? 1 : 0;
-    } else if (u.type === 'villager' && u.state === 'work') {
-      frame = 3;
+    } else if (u.type === 'villager') {
+      frame = getWorkerFrame(u);
     } else if (u.moving) {
       frame = 1 + (((u.animT * 6) | 0) % 2);
     } else if (u.fireT > 0) {
