@@ -30,3 +30,8 @@ export function circleIntersectsBounds(entity, bounds, extraRadius = 0) {
   return entity.x + radius >= bounds.left && entity.x - radius <= bounds.right
     && entity.y + radius >= bounds.top && entity.y - radius <= bounds.bottom;
 }
+
+export function shouldRenderUnitHealthBar(unit) {
+  return Boolean(unit?.alive && unit.type !== 'villager'
+    && Number.isFinite(unit.hp) && Number.isFinite(unit.maxHp) && unit.maxHp > 0);
+}

@@ -124,15 +124,15 @@ export const NATIONS = {
     name: 'England', adjective: 'English',
     coat: '#b33a38', trim: '#f0e7d0', skin: '#e0ad82', roof: '#536274',
     headgear: 'tricorn',
-    blurb: 'Disciplined redcoats and 15% more food from cultivated fields.',
-    mults: { reload: 0.9, farmRate: 1.15 },
+    blurb: 'Productive farms yield 15% more food without changing troop strength.',
+    mults: { farmRate: 1.15 },
   },
   ottoman: {
     name: 'Ottoman Empire', adjective: 'Ottoman',
     coat: '#2f7768', trim: '#d7b64b', skin: '#c99669', roof: '#397466',
     headgear: 'turban',
-    blurb: 'Swift cavalry and villagers train 10% faster.',
-    mults: { cavSpeed: 1.15, villagerTrain: 0.9 },
+    blurb: 'Villagers train 10% faster without changing troop strength.',
+    mults: { villagerTrain: 0.9 },
   },
 };
 

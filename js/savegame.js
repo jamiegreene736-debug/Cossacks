@@ -4,10 +4,10 @@
 
 import { Commander } from './ai.js';
 import {
-  NATIONS, UNIT_TYPES, DEFAULT_CPU_DIFFICULTY, normalizeCpuDifficulty,
+  NATIONS, DEFAULT_CPU_DIFFICULTY, normalizeCpuDifficulty,
 } from './config.js';
 import { repairFieldAttachments, reserveEntityIds } from './economy.js';
-import { createWorld, reserveUnitIds } from './sim.js';
+import { createWorld, getUnitRuntimeStats, reserveUnitIds } from './sim.js';
 
 export const SAVE_KEY = 'empires1700.campaign.v1';
 export const SAVE_VERSION = 1;
@@ -129,6 +129,18 @@ function validateSnapshot(snapshot) {
   }
 }
 
+function applyCurrentUnitBalance(unit) {
+  const previousMaxHp = Number(unit.maxHp);
+  const previousHp = Number(unit.hp);
+  const healthRatio = Number.isFinite(previousMaxHp) && previousMaxHp > 0 && Number.isFinite(previousHp)
+    ? Math.max(0, Math.min(1, previousHp / previousMaxHp)) : 1;
+  const stats = getUnitRuntimeStats(unit.type);
+  Object.assign(unit, stats);
+  unit.hp = stats.maxHp * healthRatio;
+  unit.reload = Math.max(0, Math.min(Number(unit.reload) || 0, stats.reloadTime));
+  unit.meleeCd = Math.max(0, Math.min(Number(unit.meleeCd) || 0, stats.meleeRate));
+}
+
 export function restoreGameSnapshot(snapshot) {
   validateSnapshot(snapshot);
   const data = snapshot.world;
@@ -157,14 +169,7 @@ export function restoreGameSnapshot(snapshot) {
   const entities = new Map();
   for (const entity of [...world.units, ...world.buildings, ...world.resources]) entities.set(entity.id, entity);
   for (const unit of world.units) {
-    if (unit.type === 'villager') {
-      const civilian = UNIT_TYPES.villager;
-      unit.range = civilian.range;
-      unit.acquire = civilian.acquire;
-      unit.reloadTime = civilian.reload;
-      unit.dmg = civilian.dmg;
-      unit.acc = civilian.acc;
-    }
+    applyCurrentUnitBalance(unit);
     unit.selected = false;
     unit.target = entities.get(unit.targetId) || null;
     unit.orderTarget = entities.get(unit.orderTargetId) || null;

@@ -1,5 +1,6 @@
 // Frame composition: haze, grade, vignette, selection, HUD marks, minimap.
 import { WORLD } from '../config.js';
+import { shouldRenderUnitHealthBar } from '../render-performance.js';
 let camera = { x: 0, y: 0, zoom: 1 };
 let cw = 0, ch = 0, dpr = 1;
 let mmCanvas = null, mmCtx = null, mmTerrain = null;
@@ -22,8 +23,8 @@ function setCompositeView(w, h, d) { cw = w; ch = h; dpr = d; }
 //    * The full-screen passes are 3 drawImage + 1 fillRect + 1 pattern fillRect.
 //      Their cost is a function of viewport pixels, NOT of unit count.
 //    * Per selected unit: exactly ONE drawImage (baked ring or baked pip).
-//    * Per damaged selected unit: exactly ONE drawImage (baked HP-bar atlas,
-//      source-rect indexed — no fillStyle assignment, no path, no gradient).
+//    * Per visible soldier: exactly ONE drawImage from the baked HP-bar atlas,
+//      source-rect indexed — no fillStyle assignment, path, or gradient work.
 //    * Minimap unit plotting is density accumulation into Int16Arrays:
 //      ~6 integer ops per unit, then ONE putImageData + ONE drawImage.
 //    * ctx.filter / ctx.shadowBlur appear ONLY inside cBuild* bake functions.
@@ -1395,14 +1396,13 @@ function drawBuildingBars(ctx, buildings) {
 /**
  * Health bars + rout marks, drawn ABOVE the unit sprites, in world space.
  * One 9-argument drawImage per bar out of a single baked atlas. The bar is
- * sized 1/zoom so it stays a constant, readable size on screen, and it is
- * suppressed entirely below 0.70 zoom where a 14px bar becomes 6px of noise.
+ * sized 1/zoom so it stays a constant, readable size on screen. Every living
+ * military unit receives one; civilians retain only their rout mark.
  *
  * `units` is the same visible buffer passed to drawSelection.
  */
 function drawHealthBars(ctx, units, alpha, spritesRef) {
   const z = camera.zoom;
-  if (z < C_HP_MIN_ZOOM) return;
   if (!cmp.hp || !cmp.rout || !spritesRef) return;
   const atlas = cmp.hp;
   const w = C_BAR_W / z, h = C_BAR_H / z;
@@ -1412,30 +1412,31 @@ function drawHealthBars(ctx, units, alpha, spritesRef) {
 
   for (let i = 0; i < n; i++) {
     const u = units[i];
-    // Bars are strictly opt-in (selected + damaged) so a 1,000-man box-select
-    // of healthy troops adds zero draws. The rout chevron is unconditional
-    // because a rout you cannot see is a rout you cannot rally — but it is one
-    // drawImage, only for broken units, and only above 0.70 zoom where the
-    // frustum is already culling most of the map.
+    // Soldiers always expose their status on both sides. The baked atlas keeps
+    // this to one draw call per visible soldier even in mass battles.
     const routing = u.state === 'flee';
-    const showBar = u.selected && u.hp < u.maxHp;
+    const showBar = shouldRenderUnitHealthBar(u);
     if (!routing && !showBar) continue;
 
     const ix = u.px + (u.x - u.px) * alpha;
     const iy = u.py + (u.y - u.py) * alpha - (u.wallElevation || 0);
     const sp = spritesRef[u.side][u.type];
-    let top = iy - sp.ay - 2;
+    let top = -sp.ay - 2;
+    ctx.save();
+    ctx.translate(ix, iy);
+    ctx.rotate(-(camera.rotation || 0));
 
     if (routing) {
-      ctx.drawImage(rm.c, ix - rw * 0.5, top - rh, rw, rh);
+      ctx.drawImage(rm.c, -rw * 0.5, top - rh, rw, rh);
       top -= rh + 0.6 / z;
     }
     if (showBar) {
       let step = (u.hp / u.maxHp * C_HP_STEPS + 0.5) | 0;
       if (step < 0) step = 0; else if (step > C_HP_STEPS) step = C_HP_STEPS;
       ctx.drawImage(atlas, 0, step * C_HP_ROW, C_HP_COL, C_HP_ROW,
-        ix - w * 0.5, top - h, w, h);
+        -w * 0.5, top - h, w, h);
     }
+    ctx.restore();
   }
 }
 
