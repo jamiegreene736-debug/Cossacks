@@ -67,6 +67,12 @@ A battle can put thousands of units on the field, so:
 - Work done **per unit per frame** must stay at about one `drawImage`. Per-unit
   gradients, shadow ellipses, `save`/`restore` churn, `ctx.filter` or
   `ctx.shadowBlur` in the hot loop are regressions.
+- The main backing canvas is capped at 1.5 device pixels per CSS pixel. This
+  keeps the three full-screen lighting passes crisp on Retina displays without
+  paying the 4x fill cost of an uncapped 2x backing store.
+- Buildings, resources, units, and the persistent decal layer are clipped to
+  the current world viewport before sorting or blitting. New world-space
+  painters must preserve that boundary.
 - `ctx.filter` and `ctx.shadowBlur` are acceptable **only** in once-baked code.
 
 Measured at 1,625 living units: 0.4ms median frame draw against a 16.7ms budget.

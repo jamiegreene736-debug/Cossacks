@@ -73,6 +73,26 @@ export function workerSoundKind(worker, target) {
   return kind === 'food' ? 'harvest' : ['wood', 'gold', 'stone'].includes(kind) ? kind : null;
 }
 
+export function findNearestAudibleMatch(entities, listenerX, predicate) {
+  let nearest = null;
+  let nearestDistance = Infinity;
+  let count = 0;
+  for (const entity of entities || []) {
+    if (!predicate(entity)) continue;
+    count++;
+    const distance = Math.abs(entity.x - listenerX);
+    if (distance < nearestDistance) {
+      nearest = entity;
+      nearestDistance = distance;
+    }
+  }
+  return { entity: nearest, count };
+}
+
+export function findNearestAudibleEntity(entities, listenerX, predicate) {
+  return findNearestAudibleMatch(entities, listenerX, predicate).entity;
+}
+
 function midiToHz(midi) { return 440 * NOTE ** (midi - 69); }
 function shuffled(values) {
   const result = [...values];
@@ -101,6 +121,7 @@ class Soundscape {
     this.trackBag = [];
     this.currentTrack = null;
     this.pendingTrack = null;
+    this.scheduledTrack = null;
     this.lastScheduledTrack = null;
     this.playerNation = 'england';
     this.musketQueue = 0;
@@ -257,6 +278,7 @@ class Soundscape {
     this.trackBag = [];
     this.currentTrack = null;
     this.pendingTrack = null;
+    this.scheduledTrack = null;
     this.lastScheduledTrack = null;
     this.musicNextTime = this.ctx.currentTime + 0.12;
     this.setPaused(false);
@@ -266,6 +288,7 @@ class Soundscape {
     this.stopScheduledMusic();
     this.currentTrack = null;
     this.pendingTrack = null;
+    this.scheduledTrack = null;
     this.lastScheduledTrack = null;
     this.musicNextTime = Infinity;
     if (this.ctx) {
@@ -516,25 +539,31 @@ class Soundscape {
   updateWorkSounds(dt, world) {
     this.workCooldown -= dt;
     if (this.workCooldown > 0 || world?.state !== 'running') return;
-    const workers = world.units.filter(unit => unit.alive && unit.type === 'villager' && unit.state === 'work' && unit.job);
-    if (!workers.length) return;
-    workers.sort((a, b) => Math.abs(a.x - this.listenerX) - Math.abs(b.x - this.listenerX));
-    const nearby = workers.slice(0, Math.min(10, workers.length));
-    const worker = nearby[Math.floor(Math.random() * nearby.length)];
+    const workers = findNearestAudibleMatch(world.units, this.listenerX,
+      unit => unit.alive && unit.type === 'villager' && unit.state === 'work' && unit.job);
+    const worker = workers.entity;
+    if (!worker) {
+      this.workCooldown = 0.35;
+      return;
+    }
     const target = world.resources.find(resource => resource.id === worker.job.targetId)
       || world.buildings.find(building => building.id === worker.job.targetId);
     const kind = workerSoundKind(worker, target);
     if (kind) this.work(kind, worker.x);
-    this.workCooldown = Math.max(0.22, 0.78 / Math.sqrt(Math.min(9, workers.length))) + Math.random() * 0.12;
+    this.workCooldown = Math.max(0.22, 0.78 / Math.sqrt(Math.min(9, workers.count)))
+      + Math.random() * 0.12;
   }
 
   updateMovementSounds(dt, world) {
     this.movementCooldown -= dt;
     if (this.movementCooldown > 0 || world?.state !== 'running') return;
-    const movers = world.units.filter(unit => unit.alive && unit.moving);
-    if (!movers.length) return;
-    movers.sort((a, b) => Math.abs(a.x - this.listenerX) - Math.abs(b.x - this.listenerX));
-    const unit = movers[Math.floor(Math.random() * Math.min(14, movers.length))];
+    const movers = findNearestAudibleMatch(world.units, this.listenerX,
+      candidate => candidate.alive && candidate.moving);
+    const unit = movers.entity;
+    if (!unit) {
+      this.movementCooldown = 0.18;
+      return;
+    }
     const time = this.ctx.currentTime;
     const pan = this.spatialPan(unit.x);
     const level = this.spatialLevel(unit.x);
@@ -548,12 +577,17 @@ class Soundscape {
     } else {
       this.noiseBurst(time, 0.07, { filterType: 'lowpass', filter: 820, volume: 0.026 * level, pan, reverb: 0.025 });
     }
-    this.movementCooldown = Math.max(0.095, 0.42 / Math.sqrt(Math.min(16, movers.length))) + Math.random() * 0.045;
+    this.movementCooldown = Math.max(0.095, 0.42 / Math.sqrt(Math.min(16, movers.count)))
+      + Math.random() * 0.045;
   }
 
   updateNatureSounds(dt, world) {
     this.natureCooldown -= dt;
-    if (this.natureCooldown > 0 || world?.state !== 'running' || this.combatIntensity(world) >= 5) return;
+    if (this.natureCooldown > 0 || world?.state !== 'running') return;
+    if (this.combatIntensity(world) >= 5) {
+      this.natureCooldown = 1.5;
+      return;
+    }
     const time = this.ctx.currentTime;
     const pan = Math.random() * 1.4 - 0.7;
     const start = 1850 + Math.random() * 750;
@@ -565,13 +599,16 @@ class Soundscape {
   updateFireSounds(dt, world) {
     this.fireCooldown -= dt;
     if (this.fireCooldown > 0 || world?.state !== 'running') return;
-    const damaged = world.buildings.filter(building => building.alive && building.complete && building.hp / building.maxHp < 0.55);
-    if (!damaged.length) return;
-    damaged.sort((a, b) => Math.abs(a.x - this.listenerX) - Math.abs(b.x - this.listenerX));
-    const building = damaged[Math.floor(Math.random() * Math.min(4, damaged.length))];
+    const damaged = findNearestAudibleMatch(world.buildings, this.listenerX,
+      candidate => candidate.alive && candidate.complete && candidate.hp / candidate.maxHp < 0.55);
+    const building = damaged.entity;
+    if (!building) {
+      this.fireCooldown = 0.45;
+      return;
+    }
     const severity = 1 - building.hp / building.maxHp;
     this.fireCrackle(building.x, severity);
-    this.fireCooldown = 0.11 + Math.random() * 0.22 / Math.sqrt(Math.min(6, damaged.length));
+    this.fireCooldown = 0.11 + Math.random() * 0.22 / Math.sqrt(Math.min(6, damaged.count));
   }
 
   combatIntensity(world) {
@@ -596,57 +633,65 @@ class Soundscape {
     return this.trackBag.shift();
   }
 
-  scheduleTrack(trackId, startTime) {
+  scheduleTrackBar(trackId, barIndex, startTime) {
     const track = TRACKS[trackId];
     const beat = 60 / track.tempo;
     const bar = beat * 4;
     const scaleNote = (degree, octave = 0) => midiToHz(track.root + track.scale[((degree % 7) + 7) % 7] + 12 * octave);
-    for (let barIndex = 0; barIndex < 8; barIndex++) {
-      const barTime = startTime + barIndex * bar;
-      const chord = track.chords[barIndex];
-      for (let voice = 0; voice < chord.length; voice++) {
-        const degree = chord[voice];
-        const options = track.color === 'lute'
-          ? { type: 'triangle', attack: 0.006, release: bar * 0.7, filter: 1900, volume: 0.017 }
-          : { type: 'sawtooth', attack: 0.32, release: 0.75, filter: track.color === 'march' ? 1250 : 980, volume: 0.011 };
-        this.tone(scaleNote(degree, voice === 2 ? 0 : -1), barTime, bar * 0.96, {
-          ...options, bus: this.music, pan: (voice - 1) * 0.28, reverb: 0.56,
-        });
-      }
-      this.tone(scaleNote(chord[0], -2), barTime, beat * 1.75, {
-        type: 'triangle', attack: 0.035, release: 0.6, filter: 620, volume: 0.027,
-        bus: this.music, pan: -0.08, reverb: 0.18,
+    const chord = track.chords[barIndex];
+    for (let voice = 0; voice < chord.length; voice++) {
+      const degree = chord[voice];
+      const options = track.color === 'lute'
+        ? { type: 'triangle', attack: 0.006, release: bar * 0.7, filter: 1900, volume: 0.017 }
+        : { type: 'sawtooth', attack: 0.32, release: 0.75, filter: track.color === 'march' ? 1250 : 980, volume: 0.011 };
+      this.tone(scaleNote(degree, voice === 2 ? 0 : -1), startTime, bar * 0.96, {
+        ...options, bus: this.music, pan: (voice - 1) * 0.28, reverb: 0.56,
       });
-      this.tone(scaleNote(chord[0], -2), barTime + beat * 2, beat * 1.7, {
-        type: 'triangle', attack: 0.025, release: 0.55, filter: 580, volume: 0.022,
-        bus: this.music, pan: 0.08, reverb: 0.16,
+    }
+    this.tone(scaleNote(chord[0], -2), startTime, beat * 1.75, {
+      type: 'triangle', attack: 0.035, release: 0.6, filter: 620, volume: 0.027,
+      bus: this.music, pan: -0.08, reverb: 0.18,
+    });
+    this.tone(scaleNote(chord[0], -2), startTime + beat * 2, beat * 1.7, {
+      type: 'triangle', attack: 0.025, release: 0.55, filter: 580, volume: 0.022,
+      bus: this.music, pan: 0.08, reverb: 0.16,
+    });
+    for (let step = 0; step < 8; step++) {
+      const degree = track.motif[(barIndex * 2 + step) % track.motif.length];
+      if (degree === null) continue;
+      const noteTime = startTime + step * beat / 2;
+      const isLute = track.color === 'lute';
+      this.tone(scaleNote(degree, 0), noteTime, isLute ? beat * 0.72 : beat * 0.92, {
+        type: isLute ? 'triangle' : track.color === 'reed' ? 'square' : 'triangle',
+        attack: isLute ? 0.005 : 0.045,
+        release: isLute ? 0.48 : 0.28,
+        filter: isLute ? 2400 : track.color === 'reed' ? 1250 : 1800,
+        volume: isLute ? 0.028 : 0.021,
+        bus: this.music, pan: step % 2 ? 0.2 : -0.2, reverb: isLute ? 0.36 : 0.5,
       });
-      for (let step = 0; step < 8; step++) {
-        const degree = track.motif[(barIndex * 2 + step) % track.motif.length];
-        if (degree === null) continue;
-        const noteTime = barTime + step * beat / 2;
-        const isLute = track.color === 'lute';
-        this.tone(scaleNote(degree, 0), noteTime, isLute ? beat * 0.72 : beat * 0.92, {
-          type: isLute ? 'triangle' : track.color === 'reed' ? 'square' : 'triangle',
-          attack: isLute ? 0.005 : 0.045,
-          release: isLute ? 0.48 : 0.28,
-          filter: isLute ? 2400 : track.color === 'reed' ? 1250 : 1800,
-          volume: isLute ? 0.028 : 0.021,
-          bus: this.music, pan: step % 2 ? 0.2 : -0.2, reverb: isLute ? 0.36 : 0.5,
-        });
-      }
-      if (track.color === 'lute' || track.color === 'march') {
-        for (const drumBeat of track.color === 'march' ? [0, 1, 2, 3] : [0, 1.5, 2.75]) {
-          const drumTime = barTime + drumBeat * beat;
-          this.noiseBurst(drumTime, 0.1, { filterType: 'lowpass', filter: 480, volume: track.color === 'march' ? 0.035 : 0.022, bus: this.music, pan: -0.12, reverb: 0.18 });
-          this.tone(track.color === 'march' ? 92 : 118, drumTime, 0.12, { endFrequency: 62, volume: 0.024, bus: this.music, pan: -0.12, reverb: 0.12 });
-        }
+    }
+    if (track.color === 'lute' || track.color === 'march') {
+      for (const drumBeat of track.color === 'march' ? [0, 1, 2, 3] : [0, 1.5, 2.75]) {
+        const drumTime = startTime + drumBeat * beat;
+        this.noiseBurst(drumTime, 0.1, { filterType: 'lowpass', filter: 480, volume: track.color === 'march' ? 0.035 : 0.022, bus: this.music, pan: -0.12, reverb: 0.18 });
+        this.tone(track.color === 'march' ? 92 : 118, drumTime, 0.12, { endFrequency: 62, volume: 0.024, bus: this.music, pan: -0.12, reverb: 0.12 });
       }
     }
     this.lastScheduledTrack = trackId;
-    if (startTime <= this.ctx.currentTime + 0.12) this.currentTrack = trackId;
-    else this.pendingTrack = { id: trackId, startTime };
-    this.musicNextTime = startTime + bar * 8 + 0.9;
+    if (barIndex === 0) {
+      if (startTime <= this.ctx.currentTime + 0.12) this.currentTrack = trackId;
+      else this.pendingTrack = { id: trackId, startTime };
+    }
+    this.musicNextTime = startTime + bar + (barIndex === track.chords.length - 1 ? 0.9 : 0);
+  }
+
+  scheduleNextMusicBar(world) {
+    if (!this.scheduledTrack || this.scheduledTrack.bar >= TRACKS[this.scheduledTrack.id].chords.length) {
+      this.scheduledTrack = { id: this.nextTrack(world), bar: 0 };
+    }
+    const startTime = Math.max(this.ctx.currentTime + 0.08, this.musicNextTime);
+    this.scheduleTrackBar(this.scheduledTrack.id, this.scheduledTrack.bar, startTime);
+    this.scheduledTrack.bar++;
   }
 
   update(dt, world, listenerX = this.listenerX) {
@@ -672,8 +717,8 @@ class Soundscape {
     this.updateMovementSounds(dt, world);
     this.updateFireSounds(dt, world);
     this.updateNatureSounds(dt, world);
-    if (world && this.musicNextTime <= this.ctx.currentTime + 2.5) {
-      this.scheduleTrack(this.nextTrack(world), Math.max(this.ctx.currentTime + 0.08, this.musicNextTime));
+    if (world && this.musicNextTime <= this.ctx.currentTime + 1) {
+      this.scheduleNextMusicBar(world);
     }
   }
 }

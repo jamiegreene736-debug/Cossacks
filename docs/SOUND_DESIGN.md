@@ -43,6 +43,12 @@ cues are shuffled, and sustained combat promotes the battle cue at the next
 transition. All cues share a restrained period palette built from string,
 plucked-lute, reed, bass, and frame-drum synthesis.
 
+The score schedules one bar at a time with a short look-ahead instead of
+constructing a full track's audio graph in one animation frame. Ambient worker,
+movement, fire, and nature probes also run on cooldowns and use allocation-free
+linear searches, including when no matching source exists, so idle and mass-unit
+scenes do not repeatedly scan and sort the whole army.
+
 The pause council exposes independent master, effects, and music levels. “Music
 while paused” can either lower the music to 16% of its chosen level or mute the
 music bus. Gain changes ramp smoothly to avoid clicks, and the selected behavior
