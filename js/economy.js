@@ -31,6 +31,7 @@ export const MILL_FIELD_OFFSETS = Object.freeze([
   Object.freeze({ x: 0, y: 122 }),
 ]);
 const MILL_FIELD_PICK_RADIUS = 340;
+export const AUTO_BUILD_SEARCH_RADIUS = 420;
 
 const FIELD_WORK_POSITIONS = Object.freeze([
   [-0.34, 0.05], [-0.10, 0.06], [0.14, 0.08], [0.36, 0.10],
@@ -1013,7 +1014,23 @@ export function getBuildingEconomyStats(world, building) {
   };
 }
 
-function advanceBuildQueue(world, worker) {
+function nearbyUnfinishedConstruction(world, worker, origin) {
+  const originX = Number.isFinite(origin?.x) ? origin.x : worker.x;
+  const originY = Number.isFinite(origin?.y) ? origin.y : worker.y;
+  let nearest = null;
+  let nearestDistance = AUTO_BUILD_SEARCH_RADIUS;
+  for (const building of world.buildings) {
+    if (!building.alive || building.complete || building.side !== worker.side
+      || building.id === origin?.id) continue;
+    const distance = Math.hypot(building.x - originX, building.y - originY);
+    if (distance > nearestDistance) continue;
+    nearest = building;
+    nearestDistance = distance;
+  }
+  return nearest;
+}
+
+function advanceBuildQueue(world, worker, origin = null) {
   const queue = Array.isArray(worker.job?.queue) ? worker.job.queue : [];
   while (queue.length) {
     const targetId = queue.shift();
@@ -1021,6 +1038,13 @@ function advanceBuildQueue(world, worker) {
     if (!target?.alive || target.complete) continue;
     worker.job = { kind: 'build', targetId, queue };
     worker.workAction = 'build';
+    return true;
+  }
+  const nearby = nearbyUnfinishedConstruction(world, worker, origin);
+  if (nearby) {
+    worker.job = { kind: 'build', targetId: nearby.id };
+    worker.workAction = 'build';
+    clearVillagerPath(worker);
     return true;
   }
   return false;
@@ -1031,7 +1055,7 @@ function updateWorkers(world, dt) {
     if (!worker.alive || worker.type !== 'villager' || !worker.job) continue;
     const target = findTarget(world, worker.job.targetId);
     if (!target || !target.alive) {
-      if (worker.job.kind === 'build' && advanceBuildQueue(world, worker)) continue;
+      if (worker.job.kind === 'build' && advanceBuildQueue(world, worker, target)) continue;
       worker.job = null;
       worker.workAction = null;
       if (worker.state === 'work') worker.state = 'idle';
@@ -1039,7 +1063,7 @@ function updateWorkers(world, dt) {
     }
     if (worker.job.kind === 'build' && target.complete) {
       if (target.type === 'farm') worker.job = { kind: 'gather', targetId: target.id };
-      else if (!advanceBuildQueue(world, worker)) worker.job = null;
+      else if (!advanceBuildQueue(world, worker, target)) worker.job = null;
       worker.workAction = resolveWorkerAction(worker.job, target);
       if (!worker.job && worker.state === 'work') worker.state = 'idle';
       continue;

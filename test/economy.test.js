@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { createWorld, damage, spawnUnit, step } from '../js/sim.js';
 import { Commander } from '../js/ai.js';
 import {
-  assignGatherers, createBuilding, findNearestResource, findResourceAt, placeBuilding,
+  assignBuilders, assignGatherers, AUTO_BUILD_SEARCH_RADIUS,
+  createBuilding, findNearestResource, findResourceAt, placeBuilding,
   getBuildingEconomyStats, getEconomyBreakdown, getFieldAttachmentStatus,
   getFieldWorkPoint, getGatherAssignmentStats, getMillFieldSlots,
   getRallyTarget, queueUnit, setRallyPoint, stepEconomy, validatePlacement,
@@ -82,6 +83,51 @@ test('Town Center workplace and construction rallies automatically assign new vi
   const builder = trainRalliedVillager(world, townCenter);
   assert.deepEqual(builder.job, { kind: 'build', targetId: house.id });
   assert.equal(builder.workAction, 'build');
+});
+
+test('builders automatically continue nearby unfinished structures but ignore distant work', () => {
+  const world = makeWorld();
+  const first = createBuilding(0, 'house', 1000, 1500, false);
+  const nearbyWall = createBuilding(0, 'wall', 1260, 1500, false, { orientation: 'horizontal' });
+  const distantHouse = createBuilding(
+    0, 'house', nearbyWall.x + AUTO_BUILD_SEARCH_RADIUS + 80, 1500, false,
+  );
+  first.progress = 0.99;
+  nearbyWall.progress = 0.99;
+  world.buildings.push(first, nearbyWall, distantHouse);
+  const worker = spawnUnit(world, 0, 'villager', first.x + first.radius + 5, first.y);
+
+  assert.equal(assignBuilders(world, [worker], first), true);
+  stepEconomy(world, 1);
+  assert.equal(first.complete, true);
+  stepEconomy(world, 0.01);
+  assert.deepEqual(worker.job, { kind: 'build', targetId: nearbyWall.id });
+
+  worker.x = nearbyWall.x + nearbyWall.radius + 5;
+  worker.y = nearbyWall.y;
+  stepEconomy(world, 1);
+  assert.equal(nearbyWall.complete, true);
+  stepEconomy(world, 0.01);
+  assert.equal(worker.job, null);
+  assert.equal(distantHouse.complete, false);
+});
+
+test('an explicit wall-run build queue takes priority over opportunistic nearby work', () => {
+  const world = makeWorld();
+  const first = createBuilding(0, 'wall', 1000, 1500, false, { orientation: 'horizontal' });
+  const queuedWall = createBuilding(0, 'wall', 1350, 1500, false, { orientation: 'horizontal' });
+  const closerHouse = createBuilding(0, 'house', 1120, 1500, false);
+  first.progress = 0.99;
+  world.buildings.push(first, queuedWall, closerHouse);
+  const worker = spawnUnit(world, 0, 'villager', first.x + first.radius + 5, first.y);
+  worker.job = { kind: 'build', targetId: first.id, queue: [queuedWall.id] };
+
+  stepEconomy(world, 1);
+  stepEconomy(world, 0.01);
+
+  assert.equal(first.complete, true);
+  assert.deepEqual(worker.job, { kind: 'build', targetId: queuedWall.id, queue: [] });
+  assert.equal(closerHouse.complete, false);
 });
 
 test('ordinary buildings remain waypoints and invalid rally targets fall back to their saved position', () => {

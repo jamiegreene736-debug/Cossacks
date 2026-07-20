@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 
 import { createWorld, spawnUnit } from '../js/sim.js';
 import {
-  assignVillagersToConstruction, isOpenGroundMoveTarget, issueVillagerGroundMove,
-  setBuildingRallyAt,
+  assignVillagersToConstruction, isOpenGroundMoveTarget, isSecondaryPointerEvent,
+  issueVillagerGroundMove, setBuildingRallyAt, setTownCenterPrimaryRallyAt,
 } from '../js/input.js';
 import { createBuilding } from '../js/economy.js';
 
@@ -31,6 +31,8 @@ function mouseEvent(type, button, extra = {}) {
     clientX: { value: extra.clientX || 0 },
     clientY: { value: extra.clientY || 0 },
     shiftKey: { value: Boolean(extra.shiftKey) },
+    ctrlKey: { value: Boolean(extra.ctrlKey) },
+    metaKey: { value: Boolean(extra.metaKey) },
   });
   return event;
 }
@@ -147,6 +149,13 @@ test('open-ground move targets exclude units, buildings, and resources', () => {
   assert.equal(isOpenGroundMoveTarget(world, resource.x, resource.y), false);
 });
 
+test('Mac secondary clicks accept both trackpad button 2 and Control-click', () => {
+  assert.equal(isSecondaryPointerEvent(mouseEvent('mousedown', 2)), true);
+  assert.equal(isSecondaryPointerEvent(mouseEvent('mousedown', 0, { ctrlKey: true })), true);
+  assert.equal(isSecondaryPointerEvent(mouseEvent('mousedown', 0)), false);
+  assert.equal(isSecondaryPointerEvent(mouseEvent('mousedown', 0, { metaKey: true })), false);
+});
+
 test('production buildings retain the clicked resource or friendly building as their rally target', () => {
   const world = makeWorld();
   const townCenter = world.buildings.find(building => building.side === 0);
@@ -170,6 +179,30 @@ test('production buildings retain the clicked resource or friendly building as t
   assert.equal(townCenter.rallyTargetId, null);
   assert.equal(townCenter.rallyX, open.x);
   assert.equal(townCenter.rallyY, open.y);
+});
+
+test('a primary click gives a selected Town Center a resource or worksite rally', () => {
+  const world = makeWorld();
+  const townCenter = world.buildings.find(building => building.side === 0);
+  const berries = world.resources.find(resource => resource.resourceType === 'food');
+  const unfinishedWall = createBuilding(0, 'wall', 900, 1600, false, { orientation: 'horizontal' });
+  world.buildings.push(unfinishedWall);
+
+  const foodRally = setTownCenterPrimaryRallyAt(
+    world, [townCenter], berries.x, berries.y,
+  );
+  assert.equal(foodRally.target, berries);
+  assert.equal(townCenter.rallyTargetId, berries.id);
+
+  const buildRally = setTownCenterPrimaryRallyAt(
+    world, [townCenter], unfinishedWall.x, unfinishedWall.y,
+  );
+  assert.equal(buildRally.target, unfinishedWall);
+  assert.equal(townCenter.rallyTargetId, unfinishedWall.id);
+
+  const open = findOpenPoint(world);
+  assert.equal(setTownCenterPrimaryRallyAt(world, [townCenter], open.x, open.y), null);
+  assert.equal(setTownCenterPrimaryRallyAt(world, [unfinishedWall], berries.x, berries.y), null);
 });
 
 test('a villager ground click clears work and creates a routed destination flag', () => {

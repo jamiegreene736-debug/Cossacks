@@ -21,6 +21,7 @@ let selection = [];
 let currentFormation = 'line';
 let placement = null;
 let wallDrag = null;
+let primaryTownCenterRallyArmed = false;
 const groups = {};
 const keys = new Set();
 
@@ -36,6 +37,10 @@ const EDGE = 26;
 const PAN_SPEED = 720;
 const MOVE_FEEDBACK_LIFE = 2.8;
 
+export function isSecondaryPointerEvent(event) {
+  return event?.button === 2 || (event?.button === 0 && Boolean(event.ctrlKey));
+}
+
 export function initInput(canvas, minimap, worldGetter, cbs) {
   getWorld = worldGetter;
   callbacks = cbs || {};
@@ -45,25 +50,41 @@ export function initInput(canvas, minimap, worldGetter, cbs) {
   canvas.addEventListener('mousedown', event => {
     const world = getWorld();
     if (!world || world.state === 'ended') return;
+    const secondaryClick = isSecondaryPointerEvent(event);
     if (placement) {
-      if (event.button === 2) cancelPlacement();
+      if (secondaryClick) {
+        event.preventDefault();
+        cancelPlacement();
+      }
       else if (event.button === 0 && placement.type === 'wall') beginWallDrag(event.clientX, event.clientY);
       else if (event.button === 0) placeAt(event.clientX, event.clientY, event.shiftKey);
+      return;
+    }
+    if (secondaryClick) {
+      event.preventDefault();
+      issueOrder(event.clientX, event.clientY);
       return;
     }
     if (event.button === 0) {
       if (keys.has(' ')) {
         panDrag = { sx: event.clientX, sy: event.clientY, camX: camera.x, camY: camera.y };
-      } else if (gatherAt(event.clientX, event.clientY)) {
-        return;
       } else {
+        const point = screenToWorld(event.clientX, event.clientY);
+        const rally = primaryTownCenterRallyArmed
+          ? setTownCenterPrimaryRallyAt(world, getSelection(), point.x, point.y) : null;
+        if (rally) {
+          primaryTownCenterRallyArmed = false;
+          announceBuildingRally(world, rally.buildings, point, rally);
+          return;
+        }
+        if (gatherAt(event.clientX, event.clientY)) {
+          return;
+        }
         drag = { x0: event.clientX, y0: event.clientY, x1: event.clientX, y1: event.clientY };
       }
     } else if (event.button === 1) {
       event.preventDefault();
       panDrag = { sx: event.clientX, sy: event.clientY, camX: camera.x, camY: camera.y };
-    } else if (event.button === 2) {
-      issueOrder(event.clientX, event.clientY);
     }
   });
 
@@ -167,6 +188,7 @@ function setSelection(entities) {
   for (const entity of selection) entity.selected = false;
   selection = entities.filter(entity => entity.alive && entity.side === 0);
   for (const entity of selection) entity.selected = true;
+  primaryTownCenterRallyArmed = selection.length === 1 && selection[0].type === 'town_center';
   callbacks.onSelection?.(selection);
   updateResourceHover(mouseX, mouseY);
 }
@@ -261,28 +283,7 @@ function issueOrder(screenX, screenY) {
   if (selectedBuildings.length) {
     const rally = setBuildingRallyAt(world, selectedBuildings, point.x, point.y);
     if (rally) {
-      const rallyTarget = rally.target;
-      const targetX = rallyTarget?.x ?? point.x;
-      const targetY = rallyTarget?.y ?? point.y;
-      world.flags.push({ x: targetX, y: targetY, life: 1.2, max: 1.2, rally: true });
-      const townCenterSelected = selectedBuildings.some(building => building.type === 'town_center');
-      const targetDef = rallyTarget?.entityKind === 'building' ? BUILDING_TYPES[rallyTarget.type] : null;
-      const autoWorks = townCenterSelected && rallyTarget && (
-        rallyTarget.entityKind === 'resource'
-        || !rallyTarget.complete
-        || rallyTarget.type === 'farm'
-        || targetDef?.workResources?.length
-      );
-      const label = rallyTarget?.entityKind === 'resource'
-        ? rallyTarget.resourceType
-        : targetDef?.label;
-      callbacks.onToast?.(
-        autoWorks
-          ? `Rally set to ${label}. New villagers will work there automatically.`
-          : label ? `Rally point set at ${label}.` : 'Rally point set.',
-        'good',
-      );
-      callbacks.onOrder?.('rally');
+      announceBuildingRally(world, selectedBuildings, point, rally);
       return;
     }
   }
@@ -304,6 +305,45 @@ export function setBuildingRallyAt(world, selected, x, y) {
   let changed = false;
   for (const building of buildings) changed = setRallyPoint(building, x, y, target) || changed;
   return changed ? { target } : null;
+}
+
+export function setTownCenterPrimaryRallyAt(world, selected, x, y) {
+  const buildings = selected.filter(entity => entity?.alive && entity.entityKind === 'building'
+    && entity.type === 'town_center');
+  if (!world || buildings.length === 0) return null;
+  const side = buildings[0].side;
+  const resource = findResourceAt(world, x, y);
+  const ownEntity = findEntityAt(world, x, y, side);
+  const target = resource || (ownEntity?.entityKind === 'building' ? ownEntity : null);
+  if (!target) return null;
+  const rally = setBuildingRallyAt(world, buildings, x, y);
+  return rally ? { ...rally, buildings } : null;
+}
+
+function announceBuildingRally(world, selectedBuildings, point, rally) {
+  const rallyTarget = rally.target;
+  const targetX = rallyTarget?.x ?? point.x;
+  const targetY = rallyTarget?.y ?? point.y;
+  world.flags.push({ x: targetX, y: targetY, life: 1.2, max: 1.2, rally: true });
+  const townCenterSelected = selectedBuildings.some(building => building.type === 'town_center');
+  if (townCenterSelected) primaryTownCenterRallyArmed = false;
+  const targetDef = rallyTarget?.entityKind === 'building' ? BUILDING_TYPES[rallyTarget.type] : null;
+  const autoWorks = townCenterSelected && rallyTarget && (
+    rallyTarget.entityKind === 'resource'
+    || !rallyTarget.complete
+    || rallyTarget.type === 'farm'
+    || targetDef?.workResources?.length
+  );
+  const label = rallyTarget?.entityKind === 'resource'
+    ? rallyTarget.resourceType
+    : targetDef?.label;
+  callbacks.onToast?.(
+    autoWorks
+      ? `Rally set to ${label}. New villagers will work there automatically.`
+      : label ? `Rally point set at ${label}.` : 'Rally point set.',
+    'good',
+  );
+  callbacks.onOrder?.('rally');
 }
 
 function moveUnitsTo(world, units, x, y, formation) {

@@ -332,7 +332,7 @@ function renderSelection(world, selection) {
 function rallyDescription(world, building) {
   if (Number.isNaN(building.rallyX) || Number.isNaN(building.rallyY)) {
     return building.type === 'town_center'
-      ? 'Right-click a resource, workplace, construction, building, or ground to rally new villagers.'
+      ? 'Click a resource, workplace, or construction to rally new villagers · two-finger or Control-click ground for a waypoint.'
       : 'Right-click a building or ground to set the rally point.';
   }
   const target = getRallyTarget(world, building);
