@@ -1,5 +1,5 @@
 // Frame composition: haze, grade, vignette, selection, HUD marks, minimap.
-import { WORLD } from '../config.js';
+import { WORLD, BUILDING_TYPES } from '../config.js';
 import { shouldRenderUnitHealthBar } from '../render-performance.js';
 let camera = { x: 0, y: 0, zoom: 1 };
 let cw = 0, ch = 0, dpr = 1;
@@ -1204,6 +1204,62 @@ function cBracketPath(ctx, x0, y0, x1, y1, a) {
   ctx.moveTo(x0 + a, y1); ctx.lineTo(x0, y1); ctx.lineTo(x0, y1 - a);
 }
 
+function visibleTowerAttackRange(building) {
+  if (!building?.alive || !building.complete || !building.selected || building.type !== 'tower') {
+    return 0;
+  }
+  return BUILDING_TYPES.tower.range;
+}
+
+/**
+ * Exact watch-tower attack radius, drawn as a measured artillery plot beneath
+ * all scenery. The translucent field explains coverage without masking terrain;
+ * the animated dashed boundary and cardinal range ticks make the limit precise.
+ */
+function drawTowerAttackRanges(ctx, buildings, time) {
+  const z = Math.max(0.25, camera.zoom);
+  let active = false;
+  for (let index = 0; index < buildings.length; index++) {
+    if (visibleTowerAttackRange(buildings[index]) > 0) { active = true; break; }
+  }
+  if (!active) return;
+
+  ctx.save();
+  ctx.lineCap = 'butt';
+  for (let index = 0; index < buildings.length; index++) {
+    const tower = buildings[index];
+    const range = visibleTowerAttackRange(tower);
+    if (!range) continue;
+
+    ctx.fillStyle = cRgba(C_SIDE_RIM[tower.side] || C_UI.goldDim, 0.055);
+    ctx.beginPath(); ctx.arc(tower.x, tower.y, range, 0, Math.PI * 2); ctx.fill();
+
+    ctx.strokeStyle = 'rgba(16,14,10,0.68)';
+    ctx.lineWidth = 3.6 / z;
+    ctx.beginPath(); ctx.arc(tower.x, tower.y, range, 0, Math.PI * 2); ctx.stroke();
+
+    ctx.strokeStyle = cRgba(C_UI.goldBright, 0.88);
+    ctx.lineWidth = 1.45 / z;
+    ctx.setLineDash([13 / z, 8 / z]);
+    ctx.lineDashOffset = -(time * 10 / z);
+    ctx.beginPath(); ctx.arc(tower.x, tower.y, range, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+
+    const tick = 8 / z;
+    ctx.strokeStyle = cRgba(C_UI.goldBright, 0.92);
+    ctx.lineWidth = 1.8 / z;
+    for (let mark = 0; mark < 8; mark++) {
+      const angle = mark * Math.PI / 4;
+      const cos = Math.cos(angle), sin = Math.sin(angle);
+      ctx.beginPath();
+      ctx.moveTo(tower.x + cos * (range - tick), tower.y + sin * (range - tick));
+      ctx.lineTo(tower.x + cos * (range + tick), tower.y + sin * (range + tick));
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
 /**
  * Building footprint rings, world space, drawn UNDER the building pass.
  *
@@ -2118,5 +2174,6 @@ function drawMinimap(world) {
 }
 export { setCompositeRefs, setCompositeView, setCompositeTrampleLayer,
          buildCompositeTextures, buildMinimapBase, drawLightingPass,
+         visibleTowerAttackRange, drawTowerAttackRanges,
          drawSelection, drawHealthBars, drawOrderFlags, drawDragRect,
          drawMinimap };

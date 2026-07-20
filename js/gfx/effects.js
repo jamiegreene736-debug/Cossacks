@@ -118,6 +118,7 @@ const DIRT_K = 3.20;
 const FLASH_K = 4.60;
 const EMBER_K = 3.40;
 const BALL_D = 22;                // constant world diameter for the shot sprite
+const TOWER_BALL_D = 27;          // tower roundshot must remain readable above roofs
 const TORCH_D = 28;
 const BSHADOW_D = 15;
 
@@ -1460,18 +1461,26 @@ function updateEffectFields(world) {
       p.fxSeen = 1;
       if (p.kind !== 'tower') continue;
       const dx = p.tx - p.sx, dy = p.ty - p.sy;
-      stampSpill(p.sx, p.sy, 22);
-      stampBank(p.sx, p.sy, 13, false);
+      const distance = Math.max(1, Math.hypot(dx, dy));
+      const nx = dx / distance, ny = dy / distance;
+      stampSpill(p.sx, p.sy, 30);
+      stampBank(p.sx, p.sy, 18, true);
       fxPush(world, {
-        kind: 'flash', cls: 1, big: false,
+        kind: 'flash', cls: 2, big: true,
         a: Math.atan2(dy, dx),
         x: p.sx, y: p.sy, vx: 0, vy: 0,
-        max: 0.13, size: 5.6, grow: 0,
+        max: 0.15, size: 7.4, grow: 0,
+      });
+      fxPush(world, {
+        kind: 'smoke', big: true,
+        x: p.sx, y: p.sy, vx: nx * 18, vy: ny * 8 - 11,
+        max: 1.35, size: 5.3, grow: 10,
       });
       fxPush(world, {
         kind: 'smoke', big: false,
-        x: p.sx, y: p.sy, vx: dx * 0.012, vy: dy * 0.012 - 7,
-        max: 0.85, size: 3.2, grow: 6,
+        x: p.sx - nx * 4, y: p.sy - ny * 4,
+        vx: nx * 8 - ny * 4, vy: ny * 5 - 9,
+        max: 0.92, size: 3.4, grow: 6.4,
       });
     }
   }
@@ -1591,7 +1600,7 @@ function drawSmokeUnder(ctx, world, alpha) {
       const hgt = Math.sin(Math.PI * k);
       let si = (hgt * BSHADOW_STEPS) | 0;
       if (si >= BSHADOW_STEPS) si = BSHADOW_STEPS - 1;
-      const d = BSHADOW_D;
+      const d = p.kind === 'tower' ? BSHADOW_D * 1.18 : BSHADOW_D;
       ctx.drawImage(shTex, si * sc, 0, sc, sc, gx - d * 0.5, gy - d * 0.5, d, d);
     }
   }
@@ -1763,8 +1772,9 @@ function drawEffects(ctx, world, alpha) {
         continue;
       }
       const row = p.kind === 'tower' ? 1 : 0;
+      const diameter = p.kind === 'tower' ? TOWER_BALL_D : BALL_D;
       ctx.drawImage(bTex, r * bc, row * bc, bc, bc,
-        ix - BALL_D * 0.5, iy - BALL_D * 0.5, BALL_D, BALL_D);
+        ix - diameter * 0.5, iy - diameter * 0.5, diameter, diameter);
     }
   }
 

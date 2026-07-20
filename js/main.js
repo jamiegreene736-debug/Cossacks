@@ -125,6 +125,7 @@ async function startBattle(opts) {
   setupLocalBuildingFirePreview(world);
   setupLocalAutoEngagePreview(world);
   setupLocalCurvedWallPreview(world);
+  setupLocalTowerCombatPreview(world);
   ui.showBattleHud(world);
   ui.setPauseLabel(false);
   ui.setSpeedLabel(1);
@@ -247,6 +248,39 @@ function setupLocalCurvedWallPreview(activeWorld) {
   camera.x = (walls[0].x + walls.at(-1).x) * 0.5;
   camera.y = (walls[0].y + walls.at(-1).y) * 0.5;
   camera.zoom = 1.45;
+  clampCamera();
+}
+
+function setupLocalTowerCombatPreview(activeWorld) {
+  const debugName = new URLSearchParams(window.location.search).get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'tower-combat') return;
+
+  const tower = createBuilding(0, 'tower', 1320, 1500, true);
+  tower.reload = 0.8;
+  activeWorld.buildings.push(tower);
+  activeWorld.resources = activeWorld.resources.filter(resource => (
+    Math.hypot(resource.x - tower.x, resource.y - tower.y) > 410 + resource.radius
+  ));
+
+  const positions = [
+    [220, -92], [258, -38], [276, 28], [244, 92], [188, 132],
+  ];
+  for (const [offsetX, offsetY] of positions) {
+    const target = spawnUnit(activeWorld, 1, 'musk', tower.x + offsetX, tower.y + offsetY);
+    target.hp = 210;
+    target.maxHp = 210;
+    target.speed = 0;
+    target.acquire = 0;
+    target.reload = 999;
+    target.target = null;
+    target.orderTarget = null;
+  }
+
+  camera.x = tower.x + 60;
+  camera.y = tower.y;
+  camera.zoom = 1.35;
   clampCamera();
 }
 

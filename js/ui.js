@@ -306,6 +306,11 @@ function renderSelection(world, selection) {
     detail.textContent = rally ? `${status} · ${rally}` : status;
     context.textContent = building.complete ? (economy ? 'Building output per hour' : 'Production') : 'Construction';
     if (!building.complete) return;
+    if (building.type === 'tower') {
+      info.textContent = 'Garrisoned defensive cannon — measured fire with no splash damage.';
+      detail.textContent = `${status} · ${def.attack} damage · ${def.range} attack radius · ${def.reload.toFixed(1)}s reload`;
+      context.textContent = 'Artillery coverage · exact radius shown on the map';
+    }
     if (economy) {
       for (const row of economy.resources) {
         addEconomyMetric(grid, row, {

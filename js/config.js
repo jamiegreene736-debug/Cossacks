@@ -223,7 +223,8 @@ export const BUILDING_TYPES = {
   tower: {
     label: 'Watch Tower', description: 'A garrisoned defensive gun position.',
     w: 52, h: 52, radius: 29, visualScale: 1.28, hp: 1400, buildTime: 14,
-    cost: { wood: 130, stone: 180 }, attack: 17, range: 330, reload: 3.2, hotkey: 'W',
+    cost: { wood: 130, stone: 180 },
+    attack: 14, range: 320, reload: 4.0, accuracy: 0.78, hotkey: 'W',
   },
   wall: {
     label: 'Stone Wall', description: 'Heavy masonry that blocks troops and musket fire.',

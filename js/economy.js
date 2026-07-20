@@ -81,6 +81,7 @@ export function createBuilding(side, type, x, y, complete = false, options = {})
     alive: true, selected: false, complete,
     progress: complete ? 1 : 0.02,
     repairing: false, repairProgress: 0, repairStartHp: null,
+    fireT: 0, aimAngle: 0,
     queue: [], rallyX: NaN, rallyY: NaN, rallyTargetId: null,
     reload: Math.random() * (def.reload || 0),
     resourceType: def.resource || null,
@@ -1275,6 +1276,7 @@ function updateTowers(world, dt) {
   for (const tower of world.buildings) {
     if (!tower.alive || !tower.complete || tower.type !== 'tower') continue;
     const def = BUILDING_TYPES.tower;
+    tower.fireT = Math.max(0, (tower.fireT || 0) - dt);
     tower.reload -= dt;
     if (tower.reload > 0) continue;
     let target = null;
@@ -1282,17 +1284,36 @@ function updateTowers(world, dt) {
     for (const unit of world.units) {
       if (!unit.alive || unit.side === tower.side) continue;
       const d = Math.hypot(unit.x - tower.x, unit.y - tower.y);
-      if (d < best) { best = d; target = unit; }
+      if (d <= best) { best = d; target = unit; }
     }
     if (!target) continue;
+
+    const dx = target.x - tower.x;
+    const dy = target.y - tower.y;
+    const distance = Math.max(1, Math.hypot(dx, dy));
+    const nx = dx / distance;
+    const ny = dy / distance;
+    const hit = Math.random() < def.accuracy;
+    const scatter = hit ? 0 : 18 + distance * 0.035;
+    const scatterAngle = Math.random() * Math.PI * 2;
+    const muzzleReach = 11 * (def.visualScale || 1);
+    const muzzleHeight = tower.h * 1.05 * (def.visualScale || 1);
+    const sx = tower.x + nx * muzzleReach;
+    const sy = tower.y - muzzleHeight + ny * 5;
+    const tx = target.x + Math.cos(scatterAngle) * scatter;
+    const ty = target.y + Math.sin(scatterAngle) * scatter;
+    const flightDistance = Math.hypot(tx - sx, ty - sy);
+
     tower.reload = def.reload;
-    world.damage(target, def.attack, tower);
+    tower.fireT = 0.28;
+    tower.aimAngle = Math.atan2(dy, dx);
     sfx.towerShot(tower.x);
     world.projectiles.push({
-      kind: 'tower', sx: tower.x, sy: tower.y - 42,
-      x: tower.x, y: tower.y - 42, px: tower.x, py: tower.y - 42,
-      tx: target.x, ty: target.y, t: 0, dur: Math.max(0.25, best / 520),
-      arc: Math.min(45, best * 0.09), dmg: 0, splash: 0,
+      kind: 'tower', sx, sy, x: sx, y: sy, px: sx, py: sy,
+      tx, ty, t: 0,
+      dur: Math.min(1.05, Math.max(0.45, flightDistance / 390)),
+      arc: Math.min(72, Math.max(24, flightDistance * 0.18)),
+      dmg: def.attack, splash: 0, hit, target, attackerId: tower.id,
     });
   }
 }
