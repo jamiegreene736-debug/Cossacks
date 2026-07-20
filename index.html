@@ -29,7 +29,7 @@
 
       <div class="nation-badge enemy-badge">
         <span class="army-total"><b id="hud-enemy-count">0</b><small>enemy</small></span>
-        <span><small>Rival realm</small><b id="hud-enemy-nation">Ottoman Empire</b></span>
+        <span><small id="hud-enemy-role">Hard CPU realm</small><b id="hud-enemy-nation">Ottoman Empire</b></span>
         <span class="crest enemy" id="enemy-crest">O</span>
       </div>
     </header>
@@ -85,17 +85,25 @@
         <h1>Empires<span class="subtitle">Seventeen Hundred</span></h1>
         <p class="tagline">From one Town Center to an army of thousands.</p>
 
-        <label class="nation-picker">Command
-          <select id="sel-player-nation"></select>
-        </label>
-        <div id="nation-preview">
-          <span class="preview-crest" id="preview-crest">E</span>
-          <div><b id="preview-name">England</b><p id="preview-blurb"></p></div>
-          <span class="versus">VS</span>
-          <div class="enemy-preview"><small>Your rival</small><b id="preview-enemy">Ottoman Empire</b></div>
-        </div>
+        <fieldset class="difficulty-picker">
+          <legend><span>1</span> Choose CPU difficulty</legend>
+          <div id="difficulty-options" class="difficulty-options" role="radiogroup" aria-label="CPU difficulty"></div>
+        </fieldset>
 
-        <button id="btn-start">Found Your Empire</button>
+        <section id="nation-step" class="nation-step locked" aria-labelledby="nation-step-title" aria-disabled="true">
+          <div id="nation-step-title" class="setup-step-title"><span>2</span> Choose your country</div>
+          <label class="nation-picker">Command
+            <select id="sel-player-nation" disabled></select>
+          </label>
+          <div id="nation-preview">
+            <span class="preview-crest" id="preview-crest">E</span>
+            <div><b id="preview-name">England</b><p id="preview-blurb"></p></div>
+            <span class="versus">VS</span>
+            <div class="enemy-preview"><small>Your <span id="preview-difficulty">chosen</span> rival</small><b id="preview-enemy">Ottoman Empire</b></div>
+          </div>
+
+          <button id="btn-start" disabled>Found Your Empire</button>
+        </section>
 
         <section id="saved-game-card" class="saved-game-card hidden" aria-label="Saved campaign">
           <div class="saved-game-heading">

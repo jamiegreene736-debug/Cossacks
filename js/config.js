@@ -7,6 +7,118 @@ export const MAX_POPULATION = 1200;
 export const RESOURCE_KEYS = ['food', 'wood', 'gold', 'stone'];
 export const STARTING_RESOURCES = { food: 240, wood: 320, gold: 120, stone: 120 };
 
+// Difficulty changes the rival commander's decisions, never combat stats or
+// starting resources. Hard intentionally preserves the original single-mode
+// policy so existing simulations and legacy saves keep their former pressure.
+export const DEFAULT_CPU_DIFFICULTY = 'hard';
+export const CPU_DIFFICULTIES = {
+  low: {
+    name: 'Low',
+    summary: 'A patient rival with a smaller economy and lighter attacks.',
+    ai: {
+      planningInterval: 1.75,
+      villagerTarget: 14,
+      villagerQueueLimit: 1,
+      builderCount: 2,
+      houseBuffer: 12,
+      houseLimit: 20,
+      farmWorkerRatio: 5,
+      towerLimit: 1,
+      buildAt: {
+        lumber_camp: 4, mill: 6, barracks: 8, mine: 10,
+        stable: 12, foundry: 14, tower: 14,
+      },
+      productionQueueLimit: 4,
+      productionBatch: { barracks: 3, stable: 2, foundry: 1 },
+      cavalryFallbackTime: 320,
+      firstAttackDelay: 160,
+      defenseRadius: 560,
+      defenseLimit: 60,
+      earlyWaveUntil: 270,
+      earlyWaveMinimum: 14,
+      lateWaveMinimum: 24,
+      waveFraction: 0.55,
+      maxWaveSize: 100,
+      waveRetryDelay: 20,
+      earlyAttackInterval: 76,
+      lateAttackInterval: 60,
+      stagingDelay: 11,
+    },
+  },
+  medium: {
+    name: 'Medium',
+    summary: 'A balanced rival that expands steadily and attacks in measured waves.',
+    ai: {
+      planningInterval: 1.25,
+      villagerTarget: 18,
+      villagerQueueLimit: 2,
+      builderCount: 3,
+      houseBuffer: 15,
+      houseLimit: 24,
+      farmWorkerRatio: 4,
+      towerLimit: 2,
+      buildAt: {
+        lumber_camp: 3, mill: 5, barracks: 6, mine: 8,
+        stable: 10, foundry: 14, tower: 15,
+      },
+      productionQueueLimit: 8,
+      productionBatch: { barracks: 4, stable: 2, foundry: 1 },
+      cavalryFallbackTime: 280,
+      firstAttackDelay: 125,
+      defenseRadius: 640,
+      defenseLimit: 90,
+      earlyWaveUntil: 255,
+      earlyWaveMinimum: 20,
+      lateWaveMinimum: 32,
+      waveFraction: 0.7,
+      maxWaveSize: 170,
+      waveRetryDelay: 16,
+      earlyAttackInterval: 62,
+      lateAttackInterval: 48,
+      stagingDelay: 9,
+    },
+  },
+  hard: {
+    name: 'Hard',
+    summary: 'The original relentless rival with rapid growth and massed assaults.',
+    ai: {
+      planningInterval: 1,
+      villagerTarget: 22,
+      villagerQueueLimit: 2,
+      builderCount: 4,
+      houseBuffer: 18,
+      houseLimit: 29,
+      farmWorkerRatio: 4,
+      towerLimit: 2,
+      buildAt: {
+        lumber_camp: 3, mill: 4, barracks: 5, mine: 6,
+        stable: 9, foundry: 13, tower: 12,
+      },
+      productionQueueLimit: 12,
+      productionBatch: { barracks: 5, stable: 3, foundry: 2 },
+      cavalryFallbackTime: 240,
+      firstAttackDelay: 92,
+      defenseRadius: 720,
+      defenseLimit: 120,
+      earlyWaveUntil: 240,
+      earlyWaveMinimum: 24,
+      lateWaveMinimum: 40,
+      waveFraction: 0.8,
+      maxWaveSize: 240,
+      waveRetryDelay: 12,
+      earlyAttackInterval: 52,
+      lateAttackInterval: 38,
+      stagingDelay: 8,
+    },
+  },
+};
+
+export function normalizeCpuDifficulty(value, fallback = DEFAULT_CPU_DIFFICULTY) {
+  const normalized = typeof value === 'string' ? value.toLowerCase() : '';
+  if (CPU_DIFFICULTIES[normalized]) return normalized;
+  return CPU_DIFFICULTIES[fallback] ? fallback : DEFAULT_CPU_DIFFICULTY;
+}
+
 export const NATIONS = {
   england: {
     name: 'England', adjective: 'English',

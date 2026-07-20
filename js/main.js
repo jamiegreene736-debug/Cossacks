@@ -118,7 +118,7 @@ async function startBattle(opts) {
   sfx.ensure();
   await productionArtReady;
   world = createWorld(opts);
-  commander = new Commander(world, 1);
+  commander = new Commander(world, 1, world.difficulty);
   resetForBattle();
   startBattleRender(world);
   setupLocalBuildingFirePreview(world);
