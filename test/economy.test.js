@@ -5,7 +5,8 @@ import { createWorld, damage, spawnUnit, step } from '../js/sim.js';
 import { Commander } from '../js/ai.js';
 import {
   assignGatherers, createBuilding, findNearestResource, findResourceAt, placeBuilding,
-  getBuildingEconomyStats, getEconomyBreakdown, getGatherAssignmentStats,
+  getBuildingEconomyStats, getEconomyBreakdown, getFieldAttachmentStatus,
+  getFieldWorkPoint, getGatherAssignmentStats, getMillFieldSlots,
   queueUnit, stepEconomy, validatePlacement,
 } from '../js/economy.js';
 
@@ -63,19 +64,22 @@ test('arriving workers face their target and expose the matching work animation'
     [findNearestResource(world, worker.x, worker.y, 'gold', 0), 'mine'],
     [findNearestResource(world, worker.x, worker.y, 'food', 0), 'forage'],
   ];
-  const farm = createBuilding(0, 'farm', 900, 1750, true);
-  world.buildings.push(farm);
+  const mill = createBuilding(0, 'mill', 900, 1600, true);
+  const farmSlot = getMillFieldSlots(mill)[3];
+  const farm = createBuilding(0, 'farm', farmSlot.x, farmSlot.y, true, farmSlot);
+  world.buildings.push(mill, farm);
   targets.push([farm, 'farm']);
 
   for (const [target, expectedAction] of targets) {
-    worker.x = target.x - target.radius - 5;
-    worker.y = target.y;
+    const workPoint = target.type === 'farm' ? getFieldWorkPoint(target, worker.id) : null;
+    worker.x = workPoint?.x ?? target.x - target.radius - 5;
+    worker.y = workPoint?.y ?? target.y;
     worker.facing = -1;
     assert.equal(assignGatherers(world, [worker], target), true);
     stepEconomy(world, 1 / 30);
     assert.equal(worker.state, 'work');
     assert.equal(worker.workAction, expectedAction);
-    assert.equal(worker.facing, 1);
+    assert.equal(worker.facing, target.type === 'farm' ? (worker.id % 2 ? 1 : -1) : 1);
   }
 });
 
@@ -120,30 +124,103 @@ test('economic-building readouts attribute workers and the exact 20% local bonus
   assert.ok(Math.abs(stats.resources[0].bonusPerHour - 6_120) < 0.001);
 });
 
-test('completed economic buildings accept villagers as renewable workplaces', () => {
+test('completed non-farm economic buildings accept villagers as renewable workplaces', () => {
   const world = makeWorld();
   advance(world, 4.1);
   const worker = world.units.find(unit => unit.side === 0);
-  const mill = createBuilding(0, 'mill', worker.x + 120, worker.y, true);
-  world.buildings.push(mill);
-  worker.x = mill.x + mill.radius + 5;
-  worker.y = mill.y;
-  const beforeFood = world.sides[0].resources.food;
+  const camp = createBuilding(0, 'lumber_camp', worker.x + 120, worker.y, true);
+  world.buildings.push(camp);
+  worker.x = camp.x + camp.radius + 5;
+  worker.y = camp.y;
+  const beforeWood = world.sides[0].resources.wood;
 
-  assert.equal(findResourceAt(world, mill.x, mill.y), mill);
-  assert.equal(assignGatherers(world, [worker], mill), true);
-  assert.deepEqual(worker.job, { kind: 'workplace', targetId: mill.id, resourceType: 'food' });
+  assert.equal(findResourceAt(world, camp.x, camp.y), camp);
+  assert.equal(assignGatherers(world, [worker], camp), true);
+  assert.deepEqual(worker.job, { kind: 'workplace', targetId: camp.id, resourceType: 'wood' });
 
-  const preview = getGatherAssignmentStats(world, [worker], mill);
+  const preview = getGatherAssignmentStats(world, [worker], camp);
   assert.equal(preview.renewable, true);
-  assert.equal(preview.resourceType, 'food');
-  assert.equal(preview.projectedPerHour, 36_720);
+  assert.equal(preview.resourceType, 'wood');
+  assert.equal(preview.projectedPerHour, 32_400);
 
   stepEconomy(world, 1);
-  assert.ok(world.sides[0].resources.food > beforeFood);
-  const stats = getBuildingEconomyStats(world, mill);
+  assert.ok(world.sides[0].resources.wood > beforeWood);
+  const stats = getBuildingEconomyStats(world, camp);
   assert.equal(stats.workers, 1);
-  assert.equal(stats.resources.find(row => row.resourceType === 'food').projectedPerHour, 36_720);
+  assert.equal(stats.resources.find(row => row.resourceType === 'wood').projectedPerHour, 32_400);
+});
+
+test('fields require a completed mill, snap to its plots, and store the parent link', () => {
+  const world = makeWorld();
+  advance(world, 4.1);
+  const worker = world.units.find(unit => unit.side === 0);
+  assert.equal(validatePlacement(world, 0, 'farm', 900, 1500).ok, false);
+  assert.match(validatePlacement(world, 0, 'farm', 900, 1500).message, /Mill first/);
+
+  const mill = createBuilding(0, 'mill', 980, 1600, true);
+  world.buildings.push(mill);
+  const requested = { x: mill.x + 12, y: mill.y - 145 };
+  const preview = validatePlacement(world, 0, 'farm', requested.x, requested.y);
+  assert.equal(preview.ok, true);
+  assert.equal(preview.millId, mill.id);
+  assert.equal(preview.fieldSlot, 0);
+  assert.notDeepEqual({ x: preview.x, y: preview.y }, requested);
+
+  const result = placeBuilding(world, 0, 'farm', requested.x, requested.y, [worker]);
+  assert.equal(result.ok, true);
+  assert.equal(result.building.millId, mill.id);
+  assert.equal(result.building.fieldSlot, 0);
+  assert.match(result.message, /attached to Mill/);
+});
+
+test('a mill exposes eight field plots and another mill is required when they are full', () => {
+  const world = makeWorld();
+  const mill = createBuilding(0, 'mill', 1000, 1600, true);
+  world.buildings.push(mill);
+  for (const slot of getMillFieldSlots(mill)) {
+    world.buildings.push(createBuilding(0, 'farm', slot.x, slot.y, true, slot));
+  }
+  assert.equal(getFieldAttachmentStatus(world, 0).ok, false);
+  assert.match(getFieldAttachmentStatus(world, 0).message, /another Mill/);
+  assert.equal(validatePlacement(world, 0, 'farm', mill.x, mill.y).ok, false);
+});
+
+test('farmers walk to stable work rows inside an attached field', () => {
+  const world = makeWorld();
+  advance(world, 4.1);
+  const worker = world.units.find(unit => unit.side === 0);
+  const mill = createBuilding(0, 'mill', 980, 1600, true);
+  const slot = getMillFieldSlots(mill)[2];
+  const field = createBuilding(0, 'farm', slot.x, slot.y, true, slot);
+  world.buildings.push(mill, field);
+  worker.x = field.x - 80;
+  worker.y = field.y;
+  const destination = getFieldWorkPoint(field, worker.id);
+  assert.equal(assignGatherers(world, [worker], field), true);
+  for (let tick = 0; tick < 480 && worker.state !== 'work'; tick++) step(world, 1 / 30);
+  assert.equal(worker.state, 'work');
+  assert.equal(worker.workAction, 'farm');
+  assert.ok(Math.hypot(worker.x - destination.x, worker.y - destination.y) <= 5);
+  assert.ok(Math.abs(worker.x - field.x) < field.w * 0.45);
+  assert.ok(Math.abs(worker.y - field.y) < field.h * 0.4);
+  assert.equal(assignGatherers(world, [worker], mill), false);
+});
+
+test('destroying a mill removes its attached fields and releases their farmers', () => {
+  const world = makeWorld();
+  advance(world, 4.1);
+  const worker = world.units.find(unit => unit.side === 0);
+  const mill = createBuilding(0, 'mill', 980, 1600, true);
+  const slot = getMillFieldSlots(mill)[1];
+  const field = createBuilding(0, 'farm', slot.x, slot.y, true, slot);
+  world.buildings.push(mill, field);
+  assignGatherers(world, [worker], field);
+
+  damage(world, mill, mill.maxHp + 1, null);
+
+  assert.equal(field.alive, false);
+  assert.equal(worker.job, null);
+  assert.ok(world.events.some(event => /attached field lost with the Mill/.test(event.text)));
 });
 
 test('construction validates collisions, consumes costs, and expands population on completion', () => {

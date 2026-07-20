@@ -18,7 +18,7 @@ import {
   chooseRenderDpr, circleIntersectsBounds, getVisibleWorldBounds,
 } from './render-performance.js';
 import { setBuildingRefs, bdResetCaches, drawResourceNode, drawFarm,
-         drawFoundation, drawCompleteBuilding, drawBuilding } from './gfx/buildings.js';
+         drawFarmForeground, drawFoundation, drawCompleteBuilding, drawBuilding } from './gfx/buildings.js';
 import { setCompositeRefs, setCompositeView, setCompositeTrampleLayer,
          buildCompositeTextures, buildMinimapBase, drawLightingPass,
          drawSelection, drawHealthBars, drawOrderFlags, drawDragRect,
@@ -481,6 +481,34 @@ export function draw(
     }
   }
   buildingSortBuf.sort((a, b) => a.y - b.y);
+
+  // Fields are parts of a mill complex, not unrelated map cards. Restrained
+  // wheel ruts link every parcel to its parent mill beneath actors/structures.
+  for (const field of buildingSortBuf) {
+    if (!field.alive || field.type !== 'farm' || !Number.isFinite(field.millId)) continue;
+    const mill = world.buildings.find(building => building.id === field.millId
+      && building.alive && building.type === 'mill');
+    if (!mill) continue;
+    const dx = field.x - mill.x, dy = field.y - mill.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    const reach = Math.min(mill.radius * 0.62, distance * 0.35);
+    const startX = mill.x + dx / distance * reach;
+    const startY = mill.y + dy / distance * reach;
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(67,49,31,.38)';
+    ctx.lineWidth = 10;
+    ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(field.x, field.y); ctx.stroke();
+    ctx.strokeStyle = 'rgba(174,143,87,.22)';
+    ctx.lineWidth = 1.5;
+    for (const offset of [-2.2, 2.2]) {
+      const nx = -dy / distance * offset, ny = dx / distance * offset;
+      ctx.beginPath(); ctx.moveTo(startX + nx, startY + ny);
+      ctx.lineTo(field.x + nx, field.y + ny); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   for (const building of buildingSortBuf) drawBuilding(building, world);
 
   drawResourceHover(resourceHover, z);
@@ -493,6 +521,23 @@ export function draw(
       ctx.fillStyle = placementPreview.valid ? '#78c878' : '#d35d50';
       ctx.strokeStyle = placementPreview.valid ? '#b9efb9' : '#ffb0a7';
       ctx.lineWidth = 2 / z;
+      if (placementPreview.type === 'farm' && Number.isFinite(placementPreview.millId)) {
+        const mill = world.buildings.find(building => building.id === placementPreview.millId);
+        if (mill) {
+          ctx.save();
+          ctx.globalAlpha = 0.8;
+          ctx.setLineDash([8 / z, 6 / z]);
+          ctx.lineWidth = 2.2 / z;
+          ctx.beginPath();
+          ctx.moveTo(mill.x, mill.y);
+          ctx.lineTo(placementPreview.x, placementPreview.y);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(mill.x, mill.y, mill.radius + 12 / z, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
       if (isFortificationType(placementPreview.type)) {
         const corners = fortificationCorners(
           placementPreview.type,
@@ -572,6 +617,10 @@ export function draw(
     const dir = u.facing >= 0 ? 0 : 1;
     ctx.drawImage(sp.frames[dir][frame], ix - sp.ax, iy - sp.ay, sp.w, sp.h);
   }
+
+  // Near rows occlude boots and lower legs, making the hoeing villager read as
+  // physically inside the crop instead of pasted above it.
+  for (const building of buildingSortBuf) drawFarmForeground(building);
 
   // Projectiles, powder smoke, muzzle flash, blood and dust.
   drawEffects(ctx, world, alpha);

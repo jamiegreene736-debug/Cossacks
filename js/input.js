@@ -365,6 +365,8 @@ export function beginPlacement(type) {
   placement = {
     type, x: camera.x, y: camera.y, valid: false, message: '',
     orientation: isFortificationType(type) ? 'horizontal' : null,
+    millId: null,
+    fieldSlot: null,
   };
   updatePlacement(mouseX || window.innerWidth / 2, mouseY || window.innerHeight / 2);
   callbacks.onPlacement?.(placement);
@@ -391,6 +393,8 @@ function updatePlacement(screenX, screenY) {
   placement.y = Number.isFinite(validation.y) ? validation.y : point.y;
   if (validation.orientation) placement.orientation = validation.orientation;
   placement.snappedToId = validation.snappedToId ?? null;
+  placement.millId = validation.millId ?? null;
+  placement.fieldSlot = validation.fieldSlot ?? null;
   placement.valid = validation.ok;
   placement.message = validation.message;
 }
@@ -408,7 +412,11 @@ function placeAt(screenX, screenY, keepPlacing) {
     placement.x,
     placement.y,
     workers,
-    { orientation: placement.orientation },
+    {
+      orientation: placement.orientation,
+      millId: placement.millId,
+      fieldSlot: placement.fieldSlot,
+    },
   );
   if (!result?.ok) {
     callbacks.onToast?.(result?.message || 'Construction failed.', 'danger');

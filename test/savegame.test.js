@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { Commander } from '../js/ai.js';
 import { normalizeAudioSettings } from '../js/audio.js';
-import { createBuilding } from '../js/economy.js';
+import { createBuilding, getMillFieldSlots } from '../js/economy.js';
 import {
   createGameSnapshot, decodeSnapshot, deleteCampaign, encodeSnapshot,
   getCampaignSummary, loadCampaign, restoreGameSnapshot, saveCampaign,
@@ -29,9 +29,11 @@ test('a campaign round trip preserves economy, AI, camera and entity references'
   const attacker = spawnUnit(world, 0, 'musk', 900, 1500);
   const defender = spawnUnit(world, 1, 'pike', 1100, 1500);
   const mill = createBuilding(0, 'mill', 760, 1380, true);
-  world.buildings.push(mill);
+  const fieldSlot = getMillFieldSlots(mill)[2];
+  const field = createBuilding(0, 'farm', fieldSlot.x, fieldSlot.y, true, fieldSlot);
+  world.buildings.push(mill, field);
   const millWorker = spawnUnit(world, 0, 'villager', 800, 1420);
-  millWorker.job = { kind: 'workplace', targetId: mill.id, resourceType: 'food' };
+  millWorker.job = { kind: 'gather', targetId: field.id };
   const enemyTownCenter = world.buildings.find(building => building.side === 1);
   attacker.target = defender;
   attacker.orderTarget = enemyTownCenter;
@@ -66,8 +68,11 @@ test('a campaign round trip preserves economy, AI, camera and entity references'
   assert.equal(restored.commander.committed.has(defender.id), true);
   assert.deepEqual(restored.commander.planCursor, { house: 4 });
   assert.deepEqual(restoredMillWorker.job, {
-    kind: 'workplace', targetId: mill.id, resourceType: 'food',
+    kind: 'gather', targetId: field.id,
   });
+  const restoredField = restored.world.buildings.find(building => building.id === field.id);
+  assert.equal(restoredField.millId, mill.id);
+  assert.equal(restoredField.fieldSlot, 2);
   assert.deepEqual(restored.camera, { x: 777, y: 888, zoom: 1.4 });
 
   const maxUnitId = Math.max(...restored.world.units.map(unit => unit.id));
@@ -89,6 +94,22 @@ test('local campaign storage exposes metadata and supports discard', () => {
   assert.equal(loadCampaign(storage).version, 1);
   deleteCampaign(storage);
   assert.equal(loadCampaign(storage), null);
+});
+
+test('legacy standalone fields attach to the nearest completed mill on restore', () => {
+  const world = createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
+  const mill = createBuilding(0, 'mill', 900, 1500, true);
+  const legacyField = createBuilding(0, 'farm', 1040, 1460, true);
+  world.buildings.push(mill, legacyField);
+  const snapshot = createGameSnapshot(world, new Commander(world, 1), { x: 900, y: 1500, zoom: 1 });
+
+  const restored = restoreGameSnapshot(snapshot).world;
+  const field = restored.buildings.find(building => building.id === legacyField.id);
+  const expected = getMillFieldSlots(restored.buildings.find(building => building.id === mill.id))
+    .find(slot => slot.fieldSlot === field.fieldSlot);
+  assert.equal(field.millId, mill.id);
+  assert.ok(Number.isInteger(field.fieldSlot));
+  assert.deepEqual({ x: field.x, y: field.y }, { x: expected.x, y: expected.y });
 });
 
 test('a maximum-scale army remains within a normal localStorage budget', () => {

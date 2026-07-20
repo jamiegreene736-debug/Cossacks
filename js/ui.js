@@ -3,7 +3,7 @@
 import { NATIONS, UNIT_TYPES, BUILDING_TYPES, RESOURCE_KEYS } from './config.js';
 import {
   formatCost, getBuildingEconomyStats, getEconomyBreakdown,
-  getGatherAssignmentStats,
+  getFieldAttachmentStatus, getGatherAssignmentStats,
 } from './economy.js';
 
 const $ = id => document.getElementById(id);
@@ -292,16 +292,18 @@ function renderSelection(world, selection) {
     info.textContent = `${working} working · ${villagers.length - working} ready for orders`;
     detail.textContent = gatherers
       ? `${gatherers} working · ${formatHourly(projected)} assigned · click open ground to move or another resource or workplace to redirect`
-      : 'Click open ground to move, or click a mill, economic building, mine, forest, food source, or farm to work.';
+      : 'Click open ground to move, or click a field, economic camp, mine, forest, or food source to work.';
     context.textContent = gatherers ? 'Selected output and construction' : 'Construct a building';
     for (const resourceType of RESOURCE_KEYS) {
       if (economy[resourceType].workers) addEconomyMetric(grid, economy[resourceType]);
     }
     for (const [type, def] of Object.entries(BUILDING_TYPES)) {
       if (type === 'town_center') continue;
+      const fieldStatus = type === 'farm' ? getFieldAttachmentStatus(world, 0) : null;
       addCommand(grid, {
         action: 'build', type, icon: buildingIcon(type), label: def.label,
-        meta: formatCost(def.cost),
+        meta: fieldStatus && !fieldStatus.ok ? fieldStatus.message : formatCost(def.cost),
+        disabled: Boolean(fieldStatus && !fieldStatus.ok),
       });
     }
     return;
@@ -354,6 +356,7 @@ function addCommand(grid, command) {
     button.setAttribute('aria-pressed', String(active));
   }
   if (command.count) button.dataset.count = String(command.count);
+  button.disabled = Boolean(command.disabled);
   const icon = document.createElement('span');
   icon.className = 'command-icon';
   icon.textContent = command.icon;
@@ -389,16 +392,20 @@ function updateObjective(world) {
   const ownBuildings = world.buildings.filter(building => building.alive && building.side === 0);
   const military = countMilitary(world, 0);
   let titleText, body;
-  const hasFarm = ownBuildings.some(building => building.type === 'farm');
+  const hasFarm = ownBuildings.some(building => building.type === 'farm' && building.complete);
+  const hasMill = ownBuildings.some(building => building.type === 'mill' && building.complete);
   if (villagers.length === 0) {
     titleText = 'The first resident';
     body = 'Your Town Center is preparing a free first villager.';
   } else if (!hasFarm && !villagers.some(worker => ['gather', 'workplace'].includes(worker.job?.kind))) {
     titleText = 'Stock the storehouses';
     body = 'Select your villager, then click a resource or completed economic building.';
+  } else if (!hasMill) {
+    titleText = 'Establish the mill';
+    body = 'Build and complete a Mill before laying out cultivated fields.';
   } else if (!hasFarm) {
-    titleText = 'Secure the food supply';
-    body = 'Select a villager, choose Farm, then place and construct it.';
+    titleText = 'Lay out the fields';
+    body = 'Select a villager, choose Field, then place it beside the Mill to attach it.';
   } else if (!ownBuildings.some(building => building.type === 'barracks')) {
     titleText = 'Prepare for war';
     body = 'Raise houses for population and a Barracks for infantry.';
@@ -419,7 +426,9 @@ export function setPlacement(active, label = '', type = '', orientation = '') {
   activePlacementType = active ? type : null;
   $('placement-tip').classList.toggle('hidden', !active);
   if (active && label) {
-    $('placement-message').textContent = BUILDING_TYPES[type]?.fortification
+    $('placement-message').textContent = type === 'farm'
+      ? 'Field: move beside a completed Mill · snaps to an open attached plot · HUD or Esc cancels'
+      : BUILDING_TYPES[type]?.fortification
       ? `${label}: click terrain · Shift-click to chain · R turns ${orientation === 'diagonal' ? 'diagonal' : 'straight'} · HUD or Esc cancels`
       : `${label}: click terrain to build · Click any HUD panel to cancel`;
   }
@@ -439,7 +448,7 @@ export function setResourceHover(world, hover) {
     return;
   }
   const labels = {
-    food: hover.target.type === 'farm' ? 'Farm' : 'Food source',
+    food: hover.target.type === 'farm' ? 'Field' : 'Food source',
     wood: 'Forest', gold: 'Gold deposit', stone: 'Stone deposit',
   };
   const title = document.createElement('strong');

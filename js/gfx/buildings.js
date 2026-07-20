@@ -3143,150 +3143,222 @@ function bdPaintFarm(g, def, side, stage, seed) {
   const w = def.w, h = def.h;
   const hw = w * 0.5, hh = h * 0.5;
   const rr = bdRnd(seed);
-  const soil = bdRamp(bdLawful(BT.EARTH));
-  const ang = -0.26;                       // furrow direction, off-axis
-  const ca = Math.cos(ang), sa = Math.sin(ang);
-
-  // --- the parcel outline: an irregular closed path, never a clean rect. A
-  // mathematically exact rectangle is the single loudest "generated" tell on a
-  // modelled board.
-  const pts = [];
-  const N = 18;
-  for (let i = 0; i < N; i++) {
-    const t = i / N * BD_TAU;
-    const ex = Math.cos(t), ey = Math.sin(t);
-    const m = Math.max(Math.abs(ex), Math.abs(ey)) || 1;
-    const k = 1 + rr(-0.05, 0.05);
-    pts.push([ex / m * hw * 0.96 * k, ey / m * hh * 0.96 * k]);
-  }
-  const parcel = function (c) {
-    c.moveTo((pts[0][0] + pts[N - 1][0]) / 2, (pts[0][1] + pts[N - 1][1]) / 2);
-    for (let i = 0; i < N; i++) {
-      const p = pts[i], q = pts[(i + 1) % N];
-      c.quadraticCurveTo(p[0], p[1], (p[0] + q[0]) / 2, (p[1] + q[1]) / 2);
-    }
+  const points = [
+    [-hw * 0.94, -hh * 0.56], [-hw * 0.42, -hh * 0.88], [hw * 0.26, -hh * 0.91],
+    [hw * 0.91, -hh * 0.67], [hw * 0.98, -hh * 0.08], [hw * 0.90, hh * 0.68],
+    [hw * 0.35, hh * 0.91], [-hw * 0.34, hh * 0.88], [-hw * 0.94, hh * 0.58],
+    [-hw, -hh * 0.02],
+  ].map(([x, y]) => [x + rr(-1.8, 1.8), y + rr(-1.4, 1.4)]);
+  const parcel = c => {
+    c.moveTo(points[0][0], points[0][1]);
+    for (let index = 1; index < points.length; index++) c.lineTo(points[index][0], points[index][1]);
     c.closePath();
   };
 
-  bdLitPath(g, parcel, soil, {
-    bbox: [-hw, -hh, w, h], shadeX: 0.78, shadeY: 0.80, litW: 1.2, lineW: 1.6,
-  });
+  // A soft compressed shadow and grass-darkened verge seat the field in the
+  // terrain. The previous hard outlined rounded rectangle read as a UI card.
+  bdContactShadow(g, 3, 7, hw * 0.92, hh * 0.55, 0.62);
+  g.save();
+  g.beginPath(); parcel(g);
+  g.fillStyle = bdRgba(BT.TURF_DEEP, 0.55);
+  g.fill();
+  g.translate(-1.3, -1.2);
+  g.scale(0.975, 0.955);
+  g.beginPath(); parcel(g);
+  const earth = g.createLinearGradient(-hw, -hh, hw, hh);
+  earth.addColorStop(0, '#786044');
+  earth.addColorStop(0.44, '#59452F');
+  earth.addColorStop(1, '#35291F');
+  g.fillStyle = earth;
+  g.fill();
+  g.restore();
 
-  // --- FURROWS. Each is a shadowed trough with a sunlit ridge crest offset
-  // toward the light — the pair is what makes corrugation read as relief. A
-  // single line per furrow reads as hatching.
   g.save();
   g.beginPath(); parcel(g); g.clip();
-  const pitch = 7.0;
-  const span = (Math.abs(hw * ca) + Math.abs(hh * sa)) * 2.2;
-  for (let d = -span; d < span; d += pitch) {
-    const x0 = -sa * d - ca * span, y0 = ca * d - sa * span;
-    const x1 = -sa * d + ca * span, y1 = ca * d + sa * span;
-    // trough
-    g.strokeStyle = bdRgba(BT.EARTH_DARK, 0.62); g.lineWidth = 2.6;
-    g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
-    // lit crest, offset toward the sun
-    g.strokeStyle = bdRgba(BT.EARTH_LIGHT, 0.55); g.lineWidth = 1.5;
+
+  // Broad ridge/trough pairs establish actual relief. Crop is planted on the
+  // crests below; the darker gaps stay visible instead of becoming flat straw
+  // hatching. Slightly bowed lines keep the parcel hand-worked.
+  const rowPitch = 7.2;
+  for (let row = -5; row <= 5; row++) {
+    const y = row * rowPitch + 1;
+    const bend = (row % 3 - 1) * 1.1;
+    g.strokeStyle = bdRgba(BT.EARTH_DARK, 0.72);
+    g.lineWidth = 3.7;
     g.beginPath();
-    g.moveTo(x0 + bdSUN.x * 1.9, y0 + bdSUN.y * 1.9);
-    g.lineTo(x1 + bdSUN.x * 1.9, y1 + bdSUN.y * 1.9);
+    g.moveTo(-hw - 12, y + 9);
+    g.quadraticCurveTo(0, y + bend, hw + 12, y - 9);
+    g.stroke();
+    g.strokeStyle = bdRgba(BT.EARTH_LIGHT, 0.28);
+    g.lineWidth = 1.25;
+    g.beginPath();
+    g.moveTo(-hw - 12, y + 6.9);
+    g.quadraticCurveTo(0, y + bend - 2.1, hw + 12, y - 11.1);
     g.stroke();
   }
-  // clods and stones turned up by the plough
-  for (let i = 0; i < 60; i++) {
-    const px = rr(-hw, hw), py = rr(-hh, hh);
-    const lit = rr(0, 1) > 0.5;
-    g.fillStyle = bdRgba(lit ? BT.EARTH_LIGHT : BT.EARTH_DARK, rr(0.25, 0.6));
-    g.beginPath(); g.arc(px, py, rr(0.6, 1.8), 0, BD_TAU); g.fill();
+
+  // Wheel ruts form a muted headland on the near edge and visually point back
+  // toward the mill complex without drawing a bright gameplay connector.
+  for (const offset of [-2.6, 2.6]) {
+    g.strokeStyle = bdRgba(BT.MUD, 0.48);
+    g.lineWidth = 1.25;
+    g.beginPath();
+    g.moveTo(-hw, hh * 0.66 + offset);
+    g.bezierCurveTo(-hw * 0.25, hh * 0.55 + offset, hw * 0.3, hh * 0.72 + offset, hw, hh * 0.56 + offset);
+    g.stroke();
   }
 
-  // --- THE CROP. Height, density and colour all key off the stage, so a farm
-  // being worked visibly empties. Each stalk gets a lit up-left side.
+  // Crops grow in coherent rows. Layering dim lower stalks, warm stems and
+  // sparse lit ears produces depth at normal zoom while retaining soil lanes.
   if (stage > 0) {
-    const density = [0, 90, 200, 330][stage];
-    const hgt     = [0, 3.2, 6.0, 9.0][stage];
-    const bodyC   = ['', '#7E8A46', BT.STRAW, BT.STRAW][stage];
-    const litC    = ['', '#98A25C', BT.STRAW_LIGHT, BT.STRAW_LIGHT][stage];
-    for (let i = 0; i < density; i++) {
-      const px = rr(-hw * 0.97, hw * 0.97), py = rr(-hh * 0.97, hh * 0.97);
-      const L = hgt * rr(0.75, 1.15);
-      const lean = rr(-0.24, 0.24);
-      g.strokeStyle = bdRgba(bodyC, rr(0.55, 0.9));
-      g.lineWidth = 1.0;
-      g.beginPath(); g.moveTo(px, py); g.lineTo(px + lean * L, py - L); g.stroke();
-      g.strokeStyle = bdRgba(litC, rr(0.4, 0.75));
-      g.lineWidth = 0.6;
-      g.beginPath();
-      g.moveTo(px - 0.6, py - 0.4); g.lineTo(px + lean * L - 0.6, py - L - 0.4);
-      g.stroke();
-      // ripe ears on the tallest stage
-      if (stage === 3 && rr(0, 1) < 0.4) {
-        g.fillStyle = bdRgba(BT.STRAW_LIGHT, 0.8);
-        g.beginPath();
-        g.ellipse(px + lean * L, py - L - 1, 0.9, 1.8, lean, 0, BD_TAU);
-        g.fill();
+    const stemStep = [99, 5, 4, 3][stage];
+    const height = [0, 4.0, 6.3, 8.4][stage];
+    const canopyWidth = [0, 0.8, 1.1, 1.45][stage];
+    const body = stage === 1 ? '#667746' : stage === 2 ? '#8B7D4A' : '#9D8948';
+    const light = stage === 1 ? '#94A25A' : BT.STRAW_LIGHT;
+    for (let row = -5; row <= 5; row++) {
+      const rowY = row * rowPitch - 1;
+      const depth = (row + 5) / 10;
+      const halfColumns = 17 - Math.floor(Math.abs(row) * 1.25);
+      const span = halfColumns * 3.25;
+      const bend = (row % 3 - 1) * 1.1;
+
+      // A shadowed canopy ribbon makes the crop read as a planted row at game
+      // scale. The previous isolated marks looked like laid bricks once crop
+      // density dropped below full growth.
+      g.strokeStyle = bdRgba(BT.EARTH_DARK, 0.32);
+      g.lineWidth = canopyWidth + 1.3;
+      g.beginPath(); g.moveTo(-span, rowY + span * 0.15 + 1.2);
+      g.quadraticCurveTo(0, rowY + bend + 1.2, span, rowY - span * 0.15 + 1.2); g.stroke();
+      const canopy = g.createLinearGradient(-span, rowY, span, rowY);
+      canopy.addColorStop(0, bdRgba(bdMix(body, BT.EARTH_DARK, 0.34), 0.46));
+      canopy.addColorStop(0.48, bdRgba(body, 0.54));
+      canopy.addColorStop(1, bdRgba(bdMix(body, light, 0.18), 0.46));
+      g.strokeStyle = canopy;
+      g.lineWidth = canopyWidth;
+      g.beginPath(); g.moveTo(-span, rowY + span * 0.15);
+      g.quadraticCurveTo(0, rowY + bend, span, rowY - span * 0.15); g.stroke();
+      g.strokeStyle = bdRgba(light, 0.28);
+      g.lineWidth = 0.35;
+      g.beginPath(); g.moveTo(-span, rowY + span * 0.15 - canopyWidth * 0.38);
+      g.quadraticCurveTo(0, rowY + bend - canopyWidth * 0.38,
+        span, rowY - span * 0.15 - canopyWidth * 0.38); g.stroke();
+
+      for (let column = -halfColumns; column <= halfColumns; column += stemStep) {
+        const px = column * 3.25 + rr(-0.9, 0.9);
+        const py = rowY - px * 0.15 + rr(-0.8, 0.8);
+        const stalkHeight = height * (0.82 + depth * 0.2) * rr(0.82, 1.12);
+        const lean = rr(-0.14, 0.20);
+        g.strokeStyle = bdRgba(BT.EARTH_DARK, 0.20);
+        g.lineWidth = 1.7;
+        g.beginPath(); g.moveTo(px + 0.8, py + 0.8); g.lineTo(px + lean * stalkHeight + 0.8, py - stalkHeight + 0.8); g.stroke();
+        g.strokeStyle = bdRgba(body, 0.80);
+        g.lineWidth = 0.95;
+        g.beginPath(); g.moveTo(px, py); g.lineTo(px + lean * stalkHeight, py - stalkHeight); g.stroke();
+        g.strokeStyle = bdRgba(light, 0.55);
+        g.lineWidth = 0.42;
+        g.beginPath(); g.moveTo(px - 0.45, py - 0.5); g.lineTo(px + lean * stalkHeight - 0.45, py - stalkHeight); g.stroke();
+        // A second shorter blade turns each mark into a small fan of wheat,
+        // avoiding both hay-hatching and the brick-like look of thick bands.
+        g.strokeStyle = bdRgba(body, 0.60);
+        g.lineWidth = 0.62;
+        g.beginPath(); g.moveTo(px + 0.6, py + 0.2);
+        g.lineTo(px - lean * stalkHeight * 0.55 + 1.1, py - stalkHeight * 0.72); g.stroke();
+        if (stage >= 2 && (column + row) % (stage === 3 ? 2 : 4) === 0) {
+          g.fillStyle = bdRgba(light, 0.72);
+          g.beginPath();
+          g.ellipse(px + lean * stalkHeight, py - stalkHeight - 0.7, 0.62, 1.5, lean, 0, BD_TAU);
+          g.fill();
+        }
       }
     }
   } else {
-    // harvested: cut stubble rows and a scatter of loose straw
-    for (let i = 0; i < 150; i++) {
-      const px = rr(-hw * 0.95, hw * 0.95), py = rr(-hh * 0.95, hh * 0.95);
-      g.strokeStyle = bdRgba(BT.STRAW, rr(0.3, 0.6));
-      g.lineWidth = 0.9;
-      g.beginPath(); g.moveTo(px, py); g.lineTo(px + rr(-0.5, 0.5), py - rr(1.2, 2.4)); g.stroke();
+    for (let row = -5; row <= 5; row++) {
+      for (let column = -16; column <= 16; column += 2) {
+        const px = column * 3.25 + rr(-0.7, 0.7);
+        const py = row * rowPitch - px * 0.15 + rr(-0.5, 0.5);
+        g.strokeStyle = bdRgba(BT.STRAW, 0.46);
+        g.lineWidth = 0.75;
+        g.beginPath(); g.moveTo(px, py); g.lineTo(px + rr(-0.4, 0.4), py - rr(1.2, 2.5)); g.stroke();
+      }
     }
+  }
+
+  // Turned clods, flints and weeds break the repeated rows at the margins.
+  for (let index = 0; index < 44; index++) {
+    const edge = rr(0, 1) > 0.5;
+    const px = edge ? rr(-hw, hw) : (rr(0, 1) > 0.5 ? -hw : hw) + rr(-4, 4);
+    const py = edge ? (rr(0, 1) > 0.5 ? -hh : hh) + rr(-3, 3) : rr(-hh, hh);
+    g.fillStyle = bdRgba(rr(0, 1) > 0.35 ? BT.EARTH_DARK : BT.ROCK_LIGHT, rr(0.2, 0.48));
+    g.beginPath(); g.ellipse(px, py, rr(0.5, 1.5), rr(0.35, 1.0), rr(-0.5, 0.5), 0, BD_TAU); g.fill();
   }
   g.restore();
 
-  // --- STOOKS: sheaves stood up to dry, appearing as the crop comes in. They
-  // are the clearest possible signal that a farm is producing.
-  const stooks = [0, 3, 2, 0][stage];
-  for (let i = 0; i < stooks; i++) {
-    const sx = -hw * 0.62 + i * w * 0.30, sy = hh * 0.60;
-    const S = bdRamp(BT.STRAW);
-    bdContactShadow(g, sx, sy, 6, 11, 0.9);
-    bdLitPath(g, function (c) {
-      c.moveTo(sx - 5.5, sy);
-      c.quadraticCurveTo(sx - 2.2, sy - 13, sx, sy - 14);
-      c.quadraticCurveTo(sx + 2.2, sy - 13, sx + 5.5, sy);
-      c.closePath();
-    }, S, { bbox: [sx - 5.5, sy - 14, 11, 14], litW: 1.0, edge: true });
-    g.strokeStyle = bdRgba(S.shade, 0.6); g.lineWidth = 0.7;
-    for (let k = -2; k <= 2; k++) {
-      g.beginPath(); g.moveTo(sx + k * 1.6, sy - 1); g.lineTo(sx + k * 0.7, sy - 12); g.stroke();
-    }
-    // binding cord
-    g.strokeStyle = bdRgba(BT.TRUNK, 0.8); g.lineWidth = 1.1;
-    g.beginPath(); g.moveTo(sx - 4, sy - 7); g.lineTo(sx + 4, sy - 7.6); g.stroke();
+  // Low survey stakes keep ownership legible without fencing the whole parcel
+  // or turning it back into a freestanding cartoon object.
+  const timber = bdRamp(BMAT.TIMBER);
+  for (const [sx, sy] of [[-hw * 0.88, hh * 0.48], [hw * 0.86, -hh * 0.49]]) {
+    bdBeam(g, timber, sx, sy + 2, sx, sy - 6, 1.05, { cap: 'butt' });
   }
+  g.fillStyle = BD_SIDE[side].rim;
+  g.fillRect(-hw * 0.88 + 1, hh * 0.48 - 6, 5.5, 2.2);
 
-  // Harvest furniture makes the parcel feel worked rather than decorative.
-  // The cart arrives as the crop is cut; full fields retain only water and
-  // empty sacks at the boundary so the grain remains the visual focus.
-  bdBarrel(g, -hw * 0.77, hh * 0.72, 8, 12);
   if (stage <= 2) {
-    bdCart(g, hw * 0.56, hh * 0.70, 0.56, seed * 17 + stage);
-    bdSack(g, hw * 0.28, hh * 0.73, 8, 11, seed * 19 + stage);
-    if (stage <= 1) bdSack(g, hw * 0.39, hh * 0.75, 9, 13, seed * 23 + stage);
+    bdSack(g, hw * 0.68, hh * 0.56, 6.5, 8.5, seed * 19 + stage);
+    if (stage <= 1) bdSack(g, hw * 0.77, hh * 0.55, 6, 7.5, seed * 23 + stage);
   }
+}
 
-  // --- boundary: post and rail on the two near sides only, so the parcel is
-  // enclosed without walling off the villagers' approach
-  bdFence(g, -hw, hw, hh + 1, 9, seed * 3, 16);
-
-  // --- THE MARKER STAKE, up-left where nothing occludes it. This is the farm's
-  // whole team read: farms have no roof to fly a banner from.
-  bdBanner(g, -hw + 5, -hh + 6, 20, side, { w: 12, h: 9, dir: side === 0 ? 1 : -1 });
-
-  // a scarecrow on the far side, purely for silhouette interest
-  const T = bdRamp(BMAT.TIMBER);
-  const scx = hw * 0.52, scy = -hh * 0.30;
-  bdBeam(g, T, scx, scy, scx, scy - 16, 1.6, { cap: 'butt' });
-  bdBeam(g, T, scx - 6, scy - 11, scx + 6, scy - 12, 1.3, { cap: 'butt' });
-  const R = bdRamp(BMAT.CANVAS);
-  bdEllipse(g, scx, scy - 18, 3.0, 2.6, R, { litW: 0.6, edge: true });
-  bdPoly(g, [scx - 5, scy - 19, scx + 5, scy - 19.4, scx + 4, scy - 21, scx - 4, scy - 20.6],
-    bdRamp(BT.STRAW), { litW: 0.6 });
+// The foreground pass is composited after units. Only the near crop rows are
+// repeated here, so a farmer's boots and lower legs disappear naturally among
+// the wheat while the torso, arms and hoe remain readable.
+function bdPaintFarmForeground(g, def, stage, seed) {
+  if (stage <= 0) return;
+  const hw = def.w * 0.5, hh = def.h * 0.5;
+  const rr = bdRnd(seed + 991);
+  const rowPitch = 7.2;
+  const stemStep = [99, 5, 4, 3][stage];
+  const height = [0, 4.0, 6.3, 8.4][stage];
+  const canopyWidth = [0, 0.8, 1.1, 1.45][stage];
+  const body = stage === 1 ? '#667746' : stage === 2 ? '#8B7D4A' : '#9D8948';
+  const light = stage === 1 ? '#94A25A' : BT.STRAW_LIGHT;
+  g.save();
+  g.beginPath();
+  g.moveTo(-hw * 0.96, 1); g.lineTo(hw * 0.97, -7);
+  g.lineTo(hw * 0.88, hh * 0.72); g.lineTo(-hw * 0.92, hh * 0.78); g.closePath();
+  g.clip();
+  for (let row = 0; row <= 5; row++) {
+    const rowY = row * rowPitch + 1;
+    const halfColumns = 17 - Math.floor(Math.abs(row) * 1.25);
+    const span = halfColumns * 3.25;
+    const bend = (row % 3 - 1) * 1.1;
+    g.strokeStyle = bdRgba(body, 0.48);
+    g.lineWidth = canopyWidth;
+    g.beginPath(); g.moveTo(-span, rowY + span * 0.15);
+    g.quadraticCurveTo(0, rowY + bend, span, rowY - span * 0.15); g.stroke();
+    g.strokeStyle = bdRgba(light, 0.28);
+    g.lineWidth = 0.35;
+    g.beginPath(); g.moveTo(-span, rowY + span * 0.15 - canopyWidth * 0.38);
+    g.quadraticCurveTo(0, rowY + bend - canopyWidth * 0.38,
+      span, rowY - span * 0.15 - canopyWidth * 0.38); g.stroke();
+    for (let column = -halfColumns; column <= halfColumns; column += stemStep) {
+      const px = column * 3.25 + rr(-0.8, 0.8);
+      const py = rowY - px * 0.15 + rr(-0.65, 0.65);
+      const stalkHeight = height * (0.9 + row * 0.025) * rr(0.86, 1.12);
+      const lean = rr(-0.12, 0.18);
+      g.strokeStyle = bdRgba(body, 0.88);
+      g.lineWidth = 1.05;
+      g.beginPath(); g.moveTo(px, py); g.lineTo(px + lean * stalkHeight, py - stalkHeight); g.stroke();
+      g.strokeStyle = bdRgba(light, 0.62);
+      g.lineWidth = 0.45;
+      g.beginPath(); g.moveTo(px - 0.4, py - 0.4); g.lineTo(px + lean * stalkHeight - 0.4, py - stalkHeight); g.stroke();
+      g.strokeStyle = bdRgba(body, 0.66);
+      g.lineWidth = 0.65;
+      g.beginPath(); g.moveTo(px + 0.6, py + 0.2);
+      g.lineTo(px - lean * stalkHeight * 0.55 + 1.1, py - stalkHeight * 0.72); g.stroke();
+    }
+  }
+  g.restore();
 }
 
 
@@ -3730,12 +3802,14 @@ function bdBake(box, scale, paint) {
 
 const bdBuildingCache = new Map();
 const bdFarmCache = new Map();
+const bdFarmForegroundCache = new Map();
 const bdResourceCache = new Map();
 
 /** Called from startBattle(). Frees every baked surface between battles. */
 function bdResetCaches() {
   bdBuildingCache.clear();
   bdFarmCache.clear();
+  bdFarmForegroundCache.clear();
   bdResourceCache.clear();
   bdFoliagePal = null;
 }
@@ -4009,6 +4083,18 @@ function bdFarmSprite(def, side, stage) {
   });
   bdFarmCache.set(key, s);
   return s;
+}
+
+function bdFarmForegroundSprite(def, side, stage) {
+  const key = side + '|' + stage;
+  let sprite = bdFarmForegroundCache.get(key);
+  if (sprite) return sprite;
+  const box = bdBoxFor('farm', def);
+  sprite = bdBake(box, BD_SCALE, function (g) {
+    bdPaintFarmForeground(g, def, stage, side * 613 + stage * 71 + 3);
+  });
+  bdFarmForegroundCache.set(key, sprite);
+  return sprite;
 }
 
 /**
@@ -4570,17 +4656,32 @@ function drawFoundation(building, nation, worldTime) {
     { w: 11, h: 8, dir: building.side === 0 ? -1 : 1 });
 }
 
-/** FARMS — one blit of the parcel at its current crop stage. */
-function drawFarm(building) {
+function bdFarmStage(building) {
   const def = BUILDING_TYPES.farm;
   const maxAmount = Math.max(1, def.amount || 1);
   // NOTE: createBuilding() in economy.js sets `amount` but NOT `maxAmount` on
   // buildings — only resource nodes carry maxAmount. Verified in source; the
   // ceiling has to come from BUILDING_TYPES.
   const frac = Math.max(0, Math.min(1, (building.amount || 0) / maxAmount));
-  const stage = frac > 0.66 ? 3 : frac > 0.33 ? 2 : frac > 0.04 ? 1 : 0;
+  return frac > 0.66 ? 3 : frac > 0.33 ? 2 : frac > 0.04 ? 1 : 0;
+}
+
+/** FARMS — one blit of the parcel at its current crop stage. */
+function drawFarm(building) {
+  const def = BUILDING_TYPES.farm;
+  const stage = bdFarmStage(building);
   const s = bdFarmSprite(def, building.side, stage);
   if (s) ctx.drawImage(s.c, s.x, s.y, s.w, s.h);
+}
+
+/** Near crop rows are redrawn after units so farmers stand within the wheat. */
+function drawFarmForeground(building) {
+  if (!building?.alive || !building.complete || building.type !== 'farm') return;
+  const def = BUILDING_TYPES.farm;
+  const sprite = bdFarmForegroundSprite(def, building.side, bdFarmStage(building));
+  if (!sprite) return;
+  ctx.drawImage(sprite.c, building.x + sprite.x, building.y + sprite.y,
+    sprite.w, sprite.h);
 }
 
 /** COMPLETED BUILDINGS — one blit, plus the two live overlays. */
@@ -4870,6 +4971,6 @@ function drawBuilding(building, world) {
 
 export {
   setBuildingRefs, bdResetCaches, getBuildingPresentation,
-  drawResourceNode, drawFarm, drawFoundation,
+  drawResourceNode, drawFarm, drawFarmForeground, drawFoundation,
   drawCompleteBuilding, drawBuilding,
 };
