@@ -598,79 +598,109 @@ function bdPassLining(g, scale, tintHex) {
 }
 
 /**
- * PASS E — the side-tinted trodden apron and the soft ground bed, painted
+ * PASS E — the brick-and-packed-earth apron and the soft ground bed, painted
  * under everything with 'destination-over' so they are not swept into the
  * lining silhouette.
  *
- * The apron is the building's share of the base-rim mechanism: worn earth
- * around the footing, warmed toward oxide red or cooled toward Prussian blue
- * at ~40% chroma, then forced through bdLawful so it obeys the palette law and
- * still reads as ground rather than as a coloured plinth. It is a large,
- * never-occluded block of side colour at the exact point the eye lands.
+ * The apron is the building's share of the base-rim mechanism: muted pavers
+ * interrupted by worn earth, with only the outer course nudged toward the
+ * owner's colour. Everything passes through bdLawful so it still reads as
+ * ground rather than a coloured plinth or permanent selection ring.
  */
-function bdPassGroundApron(g, cx, cy, rx, sideHex) {
+function bdPassGroundApron(g, cx, cy, rx, sideHex, options) {
+  const o = options || {};
+  const ry = o.ry || rx * bdSUN.squash;
+  const seed = o.seed || ((rx * 71 + ry * 131) | 0);
+  const rr = bdRnd(seed);
+  const worn = bdLawful(bdMix(BT.EARTH, sideHex || BT.EARTH, 0.16));
+  const paver = bdLawful(bdMix(BMAT.BRICK, BT.EARTH_LIGHT, 0.38));
+  const mortar = bdLawful(bdMix(BT.ROCK, BT.EARTH_LIGHT, 0.32));
   g.save();
   g.globalCompositeOperation = 'destination-over';
 
   // ORDER MATTERS AND IS INVERTED HERE. Under 'destination-over' each draw goes
   // BEHIND the previous one, so this block is painted front-to-back: the soft
   // bed shadow first (it must end up ON TOP of the trodden earth, because a
-  // shadow falls onto ground), then the clods and the lit crescent, then the
-  // apron body last so it sits underneath its own detail. Painting these in
-  // reading order — as the obvious version does — buries the contact shadow and
-  // the clods beneath a 78%-opaque disc and throws both away.
+  // shadow falls onto ground), then wear and paver joints, then the apron body
+  // last so it sits underneath its own detail. Painting these in reading order
+  // would bury the contact shadow and joints beneath the opaque paver body.
 
   // 1. soft ground bed. Radii are deliberately held to 1.12x: at 1.45x the
   // falloff ran past the stamp box on town_center / barracks / stable / foundry
   // and the blit edge cut a dead-straight line across a soft shadow.
-  const ox = cx + rx * 0.24, oy = cy + rx * 0.14;
+  const ox = cx + rx * 0.24, oy = cy + ry * 0.34;
   g.save();
   g.translate(ox, oy);
-  g.scale(1, bdSUN.squash);
-  const R = rx * 1.12;
-  const sh = g.createRadialGradient(0, 0, 0, 0, 0, R);
+  g.scale(1, ry / rx);
+  const sh = g.createRadialGradient(0, 0, 0, 0, 0, rx * 1.12);
   sh.addColorStop(0.00, bdShadow(0.40));
   sh.addColorStop(0.55, bdShadow(0.18));
   sh.addColorStop(1.00, bdShadow(0));
   g.fillStyle = sh;
-  g.beginPath(); g.arc(0, 0, R, 0, BD_TAU); g.fill();
+  g.beginPath(); g.arc(0, 0, rx * 1.12, 0, BD_TAU); g.fill();
   g.restore();
 
-  if (sideHex) {
-    const worn = bdLawful(bdMix(BT.EARTH, sideHex, 0.40));
-    const wornLit = bdLawful(bdMix(worn, bdSUN.bounce, 0.32));
-    g.save();
-    g.translate(cx, cy);
-    g.scale(1, bdSUN.squash);
-
-    // 2. clods, seeded so they never reshuffle between re-bakes
-    const rr = bdRnd(0xB0D | (rx * 7));
-    for (let i = 0; i < 26; i++) {
-      const a = rr(0, BD_TAU);
-      const dd = Math.sqrt(rr(0, 1)) * rx * 1.1;
-      const px = Math.cos(a) * dd, py = Math.sin(a) * dd;
-      const lit = (Math.cos(a) * bdSUN.x + Math.sin(a) * bdSUN.y) > 0.2;
-      g.fillStyle = bdRgba(lit ? wornLit : bdMix(worn, '#141008', 0.35), rr(0.18, 0.46));
-      g.beginPath(); g.arc(px, py, rr(0.6, 1.9), 0, BD_TAU); g.fill();
-    }
-
-    // 3. dry lit crescent on the sunward edge — the apron catching the lamp
-    g.lineWidth = rx * 0.17;
-    g.strokeStyle = bdRgba(wornLit, 0.5);
+  // 2. irregular packed-earth wear sits over the paving. Because this whole
+  // pass uses destination-over, painting it first keeps the worn spots above
+  // the mortar and brick body that follow.
+  for (let i = 0; i < 12; i++) {
+    const a = rr(0, BD_TAU);
+    const d = Math.sqrt(rr(0, 1)) * rx * 0.82;
+    const px = cx + Math.cos(a) * d;
+    const py = cy + Math.sin(a) * d * (ry / rx);
+    g.fillStyle = bdRgba(i % 3 ? worn : BT.EARTH_DARK, rr(0.16, 0.34));
     g.beginPath();
-    g.arc(0, 0, rx * 0.9, Math.PI * 0.92, Math.PI * 1.92);
-    g.stroke();
-
-    // 4. the apron body, last and therefore lowest
-    const sg = g.createRadialGradient(0, 0, 0, 0, 0, rx * 1.16);
-    sg.addColorStop(0.00, bdRgba(worn, 0.78));
-    sg.addColorStop(0.55, bdRgba(worn, 0.56));
-    sg.addColorStop(0.84, bdRgba(worn, 0.22));
-    sg.addColorStop(1.00, bdRgba(worn, 0));
-    g.fillStyle = sg;
-    g.beginPath(); g.arc(0, 0, rx * 1.16, 0, BD_TAU); g.fill();
-    g.restore();
+    g.ellipse(px, py, rr(2.2, 7.0), rr(1.0, 3.4), rr(-0.4, 0.4), 0, BD_TAU);
+    g.fill();
   }
+
+  // 3. staggered paver joints. Their isometric ellipsoidal clip makes the
+  // paving read as a flat yard around the building rather than a raised base.
+  g.save();
+  g.beginPath();
+  g.ellipse(cx, cy, rx * 0.96, ry * 0.92, 0, 0, BD_TAU);
+  g.clip();
+  const courseH = bdClamp(ry * 0.18, 3.2, 6.2);
+  const brickW = courseH * 2.35;
+  let row = 0;
+  for (let y = cy - ry; y <= cy + ry; y += courseH, row++) {
+    const yn = (y - cy) / ry;
+    const span = rx * Math.sqrt(Math.max(0, 1 - yn * yn));
+    g.strokeStyle = bdRgba(bdMix(mortar, '#1B1814', 0.34), 0.50);
+    g.lineWidth = 0.72;
+    g.beginPath(); g.moveTo(cx - span, y); g.lineTo(cx + span, y); g.stroke();
+    g.strokeStyle = bdRgba(bdMix(paver, bdSUN.key, 0.24), 0.30);
+    g.lineWidth = 0.52;
+    g.beginPath(); g.moveTo(cx - span, y - 0.75); g.lineTo(cx + span, y - 0.75); g.stroke();
+    const offset = row % 2 ? brickW * 0.5 : 0;
+    for (let x = cx - span + offset; x < cx + span; x += brickW) {
+      g.strokeStyle = bdRgba(bdMix(mortar, '#1B1814', 0.42), rr(0.36, 0.56));
+      g.lineWidth = 0.68;
+      g.beginPath(); g.moveTo(x, y - courseH); g.lineTo(x + rr(-0.45, 0.45), y); g.stroke();
+    }
+  }
+  g.restore();
+
+  // 4. restrained edge course carries a trace of team colour without turning
+  // the permanent yard into a selection ring.
+  g.strokeStyle = bdRgba(bdLawful(bdMix(paver, sideHex || paver, 0.22)), 0.42);
+  g.lineWidth = 2.0;
+  g.beginPath(); g.ellipse(cx, cy, rx * 0.97, ry * 0.93, 0, 0, BD_TAU); g.stroke();
+
+  // 5. brick/earth body and its feathered turf transition, painted last so
+  // they sit beneath the wear, joints, contact shadow, and building.
+  g.fillStyle = bdRgba(paver, 0.64);
+  g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, BD_TAU); g.fill();
+  g.save();
+  g.translate(cx, cy);
+  g.scale(1, ry / rx);
+  const sg = g.createRadialGradient(0, 0, 0, 0, 0, rx * 1.18);
+  sg.addColorStop(0.00, bdRgba(worn, 0.52));
+  sg.addColorStop(0.72, bdRgba(worn, 0.32));
+  sg.addColorStop(1.00, bdRgba(worn, 0));
+  g.fillStyle = sg;
+  g.beginPath(); g.arc(0, 0, rx * 1.18, 0, BD_TAU); g.fill();
+  g.restore();
 
   g.restore();
 }
@@ -3282,14 +3312,19 @@ const BD_TOP_EXTRA = {
 
 function bdBoxFor(type, def) {
   const topExtra = BD_TOP_EXTRA[type] == null ? 60 : BD_TOP_EXTRA[type];
+  const presentation = getBuildingPresentation(type, def);
   // The side and bottom margins are sized off def.w rather than being a flat 26
   // because the trodden apron and its soft ground bed scale with the footprint:
   // at a flat margin the bed's outer falloff ran past the stamp edge on the four
   // largest types and the blit cut a dead-straight line through a soft shadow.
-  // bdPassGroundApron's reach is 0.707*w to the right of centre and
-  // yG + 0.06h + 0.318w below it, which is what these two terms cover.
-  const sideExtra = Math.max(28, def.w * 0.28, type === 'mill' ? def.w * 0.34 : 0);
-  const botExtra = Math.max(42, def.h * 0.06 + def.w * 0.32);
+  // The current paving reach comes directly from the shared presentation
+  // profile so a wider yard can never outgrow the cached procedural stamp.
+  const sideExtra = Math.max(
+    28,
+    presentation.apronRx * 1.18 - def.w * 0.5 + 4,
+    type === 'mill' ? def.w * 0.34 : 0,
+  );
+  const botExtra = Math.max(42, presentation.apronRy * 1.20 + def.h * 0.08);
   const ox = -(def.w * 0.5 + sideExtra);
   const ow = def.w + sideExtra * 2;
   const oy = -(def.h * 0.5 + topExtra);
@@ -3341,16 +3376,45 @@ const BD_PAINTERS = {
 };
 
 const BD_ENGLISH_BUILDING_ART = Object.freeze({
-  town_center: { key: 'englishTownCenter', height: 252 },
-  house: { key: 'englishHouse', height: 116 },
-  mill: { key: 'englishMill', height: 166 },
-  lumber_camp: { key: 'englishLumberCamp', height: 108 },
-  mine: { key: 'englishMine', height: 116 },
-  barracks: { key: 'englishBarracks', height: 128 },
-  stable: { key: 'englishStable', height: 130 },
-  foundry: { key: 'englishFoundry', height: 158 },
-  tower: { key: 'englishTower', height: 174 },
+  town_center: { key: 'englishTownCenter' },
+  house: { key: 'englishHouse' },
+  mill: { key: 'englishMill' },
+  lumber_camp: { key: 'englishLumberCamp' },
+  mine: { key: 'englishMine' },
+  barracks: { key: 'englishBarracks' },
+  stable: { key: 'englishStable' },
+  foundry: { key: 'englishFoundry' },
+  tower: { key: 'englishTower' },
 });
+
+// Production sprites previously used unrelated hard-coded heights. Since the
+// sources have very different aspect ratios, that made the narrow mill and
+// tower nearly as wide as the stable. These profiles derive visible width and
+// paving from the gameplay footprint, preserving the intended hierarchy for
+// every building type while still allowing roof overhang and vertical mass.
+const BD_BUILDING_PRESENTATION = Object.freeze({
+  town_center: { artWidthScale: 1.48, apronWidthScale: 0.92, apronDepthScale: 0.54 },
+  house: { artWidthScale: 1.36, apronWidthScale: 0.72, apronDepthScale: 0.46 },
+  mill: { artWidthScale: 1.42, apronWidthScale: 0.78, apronDepthScale: 0.48 },
+  lumber_camp: { artWidthScale: 1.44, apronWidthScale: 0.78, apronDepthScale: 0.48 },
+  mine: { artWidthScale: 1.42, apronWidthScale: 0.78, apronDepthScale: 0.48 },
+  barracks: { artWidthScale: 1.44, apronWidthScale: 0.82, apronDepthScale: 0.50 },
+  stable: { artWidthScale: 1.48, apronWidthScale: 0.86, apronDepthScale: 0.52 },
+  foundry: { artWidthScale: 1.40, apronWidthScale: 0.84, apronDepthScale: 0.50 },
+  tower: { artWidthScale: 1.36, apronWidthScale: 0.70, apronDepthScale: 0.46 },
+});
+
+function getBuildingPresentation(type, def = BUILDING_TYPES[type]) {
+  if (!def) return null;
+  const profile = BD_BUILDING_PRESENTATION[type] || {
+    artWidthScale: 1.4, apronWidthScale: 0.76, apronDepthScale: 0.48,
+  };
+  return {
+    artWidth: def.w * profile.artWidthScale,
+    apronRx: def.w * profile.apronWidthScale,
+    apronRy: def.h * profile.apronDepthScale,
+  };
+}
 
 /**
  * The British civic hall uses a pre-rendered source rather than the general
@@ -3358,13 +3422,17 @@ const BD_ENGLISH_BUILDING_ART = Object.freeze({
  * gallery-light bands would destroy the sub-pixel masonry, glazing and carved
  * stone detail that the production asset supplies.
  */
-function bdProductionBuildingSprite(def, art, image, damageStage, seed) {
-  const imageH = art.height;
-  const imageW = imageH * image.naturalWidth / image.naturalHeight;
+function bdProductionBuildingSprite(type, def, image, side, damageStage, seed) {
+  const presentation = getBuildingPresentation(type, def);
+  const imageW = presentation.artWidth;
+  const imageH = imageW * image.naturalHeight / image.naturalWidth;
   const bottom = def.h * 0.48 + 8;
   const left = -imageW / 2;
   const top = bottom - imageH;
-  const box = [left - 24, top - 18, imageW + 48, imageH + 78];
+  const boxLeft = Math.min(left - 24, -presentation.apronRx * 1.18 - 4);
+  const boxRight = Math.max(left + imageW + 24, presentation.apronRx * 1.18 + 4);
+  const boxBottom = Math.max(bottom + 60, bottom - 2 + presentation.apronRy * 1.20 + 8);
+  const box = [boxLeft, top - 18, boxRight - boxLeft, boxBottom - (top - 18)];
 
   return bdBake(box, BD_SCALE, function (g) {
     g.drawImage(image, left, top, imageW, imageH);
@@ -3411,6 +3479,11 @@ function bdProductionBuildingSprite(def, art, image, damageStage, seed) {
     g.globalCompositeOperation = 'destination-over';
     bdContactShadow(g, 0, bottom - 8, def.w * 0.58, def.h * 0.54, 0.74);
     g.restore();
+
+    bdPassGroundApron(g, 0, bottom - 2, presentation.apronRx, BD_SIDE[side].rim, {
+      ry: presentation.apronRy,
+      seed,
+    });
   });
 }
 
@@ -3425,7 +3498,7 @@ function bdBuildingSprite(type, def, side, nation, natRoof, variant, damageStage
 
   if (image) {
     s = bdProductionBuildingSprite(
-      def, art, image, damage, variant * 7919 + side * 104729 + 1,
+      type, def, image, side, damage, variant * 7919 + side * 104729 + 1,
     );
     bdBuildingCache.set(key, s);
     return s;
@@ -3461,7 +3534,11 @@ function bdBuildingSprite(type, def, side, nation, natRoof, variant, damageStage
     bdCastShadow(g, bdShellSilhouette(G), G.height);
     g.restore();
     // trodden apron + soft bed, beneath everything
-    bdPassGroundApron(g, 0, G.yG + def.h * 0.06, def.w * 0.52, BD_SIDE[side].rim);
+    const presentation = getBuildingPresentation(type, def);
+    bdPassGroundApron(g, 0, G.yG + def.h * 0.06, presentation.apronRx, BD_SIDE[side].rim, {
+      ry: presentation.apronRy,
+      seed,
+    });
   });
   bdBuildingCache.set(key, s);
   return s;
@@ -4269,7 +4346,7 @@ function drawBuilding(building, world) {
    ------------------------------------------------------------------------ */
 
 export {
-  setBuildingRefs, bdResetCaches,
+  setBuildingRefs, bdResetCaches, getBuildingPresentation,
   drawResourceNode, drawFarm, drawFoundation,
   drawCompleteBuilding, drawBuilding,
 };
