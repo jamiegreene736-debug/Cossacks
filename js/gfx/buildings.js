@@ -5365,6 +5365,22 @@ function drawBuilding(building, world) {
   ctx.restore();
 }
 
+function drawBuildingCollapse(destruction, worldTime) {
+  if (!destruction || destruction.duration <= 0) return;
+  const progress = Math.max(0, Math.min(1, destruction.age / destruction.duration));
+  const fall = Math.max(0, (progress - 0.12) / 0.88);
+  const shake = Math.sin(progress * Math.PI * 16 + destruction.id) * (1 - progress) * 2.8;
+  const squash = Math.max(0.18, 1 - fall * 0.82);
+  const fade = progress < 0.58 ? 1 : 1 - (progress - 0.58) / 0.42;
+
+  ctx.save();
+  ctx.translate(destruction.x + shake, destruction.y + fall * destruction.h * 0.12);
+  ctx.globalAlpha = Math.max(0, fade);
+  ctx.transform(1 + fall * 0.05, 0, -fall * 0.08, squash, 0, destruction.h * fall * 0.2);
+  drawCompleteBuilding(destruction, destruction.nation, worldTime);
+  ctx.restore();
+}
+
 
 /* ---------------------------------------------------------------------------
    11. MODULE WRAPPER  (see the report — the integration target moved)
@@ -5408,5 +5424,5 @@ function drawBuilding(building, world) {
 export {
   setBuildingRefs, bdResetCaches, getBuildingPresentation, bdConstructionArtFrame,
   drawResourceNode, drawFarm, drawFarmForeground, drawFoundation,
-  drawCompleteBuilding, drawBuilding,
+  drawCompleteBuilding, drawBuilding, drawBuildingCollapse,
 };

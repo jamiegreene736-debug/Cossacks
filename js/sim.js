@@ -114,7 +114,7 @@ function makeUnit(side, nationKey, type, x, y) {
     target: null, acquireT: Math.random() * 0.5,
     formation: 'line',
     facing: side === 0 ? 1 : -1,
-    moving: false, animT: Math.random() * 10, fireT: 0,
+    moving: false, animT: Math.random() * 10, fireT: 0, torchT: 0,
     fleeYDrift: 0,
     job: null,
     workAction: null,
@@ -129,7 +129,7 @@ function clampPos(u) {
 export function createWorld(opts) {
   const world = {
     units: [], active: [],
-    projectiles: [], particles: [], flags: [],
+    projectiles: [], particles: [], flags: [], destructions: [],
     pendingDecals: [], decals: [],
     time: 0, state: 'running', winner: -1, checkT: 1,
     speed: 1, killLog: {},
@@ -225,6 +225,23 @@ export function damage(world, victim, amount, attacker) {
   }
 }
 
+export function buildingFireIntensity(building) {
+  if (!building?.alive || !building.complete || !building.ignited) return 0;
+  const health = Math.max(0, building.hp / Math.max(1, building.maxHp));
+  return Math.min(1, 0.28 + (1 - health) * 0.88
+    + Math.min(0.2, (building.fireImpactCount || 1) * 0.025));
+}
+
+function igniteBuilding(building) {
+  if (!building?.alive || building.entityKind !== 'building') return;
+  building.ignited = true;
+  building.fireImpactCount = (building.fireImpactCount || 0) + 1;
+  building.fireEmitT = Math.min(building.fireEmitT ?? 0.04, 0.04);
+  if (!Number.isFinite(building.fireSeed)) {
+    building.fireSeed = ((building.id || 1) * 2654435761) >>> 0;
+  }
+}
+
 function kill(world, entity) {
   entity.alive = false;
   entity.hp = 0;
@@ -234,7 +251,19 @@ function kill(world, entity) {
   if (entity.entityKind === 'building') {
     sfx.buildingDestroyed(entity.type, entity.x);
     onBuildingDestroyed(world, entity);
-    world.pendingDecals.push({ kind: 'ruin', x: entity.x, y: entity.y, type: entity.type });
+    world.pendingDecals.push({
+      kind: 'ruin', x: entity.x, y: entity.y, type: entity.type,
+      w: entity.w, h: entity.h, side: entity.side, seed: entity.fireSeed,
+    });
+    if (!world.destructions) world.destructions = [];
+    world.destructions.push({
+      id: entity.id, type: entity.type, side: entity.side,
+      x: entity.x, y: entity.y, w: entity.w, h: entity.h, radius: entity.radius,
+      nation: world.sides[entity.side].nation,
+      hp: 1, maxHp: entity.maxHp, complete: true, queue: [],
+      fireSeed: entity.fireSeed || ((entity.id * 2654435761) >>> 0),
+      age: 0, duration: 1.45,
+    });
     world.events.push({
       side: entity.side,
       text: `${entity.side === 0 ? 'Your' : 'Enemy'} ${entity.type.replaceAll('_', ' ')} was destroyed.`,
@@ -292,6 +321,10 @@ function fireBlocked(world, u, t, d) {
 }
 
 function fireMusket(world, u, t, d, accMul = 1) {
+  if (t.entityKind === 'building') {
+    launchBuildingTorch(world, u, t, u.dmg * (0.85 + Math.random() * 0.3), true);
+    return;
+  }
   u.reload = u.reloadTime * (0.85 + Math.random() * 0.3);
   u.fireT = 0.13;
   const nx = (t.x - u.x) / d, ny = (t.y - u.y) / d;
@@ -303,6 +336,55 @@ function fireMusket(world, u, t, d, accMul = 1) {
   if (Math.random() < hitChance) {
     damage(world, t, u.dmg * (0.85 + Math.random() * 0.3), u);
   }
+}
+
+export function launchBuildingTorch(world, u, building, amount, usesReload = false) {
+  if (!u?.alive || !building?.alive || building.entityKind !== 'building') return null;
+  if (usesReload) u.reload = u.reloadTime * (0.85 + Math.random() * 0.3);
+  const dx = building.x - u.x;
+  const dy = building.y - u.y;
+  const distance = Math.max(1, Math.hypot(dx, dy));
+  const nx = dx / distance;
+  const ny = dy / distance;
+  const visualY = u.y - (u.wallElevation || 0);
+  const startReach = u.type === 'cav' ? 12 : 8;
+  const projectile = {
+    kind: 'torch', sx: u.x + nx * startReach, sy: visualY + ny * startReach - 9,
+    x: u.x + nx * startReach, y: visualY + ny * startReach - 9,
+    px: u.x + nx * startReach, py: visualY + ny * startReach - 9,
+    tx: building.x + nx * Math.min(building.radius * 0.24, 18),
+    ty: building.y - Math.max(9, building.h * 0.38),
+    t: 0, dur: Math.min(0.92, Math.max(0.38, distance / 185)),
+    arc: Math.min(42, Math.max(16, distance * 0.16)),
+    dmg: amount, splash: 0, target: building, attackerId: u.id,
+  };
+  world.projectiles.push(projectile);
+  u.torchT = 0.48;
+  u.fireT = Math.max(u.fireT, 0.18);
+  u.facing = dx >= 0 ? 1 : -1;
+  sfx.torchThrow(u.x, u.type === 'cav');
+  return projectile;
+}
+
+function impactTorch(world, projectile) {
+  const target = projectile.target;
+  flash(world, projectile.tx, projectile.ty, false);
+  smokePuff(world, projectile.tx, projectile.ty - 2, false);
+  for (let index = 0; index < 6; index++) {
+    const angle = Math.random() * Math.PI * 2;
+    spawnParticle(world, {
+      kind: 'ember', x: projectile.tx, y: projectile.ty,
+      vx: Math.cos(angle) * (18 + Math.random() * 36),
+      vy: Math.sin(angle) * 18 - 24 - Math.random() * 22,
+      life: 0, max: 0.35 + Math.random() * 0.45,
+      size: 1.7 + Math.random() * 1.6, grow: 0,
+    });
+  }
+  sfx.torchImpact(projectile.tx);
+  if (!target?.alive || target.entityKind !== 'building') return;
+  igniteBuilding(target);
+  const attacker = world.units.find(unit => unit.id === projectile.attackerId) || null;
+  damage(world, target, projectile.dmg, attacker);
 }
 
 function fireCannon(world, u, t, d) {
@@ -355,6 +437,7 @@ function updateUnit(world, u, dt) {
   u.reload -= dt;
   u.meleeCd -= dt;
   u.fireT -= dt;
+  u.torchT = Math.max(0, (u.torchT || 0) - dt);
   u.moving = false;
 
   if (u.state === 'flee') {
@@ -531,8 +614,34 @@ function meleeStrike(world, u, t) {
     if (t.formation === 'square' && t.type !== 'cav') dmg *= SQUARE_VS_CAV;
     u.charge = Math.max(0, u.charge - 0.5);
   }
-  sfx.melee(u.x, u.type === 'cav' || t.type === 'cav');
-  damage(world, t, dmg, u);
+  if (t.entityKind === 'building') {
+    launchBuildingTorch(world, u, t, dmg);
+  } else {
+    sfx.melee(u.x, u.type === 'cav' || t.type === 'cav');
+    damage(world, t, dmg, u);
+  }
+}
+
+function stepBuildingFires(world, dt) {
+  for (const building of world.buildings) {
+    const intensity = buildingFireIntensity(building);
+    if (intensity <= 0) continue;
+    building.fireEmitT = (building.fireEmitT || 0) - dt;
+    if (building.fireEmitT > 0) continue;
+    building.fireEmitT = 0.22 - intensity * 0.11 + Math.random() * 0.07;
+    const spread = Math.max(8, building.w * 0.3);
+    const x = building.x + (Math.random() - 0.5) * spread;
+    const y = building.y - building.h * (0.28 + Math.random() * 0.32);
+    smokePuff(world, x, y, intensity > 0.7);
+    if (Math.random() < 0.38 + intensity * 0.5) {
+      spawnParticle(world, {
+        kind: 'ember', x, y: y + 5,
+        vx: (Math.random() - 0.5) * 15, vy: -22 - Math.random() * 28,
+        life: 0, max: 0.45 + Math.random() * 0.85,
+        size: 1.4 + intensity * 2.1, grow: 0,
+      });
+    }
+  }
 }
 
 // ---------- Main step ----------
@@ -554,6 +663,7 @@ export function step(world, dt) {
   world.tgtGrid.build(active);
 
   stepEconomy(world, dt);
+  stepBuildingFires(world, dt);
 
   blockingFortifications.length = 0;
   for (const building of world.buildings) {
@@ -610,9 +720,16 @@ export function step(world, dt) {
     p.y = p.sy + (p.ty - p.sy) * k - Math.sin(Math.PI * k) * p.arc;
     if (p.t >= p.dur) {
       if (p.kind === 'tower') flash(world, p.tx, p.ty, false);
+      else if (p.kind === 'torch') impactTorch(world, p);
       else explodeShell(world, p);
       world.projectiles.splice(i, 1);
     }
+  }
+
+  for (let index = world.destructions.length - 1; index >= 0; index--) {
+    const destruction = world.destructions[index];
+    destruction.age += dt;
+    if (destruction.age >= destruction.duration) world.destructions.splice(index, 1);
   }
 
   // Particles

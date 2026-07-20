@@ -1,5 +1,5 @@
 // Powder smoke, muzzle flash, projectiles, blood, dust.
-import { WORLD } from '../config.js';
+import { WORLD, BUILDING_TYPES } from '../config.js';
 let camera = { x: 0, y: 0, zoom: 1 };
 let cw = 0, ch = 0;
 function setEffectsCamera(c) { camera = c; }
@@ -101,6 +101,8 @@ const DIRT_CELL = 192, DIRT_VARS = 2, DIRT_MASK = 1, DIRT_ALPHAS = 8;
 const DEBRIS_CELL = 32, DEBRIS_VARS = 8, DEBRIS_MASK = 7, DEBRIS_ALPHAS = 4;
 const EMBER_CELL = 24, EMBER_VARS = 4, EMBER_MASK = 3, EMBER_ALPHAS = 5;
 const BALL_CELL = 64, BALL_VARS = 2;
+const TORCH_CELL = 64;
+const FIRE_CELL = 96, FIRE_FRAMES = 8, FIRE_LEVELS = 3;
 const BSHADOW_CELL = 40, BSHADOW_STEPS = 6;
 const ROT = 16;                   // baked rotations for directional sprites
 const ROT_MASK = 15;
@@ -116,6 +118,7 @@ const DIRT_K = 3.20;
 const FLASH_K = 4.60;
 const EMBER_K = 3.40;
 const BALL_D = 22;                // constant world diameter for the shot sprite
+const TORCH_D = 28;
 const BSHADOW_D = 15;
 
 // Muzzle-flash size classes: 0 = musket, 1 = tower/impact, 2 = cannon.
@@ -774,6 +777,121 @@ function bakeBallMaster(S, cfg) {
   return c;
 }
 
+function bakeTorchMaster(S) {
+  const canvas = fxCanvas(S, S);
+  const g = fxCtx(canvas);
+  const cx = S * 0.5;
+  const cy = S * 0.5;
+  const glow = g.createRadialGradient(cx + S * 0.15, cy, 0, cx + S * 0.15, cy, S * 0.24);
+  glow.addColorStop(0, 'rgba(255,214,102,0.62)');
+  glow.addColorStop(1, 'rgba(255,92,18,0)');
+  g.fillStyle = glow;
+  g.fillRect(0, 0, S, S);
+  g.lineCap = 'round';
+  g.strokeStyle = '#3A2415';
+  g.lineWidth = S * 0.075;
+  g.beginPath(); g.moveTo(S * 0.18, cy); g.lineTo(S * 0.68, cy); g.stroke();
+  g.strokeStyle = '#8B5C2E';
+  g.lineWidth = S * 0.026;
+  g.beginPath(); g.moveTo(S * 0.2, cy - S * 0.018); g.lineTo(S * 0.64, cy - S * 0.018); g.stroke();
+  g.strokeStyle = '#1A1410';
+  g.lineWidth = S * 0.14;
+  g.beginPath(); g.moveTo(S * 0.63, cy); g.lineTo(S * 0.74, cy); g.stroke();
+  g.fillStyle = '#E34A18';
+  g.beginPath();
+  g.moveTo(S * 0.69, cy); g.quadraticCurveTo(S * 0.77, cy - S * 0.25, S * 0.84, cy - S * 0.08);
+  g.quadraticCurveTo(S * 0.92, cy, S * 0.78, cy + S * 0.12);
+  g.quadraticCurveTo(S * 0.72, cy + S * 0.08, S * 0.69, cy); g.fill();
+  g.fillStyle = '#FFD67A';
+  g.beginPath();
+  g.moveTo(S * 0.72, cy); g.quadraticCurveTo(S * 0.79, cy - S * 0.13, S * 0.83, cy - S * 0.03);
+  g.quadraticCurveTo(S * 0.86, cy + S * 0.03, S * 0.75, cy + S * 0.07); g.fill();
+  return canvas;
+}
+
+function bakeFireAtlas() {
+  const texture = fxCanvas(FIRE_CELL * FIRE_FRAMES, FIRE_CELL * FIRE_LEVELS);
+  const g = fxCtx(texture);
+  for (let level = 0; level < FIRE_LEVELS; level++) {
+    for (let frame = 0; frame < FIRE_FRAMES; frame++) {
+      const ox = frame * FIRE_CELL;
+      const oy = level * FIRE_CELL;
+      const cx = ox + FIRE_CELL * 0.5;
+      const base = oy + FIRE_CELL * 0.84;
+      const height = FIRE_CELL * (0.38 + level * 0.1);
+      const width = FIRE_CELL * (0.18 + level * 0.035);
+      const sway = Math.sin(frame / FIRE_FRAMES * Math.PI * 2 + level) * FIRE_CELL * 0.045;
+      const glow = g.createRadialGradient(cx, base - height * 0.34, 0,
+        cx, base - height * 0.34, FIRE_CELL * 0.38);
+      glow.addColorStop(0, 'rgba(255,158,48,0.38)');
+      glow.addColorStop(1, 'rgba(255,70,12,0)');
+      g.fillStyle = glow;
+      g.fillRect(ox, oy, FIRE_CELL, FIRE_CELL);
+      g.fillStyle = 'rgba(38,34,31,0.34)';
+      g.beginPath();
+      g.moveTo(cx - width * 0.4, base - height * 0.45);
+      g.bezierCurveTo(cx - width, base - height * 0.68,
+        cx + sway + width * 0.75, base - height * 0.82,
+        cx + sway * 1.5, base - height * 1.16);
+      g.bezierCurveTo(cx + sway + width * 0.22, base - height * 0.84,
+        cx + width * 0.48, base - height * 0.64, cx + width * 0.2, base - height * 0.44);
+      g.closePath(); g.fill();
+      const outer = g.createLinearGradient(cx, base, cx + sway, base - height);
+      outer.addColorStop(0, '#6E1C12');
+      outer.addColorStop(0.5, '#B52D13');
+      outer.addColorStop(1, 'rgba(108,24,15,0.8)');
+      g.fillStyle = outer;
+      g.beginPath();
+      g.moveTo(cx - width, base);
+      g.bezierCurveTo(cx - width * 1.15, base - height * 0.38,
+        cx + sway - width * 0.15, base - height * 0.76, cx + sway, base - height);
+      g.bezierCurveTo(cx + width * 0.25, base - height * 0.68,
+        cx + width * 1.2, base - height * 0.42, cx + width, base);
+      g.closePath(); g.fill();
+      g.fillStyle = '#D74317';
+      g.beginPath();
+      g.moveTo(cx - width * 1.08, base);
+      g.quadraticCurveTo(cx - width * 1.35, base - height * 0.33,
+        cx - width * 0.72 - sway * 0.2, base - height * 0.58);
+      g.quadraticCurveTo(cx - width * 0.52, base - height * 0.28,
+        cx - width * 0.25, base); g.closePath(); g.fill();
+      g.beginPath();
+      g.moveTo(cx + width * 0.35, base);
+      g.quadraticCurveTo(cx + width * 1.12, base - height * 0.3,
+        cx + width * 0.7 + sway * 0.25, base - height * 0.55);
+      g.quadraticCurveTo(cx + width * 0.9, base - height * 0.22,
+        cx + width * 1.06, base); g.closePath(); g.fill();
+      g.fillStyle = '#F0641D';
+      g.beginPath();
+      g.moveTo(cx - width * 0.66, base);
+      g.bezierCurveTo(cx - width * 0.58, base - height * 0.42,
+        cx + sway * 0.72, base - height * 0.63, cx + sway * 0.65, base - height * 0.82);
+      g.bezierCurveTo(cx + width * 0.2, base - height * 0.52,
+        cx + width * 0.72, base - height * 0.3, cx + width * 0.7, base);
+      g.closePath(); g.fill();
+      g.fillStyle = '#FFD36A';
+      g.beginPath();
+      g.moveTo(cx - width * 0.35, base);
+      g.quadraticCurveTo(cx - width * 0.2, base - height * 0.43,
+        cx + sway * 0.34, base - height * 0.58);
+      g.quadraticCurveTo(cx + width * 0.38, base - height * 0.25,
+        cx + width * 0.38, base); g.closePath(); g.fill();
+      g.fillStyle = 'rgba(255,249,204,0.88)';
+      g.beginPath(); g.ellipse(cx, base - height * 0.12, width * 0.17, height * 0.18, 0, 0, 7); g.fill();
+      g.fillStyle = 'rgba(255,188,65,0.9)';
+      for (let spark = 0; spark < 4 + level; spark++) {
+        const sparkX = cx + fxRnd(-width * 1.3, width * 1.3);
+        const sparkY = base - height * fxRnd(0.45, 1.18);
+        const sparkR = FIRE_CELL * fxRnd(0.008, 0.016);
+        g.beginPath(); g.arc(sparkX, sparkY, sparkR, 0, 7); g.fill();
+      }
+      g.fillStyle = 'rgba(34,24,17,0.72)';
+      g.beginPath(); g.ellipse(cx, base + 1, width * 0.82, height * 0.055, 0, 0, 7); g.fill();
+    }
+  }
+  return { tex: texture, cell: FIRE_CELL };
+}
+
 const BALL_CFGS = [
   { // iron roundshot
     hi: '#6E6E78', body: '#2B2B31', lo: '#0E0E12', spec: 'rgba(196,198,210,0.55)',
@@ -1024,6 +1142,20 @@ function buildParticleTextures() {
     }
     fxTex.ball = { tex, cell: BALL_CELL };
   }
+  {
+    const tex = fxCanvas(TORCH_CELL * ROT, TORCH_CELL);
+    const g = tex.getContext('2d');
+    const master = bakeTorchMaster(TORCH_CELL);
+    for (let rotation = 0; rotation < ROT; rotation++) {
+      g.save();
+      g.translate(rotation * TORCH_CELL + TORCH_CELL * 0.5, TORCH_CELL * 0.5);
+      g.rotate(rotation * Math.PI * 2 / ROT);
+      g.drawImage(master, -TORCH_CELL * 0.5, -TORCH_CELL * 0.5);
+      g.restore();
+    }
+    fxTex.torch = { tex, cell: TORCH_CELL };
+  }
+  fxTex.fire = bakeFireAtlas();
 
   // ---- projectile ground shadow, indexed by arc height -------------------
   {
@@ -1197,9 +1329,8 @@ function fxNoteDecal(world, d) {
       // A building coming down. This is the largest single visual event in the
       // game and it currently has no visual at all beyond a rubble stamp.
       // Scale the burst by footprint so a watch tower is not a town centre.
-      const def = (typeof BUILDING_TYPES !== 'undefined' && d.type)
-        ? BUILDING_TYPES[d.type] : null;
-      const w = def ? def.w : 80;
+      const def = d.type ? BUILDING_TYPES[d.type] : null;
+      const w = d.w || (def ? def.w : 80);
       const k = w / 100;
       stampBank(x, y, 40 * k, true);
       stampBank(x - w * 0.22, y + 6, 26 * k, true);
@@ -1471,6 +1602,46 @@ function drawSmokeUnder(ctx, world, alpha) {
   if (bankHot > 0) fxBlitField(ctx, smokeBank, 0.50, 0, 0, WORLD.w, WORLD.h);
 }
 
+function fireAnchor(seed, index) {
+  let value = (seed + Math.imul(index + 1, 0x9e3779b1)) >>> 0;
+  value ^= value >>> 16;
+  value = Math.imul(value, 0x7feb352d) >>> 0;
+  value ^= value >>> 15;
+  return value / 0xffffffff;
+}
+
+function drawBuildingFireSprite(ctx, world, fire, building, intensity) {
+  const level = Math.min(FIRE_LEVELS - 1, Math.floor(intensity * FIRE_LEVELS));
+  const count = Math.max(2, Math.min(6, 2 + Math.floor(intensity * 5)));
+  const seed = building.fireSeed || ((building.id || 1) * 2654435761) >>> 0;
+  for (let index = 0; index < count; index++) {
+    const horizontal = fireAnchor(seed, index * 3) - 0.5;
+    const height = 0.22 + fireAnchor(seed, index * 3 + 1) * 0.92;
+    const phase = fireAnchor(seed, index * 3 + 2) * FIRE_FRAMES;
+    const frame = Math.floor(world.time * (8.2 + index * 0.37) + phase) % FIRE_FRAMES;
+    const size = (21 + level * 6) * (0.78 + fireAnchor(seed ^ 0xa5a5a5a5, index) * 0.42);
+    const x = building.x + horizontal * building.w * 0.62;
+    const y = building.y - building.h * height;
+    ctx.drawImage(fire.tex, frame * fire.cell, level * fire.cell, fire.cell, fire.cell,
+      x - size * 0.5, y - size * 0.78, size, size);
+  }
+}
+
+function drawBuildingFires(ctx, world) {
+  if (!fxTex?.fire) return;
+  const fire = fxTex.fire;
+  for (const building of world.buildings) {
+    if (!building.alive || !building.complete || !building.ignited) continue;
+    const health = Math.max(0, building.hp / Math.max(1, building.maxHp));
+    drawBuildingFireSprite(ctx, world, fire, building,
+      Math.min(1, 0.3 + (1 - health) * 0.9));
+  }
+  for (const destruction of world.destructions || []) {
+    drawBuildingFireSprite(ctx, world, fire, destruction,
+      Math.max(0.35, 1 - destruction.age / destruction.duration * 0.65));
+  }
+}
+
 /* -----------------------------------------------------------------------------
    drawEffects — THE AIR PLANE.
 
@@ -1576,6 +1747,7 @@ function drawEffects(ctx, world, alpha) {
   {
     const projs = world.projectiles;
     const bTex = fxTex.ball.tex, bc = fxTex.ball.cell;
+    const tTex = fxTex.torch.tex, tc = fxTex.torch.cell;
     for (let i = 0; i < projs.length; i++) {
       const p = projs[i];
       const ix = p.px + (p.x - p.px) * alpha;
@@ -1584,6 +1756,11 @@ function drawEffects(ctx, world, alpha) {
       let vx = p.x - p.px, vy = p.y - p.py;
       if (vx === 0 && vy === 0) { vx = p.tx - p.sx; vy = p.ty - p.sy; }
       const r = ((Math.atan2(vy, vx) * ROT_K + 16.5) | 0) & ROT_MASK;
+      if (p.kind === 'torch') {
+        ctx.drawImage(tTex, r * tc, 0, tc, tc,
+          ix - TORCH_D * 0.5, iy - TORCH_D * 0.5, TORCH_D, TORCH_D);
+        continue;
+      }
       const row = p.kind === 'tower' ? 1 : 0;
       ctx.drawImage(bTex, r * bc, row * bc, bc, bc,
         ix - BALL_D * 0.5, iy - BALL_D * 0.5, BALL_D, BALL_D);
@@ -1650,4 +1827,4 @@ function drawEffects(ctx, world, alpha) {
   ctx.globalAlpha = 1;
 }
 export { setEffectsCamera, setEffectsView, buildParticleTextures,
-         resetEffectFields, drawSmokeUnder, drawEffects };
+         resetEffectFields, fxNoteDecal, drawSmokeUnder, drawBuildingFires, drawEffects };

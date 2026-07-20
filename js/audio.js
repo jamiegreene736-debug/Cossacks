@@ -490,6 +490,39 @@ export class Soundscape {
     this.tone(ring * 1.47, time + 0.004, 0.09, { type: 'sine', volume: 0.025 * level, pan, reverb: 0.25 });
   }
 
+  torchThrow(x, mounted = false) {
+    if (!this.ctx || this.muted) return;
+    const time = this.ctx.currentTime;
+    const pan = this.spatialPan(x);
+    const level = this.spatialLevel(x) * (mounted ? 1.08 : 1);
+    this.noiseBurst(time, 0.16, {
+      filterType: 'bandpass', filter: mounted ? 920 : 1180, q: 0.55,
+      volume: 0.075 * level, pan, reverb: 0.12,
+    });
+    this.noiseBurst(time + 0.045, 0.11, {
+      filter: 3400, q: 1.4, volume: 0.035 * level, pan, reverb: 0.16,
+    });
+    this.tone(138, time, 0.18, {
+      type: 'triangle', endFrequency: 86, volume: 0.025 * level, pan, reverb: 0.1,
+    });
+  }
+
+  torchImpact(x) {
+    if (!this.ctx || this.muted) return;
+    const time = this.ctx.currentTime;
+    const pan = this.spatialPan(x);
+    const level = this.spatialLevel(x);
+    this.noiseBurst(time, 0.11, {
+      filterType: 'lowpass', filter: 980, volume: 0.12 * level, pan, reverb: 0.14,
+    });
+    this.noiseBurst(time + 0.015, 0.2, {
+      filter: 3900, q: 1.2, volume: 0.075 * level, pan, reverb: 0.2,
+    });
+    this.tone(76, time, 0.24, {
+      endFrequency: 42, volume: 0.045 * level, pan, reverb: 0.16,
+    });
+  }
+
   cannonFire(x) {
     if (!this.ctx || this.muted || this.cannonCooldown > 0) return;
     this.cannonCooldown = 0.055;
@@ -745,6 +778,19 @@ export class Soundscape {
     if (this.siegeScanCooldown <= 0) {
       const previousId = this.activeSiege?.building.id;
       this.activeSiege = findNearestBuildingSiege(world, this.listenerX);
+      if (!this.activeSiege) {
+        const burning = findNearestAudibleMatch(world.buildings, this.listenerX,
+          building => building.alive && building.complete && building.ignited);
+        if (burning.entity) {
+          this.activeSiege = {
+            building: burning.entity,
+            attackers: Math.max(1, burning.count),
+            severity: Math.max(0.3,
+              1 - burning.entity.hp / Math.max(1, burning.entity.maxHp)),
+            ambientOnly: true,
+          };
+        }
+      }
       this.siegeScanCooldown = 0.18;
       if (this.activeSiege && this.activeSiege.building.id !== previousId) {
         this.siegeFireCooldown = 0;
@@ -758,7 +804,7 @@ export class Soundscape {
       this.buildingFire(siege.building.x, siege.severity, siege.attackers);
       this.siegeFireCooldown = 0.56 + Math.random() * 0.34;
     }
-    if (this.siegeShoutCooldown <= 0) {
+    if (!siege.ambientOnly && this.siegeShoutCooldown <= 0) {
       this.siegeShouts(siege.building.x, siege.attackers);
       this.siegeShoutCooldown = Math.max(1.55, 4.4 / Math.sqrt(Math.min(16, siege.attackers)))
         + Math.random() * 1.55;

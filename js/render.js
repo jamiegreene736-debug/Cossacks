@@ -6,7 +6,8 @@ import { buildTerrain, drawTerrain, drawTree, buildMinimapTerrain } from './gfx/
 import { drawSoldier, INF_W, INF_H, INF_AX, INF_AY } from './gfx/infantry.js';
 import { setDecalCtx, buildDecalStamps, paintDecal } from './gfx/decals.js';
 import { setEffectsCamera, setEffectsView, buildParticleTextures,
-         resetEffectFields, drawSmokeUnder, drawEffects } from './gfx/effects.js';
+         resetEffectFields, fxNoteDecal, drawSmokeUnder, drawBuildingFires,
+         drawEffects } from './gfx/effects.js';
 import { getTerrainCanvas } from './gfx/terrain.js';
 import { getTrampleCanvas } from './gfx/decals.js';
 import { drawCavalry, drawCannon } from './gfx/mounted.js';
@@ -26,7 +27,8 @@ import {
   screenVectorToWorld, turnView as nextViewRotation, worldViewDepth,
 } from './camera.js';
 import { setBuildingRefs, bdResetCaches, drawResourceNode, drawFarm,
-         drawFarmForeground, drawFoundation, drawCompleteBuilding, drawBuilding } from './gfx/buildings.js';
+         drawFarmForeground, drawFoundation, drawCompleteBuilding, drawBuilding,
+         drawBuildingCollapse } from './gfx/buildings.js';
 import { setCompositeRefs, setCompositeView, setCompositeTrampleLayer,
          buildCompositeTextures, buildMinimapBase, drawLightingPass,
          drawSelection, drawHealthBars, drawOrderFlags, drawDragRect,
@@ -53,6 +55,42 @@ let decalCanvas = null, decalCtx = null;
 let mmTerrain = null;
 let sprites = null; // sprites[side][type] = {frames: [dir][frame], w,h,ax,ay}
 const buildingSortBuf = [];
+
+function drawThrowingTorch(unit, x, y, visualFacing = unit.facing) {
+  if (!(unit.torchT > 0)) return;
+  const facing = visualFacing >= 0 ? 1 : -1;
+  const progress = Math.max(0, Math.min(1, 1 - unit.torchT / 0.48));
+  const mounted = unit.type === 'cav';
+  const shoulderX = x + facing * (mounted ? 3 : 1);
+  const shoulderY = y - (mounted ? 20 : 18);
+  const reach = 7 + Math.sin(progress * Math.PI) * 8;
+  const handX = shoulderX + facing * reach;
+  const handY = shoulderY - 5 - Math.sin(progress * Math.PI) * 6;
+  const headX = handX + facing * 8;
+  const headY = handY - 7;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = unit.side === 0 ? '#873936' : '#2D6B68';
+  ctx.lineWidth = 3.2;
+  ctx.beginPath(); ctx.moveTo(shoulderX, shoulderY); ctx.lineTo(handX, handY); ctx.stroke();
+  ctx.strokeStyle = '#8B5A2B';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(handX - facing * 3, handY + 3); ctx.lineTo(headX, headY); ctx.stroke();
+  ctx.strokeStyle = '#241711';
+  ctx.lineWidth = 4.4;
+  ctx.beginPath(); ctx.moveTo(headX - facing * 2.5, headY + 2); ctx.lineTo(headX + facing * 2.5, headY - 2); ctx.stroke();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.shadowColor = '#FF7A20';
+  ctx.shadowBlur = 8;
+  ctx.fillStyle = '#E64A16';
+  ctx.beginPath();
+  ctx.moveTo(headX - 4, headY); ctx.quadraticCurveTo(headX, headY - 12, headX + 4, headY - 2);
+  ctx.quadraticCurveTo(headX + 5, headY + 4, headX, headY + 5);
+  ctx.quadraticCurveTo(headX - 5, headY + 3, headX - 4, headY); ctx.fill();
+  ctx.fillStyle = '#FFE08A';
+  ctx.beginPath(); ctx.ellipse(headX, headY, 2.1, 4.2, 0.3 * facing, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
 
 // ---------- Setup ----------
 
@@ -531,6 +569,7 @@ export function draw(
     if (!world.decals) world.decals = [];
     for (const d of world.pendingDecals) {
       paintDecal(d);
+      fxNoteDecal(world, d);
       world.decals.push(d);
     }
     // A very long artillery campaign should not grow the save indefinitely.
@@ -599,6 +638,11 @@ export function draw(
   }
   for (const building of buildingSortBuf) {
     if (building.type === 'wall_stairs') drawBuilding(building, world);
+  }
+  for (const destruction of world.destructions || []) {
+    if (circleIntersectsBounds(destruction, visibleWorld, 190)) {
+      drawBuildingCollapse(destruction, world.time);
+    }
   }
 
   drawResourceHover(resourceHover, z);
@@ -744,12 +788,15 @@ export function draw(
     ctx.translate(ix, iy);
     ctx.rotate(-rotation);
     ctx.drawImage(sp.frames[dir][frame], -sp.ax, -sp.ay, sp.w, sp.h);
+    drawThrowingTorch(u, 0, 0, dir === 0 ? 1 : -1);
     ctx.restore();
   }
 
   // Near rows occlude boots and lower legs, making the hoeing villager read as
   // physically inside the crop instead of pasted above it.
   for (const building of buildingSortBuf) drawFarmForeground(building);
+
+  drawBuildingFires(ctx, world);
 
   // Projectiles, powder smoke, muzzle flash, blood and dust.
   drawEffects(ctx, world, alpha);
