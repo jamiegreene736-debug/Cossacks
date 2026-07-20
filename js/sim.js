@@ -207,6 +207,11 @@ function maybeBreak(world, u) {
 export function damage(world, victim, amount, attacker) {
   if (!victim.alive) return;
   victim.hp -= amount;
+  if (victim.entityKind === 'building' && attacker?.alive && attacker.entityKind !== 'building'
+    && attacker.type !== 'villager' && attacker.side !== victim.side) {
+    victim.lastHostileUnitDamageAt = world.time;
+    victim.lastHostileUnitSide = attacker.side;
+  }
   if (victim.entityKind !== 'building') {
     victim.morale -= amount * 0.25;
     if (victim.morale < 0) victim.morale = 0;
