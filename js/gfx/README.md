@@ -3,7 +3,7 @@
 The renderer combines procedural art with checked-in, high-resolution sprites
 where fine masonry, weathering, glazing, foliage, carved ornament, cloth, and
 human anatomy need to survive close gameplay zoom. England's complete building
-roster, both nations' civilians, natural resource nodes, meadow, mature trees,
+roster, both nations' complete military and civilian rosters, natural resource nodes, meadow, mature trees,
 rock and riverbank accents, deadwood, road aggregate, water, cultivated soil,
 country vegetation, progressive Georgian construction sites, and English
 stone walls/gates use coordinated production-art sets. Construction sheets
@@ -66,7 +66,7 @@ A battle can put thousands of units on the field, so:
   the quality comes from.
 - Procedural buildings bake at 4x and procedural resources at 3x. Production
   sprites load once, then use lazy scale/damage/depletion variants. Civilian
-  production frames bake into the same left/right unit atlas at battle start.
+  and military production frames bake into the same left/right unit atlas at battle start.
   The Town Center's waving flag is the only live architectural overlay.
 - Work done **per unit per frame** must stay at about one `drawImage`. Per-unit
   gradients, shadow ellipses, `save`/`restore` churn, `ctx.filter` or
@@ -91,9 +91,10 @@ Measured at 1,625 living units: 0.4ms median frame draw against a 16.7ms budget.
 | `assets/buildings/` | Transparent high-resolution sources for completed England structures, four-stage construction, and completed/in-progress stone fortifications. |
 | `assets/resources/` | Transparent woodland, berry, stone, and gold sources. |
 | `assets/terrain/` | Seamless meadow, road, water, soil and stubble materials plus alpha tree, rock, reed, deadwood and country-vegetation sources. |
-| `assets/units/` | Four-frame English and Ottoman civilian production sheets. |
-| `infantry.js` | `drawSoldier()` — musketeers and pikemen. |
-| `mounted.js` | `drawCavalry()`, `drawCannon()`. |
+| `assets/units/` | English and Ottoman civilian, musketeer, polearm-guard, cavalry, and artillery production sheets. |
+| `infantry.js` | `drawSoldier()` — resilient procedural musketeer and polearm fallback. |
+| `mounted.js` | Resilient procedural `drawCavalry()` and `drawCannon()` fallbacks. |
+| `docs/military-art-references.md` | Museum references and chronology decisions for the production military roster. |
 | `villager.js` | `drawWorker()` — resilient procedural civilian fallback with axe, pickaxe, hoe, sickle, and mallet poses. |
 | `worker-animation.js` | Shared job-to-tool action mapping and cached atlas-frame selection. |
 | `decals.js` | Persistent aftermath: corpses, craters, wrecks, ruins, trample. |

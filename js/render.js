@@ -11,7 +11,11 @@ import { getTerrainCanvas } from './gfx/terrain.js';
 import { getTrampleCanvas } from './gfx/decals.js';
 import { drawCavalry, drawCannon } from './gfx/mounted.js';
 import { drawWorker, VL_W, VL_H, VL_AX, VL_AY } from './gfx/villager.js';
-import { getProductionArt } from './gfx/art-assets.js';
+import {
+  MILITARY_ART_ROWS,
+  MILITARY_ART_SPECS,
+  getProductionArt,
+} from './gfx/art-assets.js';
 import { fortificationCorners, isFortificationType } from './fortifications.js';
 import { getWorkerFrame } from './worker-animation.js';
 import {
@@ -235,6 +239,44 @@ function paintProductionToolHead(g, action, grip, head) {
   g.restore();
 }
 
+function paintProductionMilitaryBase(g, def, side) {
+  g.save();
+  g.translate(def.w / 2, def.ay - 0.35);
+  g.fillStyle = 'rgba(27,30,42,0.42)';
+  g.beginPath();
+  g.ellipse(0, 0, def.baseRadiusX, def.baseRadiusY, 0, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = SIDE_RIM[side];
+  g.lineWidth = 1.15;
+  g.globalAlpha = 0.92;
+  g.stroke();
+  g.restore();
+}
+
+function withProductionMilitaryArt(type, nationKey, fallback) {
+  const spec = MILITARY_ART_SPECS[type];
+  const image = spec ? getProductionArt(spec.key) : null;
+  const sourceRow = MILITARY_ART_ROWS[nationKey];
+  if (!spec || !image || sourceRow === undefined) return fallback;
+
+  return {
+    ...fallback,
+    w: spec.w,
+    h: spec.h,
+    ax: spec.ax,
+    ay: spec.ay,
+    baseRadiusX: spec.baseRadiusX,
+    baseRadiusY: spec.baseRadiusY,
+    military: true,
+    production: {
+      image,
+      sourceW: spec.sourceW,
+      sourceH: spec.sourceH,
+      sourceRow,
+    },
+  };
+}
+
 function paintProductionWorkerTool(g, nationKey, action, phase) {
   const oldHead = PRODUCTION_TOOL_CLEAR[nationKey]?.[phase];
   if (oldHead) {
@@ -287,7 +329,12 @@ function buildNationSprites(nationKey, side = 0) {
     h: PRODUCTION_WORKER.h,
     ax: PRODUCTION_WORKER.ax,
     ay: PRODUCTION_WORKER.ay,
-    production: productionWorker,
+    production: {
+      image: productionWorker,
+      sourceW: PRODUCTION_WORKER.sourceW,
+      sourceH: PRODUCTION_WORKER.sourceH,
+      sourceRow: 0,
+    },
     frames: workerFrames,
   } : {
     w: VL_W,
@@ -298,7 +345,7 @@ function buildNationSprites(nationKey, side = 0) {
     painter: (g, pose, leg, action) => drawWorker(g, nat, pose, leg, action),
   };
 
-  const defs = {
+  const proceduralDefs = {
     villager: workerDef,
     musk: { w: INF_W, h: INF_H, ax: INF_AX, ay: INF_AY, frames: [
       ['idle', 0], ['idle', 1], ['idle', 2], ['fire', 0],
@@ -317,6 +364,13 @@ function buildNationSprites(nationKey, side = 0) {
       ['idle', 0], ['fire', 0],
     ], painter: (g, pose) => drawCannon(g, nat, pose, side) },
   };
+  const defs = {
+    ...proceduralDefs,
+    musk: withProductionMilitaryArt('musk', nationKey, proceduralDefs.musk),
+    pike: withProductionMilitaryArt('pike', nationKey, proceduralDefs.pike),
+    cav: withProductionMilitaryArt('cav', nationKey, proceduralDefs.cav),
+    gun: withProductionMilitaryArt('gun', nationKey, proceduralDefs.gun),
+  };
 
   for (const [type, def] of Object.entries(defs)) {
     const right = [], left = [];
@@ -324,15 +378,17 @@ function buildNationSprites(nationKey, side = 0) {
       const [pose, leg, action = null, sourceFrame = frameIndex] = def.frames[frameIndex];
       const [c, g] = frameCanvas(def.w, def.h);
       if (def.production) {
+        if (def.military) paintProductionMilitaryBase(g, def, side);
         g.imageSmoothingEnabled = true;
         g.imageSmoothingQuality = 'high';
         g.drawImage(
-          def.production,
-          sourceFrame * PRODUCTION_WORKER.sourceW, 0,
-          PRODUCTION_WORKER.sourceW, PRODUCTION_WORKER.sourceH,
+          def.production.image,
+          sourceFrame * def.production.sourceW,
+          def.production.sourceRow * def.production.sourceH,
+          def.production.sourceW, def.production.sourceH,
           0, 0, def.w, def.h,
         );
-        if (action) paintProductionWorkerTool(g, nationKey, action, leg);
+        if (!def.military && action) paintProductionWorkerTool(g, nationKey, action, leg);
       } else {
         def.painter(g, pose, leg, action);
       }
@@ -612,7 +668,7 @@ export function draw(
   sortBuf.length = 0;
   for (const u of world.units) {
     if (!u.alive) continue;
-    if (!circleIntersectsBounds(u, visibleWorld, 40)) continue;
+    if (!circleIntersectsBounds(u, visibleWorld, 56)) continue;
     sortBuf.push(u);
   }
   sortBuf.sort((a, b) => a.y - b.y);
