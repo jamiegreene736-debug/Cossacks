@@ -513,28 +513,40 @@ function drawMovePreview(preview, zoom, time) {
   if (!preview) return;
   const s = 1 / Math.max(0.62, Math.min(1.45, zoom));
   const pulse = 0.5 + Math.sin(time * 5.5) * 0.5;
+  const attack = preview.kind === 'attack';
   ctx.save();
   ctx.translate(preview.x, preview.y);
   ctx.scale(s, s);
   ctx.globalAlpha = 0.58 + pulse * 0.18;
-  ctx.strokeStyle = '#f0e9cf';
+  ctx.strokeStyle = attack ? '#ffd5c7' : '#f0e9cf';
   ctx.lineWidth = 1.4;
   ctx.setLineDash([4, 4]);
   ctx.lineDashOffset = -time * 11;
   ctx.beginPath();
-  ctx.ellipse(0, 0, 17 + pulse * 2, 7.5 + pulse, 0, 0, Math.PI * 2);
+  const targetRadius = attack ? Math.min(64, Math.max(17, (preview.radius || 0) / s + 7)) : 17;
+  ctx.ellipse(0, 0, targetRadius + pulse * 2, targetRadius * 0.46 + pulse, 0, 0, Math.PI * 2);
   ctx.stroke();
   ctx.setLineDash([]);
 
-  ctx.strokeStyle = '#d4b860';
+  ctx.strokeStyle = attack ? '#d7664f' : '#d4b860';
   ctx.lineWidth = 1.8;
-  for (let i = -1; i <= 1; i++) {
-    const x = i * 7;
+  if (attack) {
+    const arm = Math.min(18, targetRadius * 0.62);
     ctx.beginPath();
-    ctx.moveTo(x - 3.5, 1.5);
-    ctx.lineTo(x, -2);
-    ctx.lineTo(x + 3.5, 1.5);
+    ctx.moveTo(-arm, -arm * 0.46);
+    ctx.lineTo(arm, arm * 0.46);
+    ctx.moveTo(arm, -arm * 0.46);
+    ctx.lineTo(-arm, arm * 0.46);
     ctx.stroke();
+  } else {
+    for (let i = -1; i <= 1; i++) {
+      const x = i * 7;
+      ctx.beginPath();
+      ctx.moveTo(x - 3.5, 1.5);
+      ctx.lineTo(x, -2);
+      ctx.lineTo(x + 3.5, 1.5);
+      ctx.stroke();
+    }
   }
   ctx.restore();
 }

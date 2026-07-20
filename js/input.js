@@ -222,7 +222,9 @@ function finishSelect(additive) {
     const entity = findEntityAt(world, point.x, point.y, 0);
     if (entity) {
       picked = [entity];
-    } else if (!additive && issueVillagerGroundMove(world, getSelection(), point.x, point.y, currentFormation)) {
+    } else if (!additive && issuePrimaryUnitCommand(
+      world, getSelection(), point.x, point.y, currentFormation,
+    )) {
       callbacks.onSelection?.(getSelection());
       updateResourceHover(drag.x1, drag.y1);
       return;
@@ -253,13 +255,7 @@ function issueOrder(screenX, screenY) {
   const selectedBuildings = selected.filter(entity => entity.entityKind === 'building');
 
   const enemy = findEntityAt(world, point.x, point.y, 1);
-  if (enemy && units.length) {
-    clearWorkerJobs(units);
-    applyAttackOrder(units, enemy);
-    world.flags.push({ x: enemy.x, y: enemy.y, life: 1.2, max: 1.2, attack: true });
-    callbacks.onOrder?.('attack');
-    return;
-  }
+  if (enemy && attackUnits(world, units, enemy)) return;
 
   const ownEntity = findEntityAt(world, point.x, point.y, 0);
   if (assignVillagersToConstruction(world, workers, ownEntity)) {
@@ -382,6 +378,19 @@ function moveUnitsTo(world, units, x, y, formation) {
   return true;
 }
 
+function attackUnits(world, units, target) {
+  if (!units.length || !target?.alive || target.side === units[0].side) return false;
+  clearWorkerJobs(units);
+  applyAttackOrder(units, target);
+  world.flags.push({
+    kind: 'attack', attack: true,
+    x: target.x, y: target.y,
+    life: 1.2, max: 1.2,
+  });
+  callbacks.onOrder?.('attack');
+  return true;
+}
+
 export function isOpenGroundMoveTarget(world, x, y) {
   return Boolean(world)
     && x >= 0 && x <= WORLD.w && y >= 0 && y <= WORLD.h
@@ -393,6 +402,16 @@ export function issueVillagerGroundMove(world, selected, x, y, formation = 'line
   const units = selected.filter(entity => entity.alive && entity.side === 0
     && entity.entityKind !== 'building');
   if (!units.some(unit => unit.type === 'villager') || !isOpenGroundMoveTarget(world, x, y)) return false;
+  return moveUnitsTo(world, units, x, y, formation);
+}
+
+export function issuePrimaryUnitCommand(world, selected, x, y, formation = 'line') {
+  const units = selected.filter(entity => entity.alive && entity.side === 0
+    && entity.entityKind !== 'building');
+  if (!world || units.length === 0) return false;
+  const enemy = findEntityAt(world, x, y, 1);
+  if (enemy) return attackUnits(world, units, enemy);
+  if (!isOpenGroundMoveTarget(world, x, y)) return false;
   return moveUnitsTo(world, units, x, y, formation);
 }
 
@@ -412,13 +431,21 @@ function updateResourceHover(screenX, screenY) {
   const target = hoverableWorkerTargetAt(screenX, screenY);
   resourceHover = target;
   const selected = getSelection();
-  const point = !target && selected.some(entity => entity.type === 'villager')
+  const hasMobileSelection = selected.some(entity => entity.alive && entity.side === 0
+    && entity.entityKind !== 'building');
+  const point = !target && hasMobileSelection
     ? screenToWorld(screenX, screenY) : null;
-  movePreview = point && isOpenGroundMoveTarget(getWorld(), point.x, point.y) ? point : null;
+  const enemy = point ? findEntityAt(getWorld(), point.x, point.y, 1) : null;
+  movePreview = enemy
+    ? { kind: 'attack', x: enemy.x, y: enemy.y, radius: enemy.radius }
+    : point && isOpenGroundMoveTarget(getWorld(), point.x, point.y)
+      ? { kind: 'move', x: point.x, y: point.y }
+      : null;
   const construction = target?.entityKind === 'building' && !target.complete;
   inputCanvas?.classList.toggle('cursor-gather', Boolean(target) && !construction);
   inputCanvas?.classList.toggle('cursor-build', Boolean(construction));
-  inputCanvas?.classList.toggle('cursor-move', Boolean(movePreview));
+  inputCanvas?.classList.toggle('cursor-move', movePreview?.kind === 'move');
+  inputCanvas?.classList.toggle('cursor-attack', movePreview?.kind === 'attack');
   callbacks.onResourceHover?.({
     target,
     workers: getSelection().filter(entity => entity.type === 'villager'),
@@ -431,12 +458,14 @@ function clearResourceHover() {
   if (!resourceHover && !movePreview
       && !inputCanvas?.classList.contains('cursor-gather')
       && !inputCanvas?.classList.contains('cursor-build')
-      && !inputCanvas?.classList.contains('cursor-move')) return;
+      && !inputCanvas?.classList.contains('cursor-move')
+      && !inputCanvas?.classList.contains('cursor-attack')) return;
   resourceHover = null;
   movePreview = null;
   inputCanvas?.classList.remove('cursor-gather');
   inputCanvas?.classList.remove('cursor-build');
   inputCanvas?.classList.remove('cursor-move');
+  inputCanvas?.classList.remove('cursor-attack');
   callbacks.onResourceHover?.({ target: null, workers: [], screenX: mouseX, screenY: mouseY });
 }
 

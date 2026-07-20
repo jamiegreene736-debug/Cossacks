@@ -52,13 +52,14 @@ then sends progressively larger, staged formations into battle.
 ## Controls
 
 - **Left-click / drag** — select a building, villager, or regiment
-- **Select villagers, then left-click open ground** — move them to a flagged destination
+- **Select infantry, cavalry, artillery, or villagers, then left-click open ground** — move the formation to a flagged waypoint
+- **Select units, then left-click an enemy** — focus the selection on that attack target
 - **Select villagers, then hover and left-click a deposit or economic building** — gather resources or work there
-- **Right-click / Mac two-finger click / Control-click** — move, construct, attack, or set a ground rally point
+- **Right-click / Mac two-finger click / Control-click** — alternate move, construct, attack, wall-mount, or rally command
 - **Town Center selected + primary click on a resource or worksite** — send newly trained villagers there to gather, work, or build
 - **Build card, then click terrain** — place a foundation
 - **Stone Wall, then press-drag-release** — preview and place the longest connected run your stone and open terrain allow
-- **Villager + open-ground click** — move to the waypoint using a route around walls, buildings, and deposits
+- **Villager + open-ground click** — route around walls, buildings, and deposits on the way to the waypoint
 - **Cancel placement** — click the placement button or any HUD panel; Esc and secondary-click also work
 - **L / C / B** — line, column, or square formation
 - **H** — halt; **P** — pause; **F** — select all military units

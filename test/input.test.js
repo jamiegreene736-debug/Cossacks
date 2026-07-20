@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createWorld, spawnUnit } from '../js/sim.js';
+import { createWorld, spawnUnit, step } from '../js/sim.js';
 import {
   assignVillagersToConstruction, isOpenGroundMoveTarget, isSecondaryPointerEvent,
-  issueVillagerGroundMove, setBuildingRallyAt, setTownCenterPrimaryRallyAt,
+  issuePrimaryUnitCommand, issueVillagerGroundMove, setBuildingRallyAt,
+  setTownCenterPrimaryRallyAt,
 } from '../js/input.js';
 import { createBuilding } from '../js/economy.js';
 
@@ -230,6 +231,60 @@ test('a villager ground click clears work and creates a routed destination flag'
   assert.ok(flag.life > 1.2);
 });
 
+test('primary ground clicks issue waypoints to infantry, cavalry, and artillery', () => {
+  const world = makeWorld();
+  const units = [
+    spawnUnit(world, 0, 'musk', 720, 1420),
+    spawnUnit(world, 0, 'pike', 735, 1440),
+    spawnUnit(world, 0, 'cav', 750, 1460),
+    spawnUnit(world, 0, 'gun', 765, 1480),
+  ];
+  const target = findOpenPoint(world);
+  const startingPositions = units.map(unit => ({ x: unit.x, y: unit.y }));
+
+  assert.equal(issuePrimaryUnitCommand(world, units, target.x, target.y, 'column'), true);
+  for (const unit of units) {
+    assert.equal(unit.state, 'move');
+    assert.equal(unit.formation, 'column');
+    assert.equal(Number.isFinite(unit.orderX), true);
+    assert.equal(Number.isFinite(unit.orderY), true);
+    assert.equal(unit.orderTarget, null);
+  }
+  assert.deepEqual(
+    { kind: world.flags.at(-1).kind, x: world.flags.at(-1).x, y: world.flags.at(-1).y },
+    { kind: 'move', x: target.x, y: target.y },
+  );
+  for (let frame = 0; frame < 30; frame++) step(world, 1 / 30);
+  units.forEach((unit, index) => {
+    assert.ok(
+      Math.hypot(unit.x - startingPositions[index].x, unit.y - startingPositions[index].y) > 5,
+      `${unit.type} should advance toward its waypoint`,
+    );
+  });
+});
+
+test('primary enemy clicks focus the whole mobile selection on that target', () => {
+  const world = makeWorld();
+  const targetPoint = findOpenPoint(world);
+  const enemy = spawnUnit(world, 1, 'cav', targetPoint.x, targetPoint.y);
+  const units = [
+    spawnUnit(world, 0, 'musk', 720, 1420),
+    spawnUnit(world, 0, 'cav', 750, 1460),
+    spawnUnit(world, 0, 'gun', 780, 1500),
+  ];
+
+  assert.equal(issuePrimaryUnitCommand(world, units, enemy.x, enemy.y), true);
+  for (const unit of units) {
+    assert.equal(unit.state, 'move');
+    assert.equal(unit.orderTarget, enemy);
+    assert.equal(unit.target, enemy);
+    assert.equal(Number.isNaN(unit.orderX), true);
+  }
+  assert.equal(world.flags.at(-1).kind, 'attack');
+  assert.equal(world.flags.at(-1).x, enemy.x);
+  assert.equal(world.flags.at(-1).y, enemy.y);
+});
+
 test('selected villagers can take over any unfinished friendly construction', () => {
   const world = makeWorld();
   const first = spawnUnit(world, 0, 'villager', 720, 1420);
@@ -246,7 +301,7 @@ test('selected villagers can take over any unfinished friendly construction', ()
   assert.equal(assignVillagersToConstruction(world, [first], wall), false);
 });
 
-test('primary ground movement requires a villager and refuses occupied terrain', () => {
+test('villager-only movement helper still requires a villager and refuses occupied terrain', () => {
   const world = makeWorld();
   const villager = spawnUnit(world, 0, 'villager', 720, 1420);
   const soldier = spawnUnit(world, 0, 'musk', 735, 1440);
