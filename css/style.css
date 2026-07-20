@@ -26,7 +26,8 @@ button, select { font: inherit; }
 #game { position: absolute; inset: 0; display: block; cursor: crosshair; }
 #game.cursor-gather { cursor: pointer; }
 #game.cursor-build { cursor: crosshair; }
-#game.cursor-move { cursor: pointer; }
+#game.cursor-move { cursor: move; }
+#game.cursor-attack { cursor: crosshair; }
 .hidden { display: none !important; }
 .hud { position: absolute; z-index: 10; }
 .eyebrow {

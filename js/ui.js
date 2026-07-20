@@ -339,8 +339,8 @@ function renderSelection(world, selection) {
   title.textContent = `${units.length.toLocaleString()} Soldiers`;
   info.textContent = Object.entries(byType).map(([type, count]) => `${count} ${UNIT_TYPES[type].label}`).join(' · ');
   detail.textContent = wallDefenders
-    ? `${wallDefenders} defending the wall · right-click ground to descend or an enemy to focus fire.`
-    : 'Right-click ground to march, an enemy to attack, or an accessible wall to mount musketeers.';
+    ? `${wallDefenders} defending the wall · click ground to descend or an enemy to focus fire.`
+    : 'Click open ground to march or an enemy to attack. Right-click an accessible wall to mount musketeers.';
   context.textContent = 'Formation and movement';
   formations.classList.remove('hidden');
 }
