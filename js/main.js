@@ -6,7 +6,7 @@ import { Commander } from './ai.js';
 import { initRender, startBattle as startBattleRender, draw,
          camera, clampCamera } from './render.js';
 import { initInput, updateInput, getSelection, getDragRect,
-         getPlacementPreview, getResourceHoverTarget, beginPlacement, setFormation,
+         getPlacementPreview, getResourceHoverTarget, getMovePreview, beginPlacement, setFormation,
          cancelPlacement, haltSelection, resetForBattle } from './input.js';
 import { placeBuilding, queueUnit, validatePlacement } from './economy.js';
 import * as ui from './ui.js';
@@ -204,7 +204,10 @@ function frame(now) {
   }
 
   updateInput(dt);
-  draw(world, Math.min(1, acc / SIM_STEP), getDragRect(), getPlacementPreview(), getResourceHoverTarget());
+  draw(
+    world, Math.min(1, acc / SIM_STEP), getDragRect(),
+    getPlacementPreview(), getResourceHoverTarget(), getMovePreview(),
+  );
   ui.updateHud(world, getSelection());
 
   if (world.state === 'ended' && !endShown) {
@@ -223,7 +226,7 @@ window.__tick = (secs = 1) => {
     step(world, SIM_STEP);
     commander.update(SIM_STEP);
   }
-  draw(world, 1, null, getPlacementPreview(), getResourceHoverTarget());
+  draw(world, 1, null, getPlacementPreview(), getResourceHoverTarget(), getMovePreview());
   ui.updateHud(world, getSelection());
   if (world.state === 'ended' && !endShown) {
     endShown = true;
@@ -237,7 +240,7 @@ window.__view = (x, y, zoom) => {
   if (!world) return 'no battle running';
   camera.x = x; camera.y = y; camera.zoom = zoom;
   clampCamera();
-  draw(world, 1, null, getPlacementPreview(), getResourceHoverTarget());
+  draw(world, 1, null, getPlacementPreview(), getResourceHoverTarget(), getMovePreview());
   return `cam=(${camera.x | 0},${camera.y | 0}) zoom=${camera.zoom}`;
 };
 

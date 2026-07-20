@@ -267,8 +267,8 @@ function renderSelection(world, selection) {
     const working = villagers.filter(worker => worker.job).length;
     info.textContent = `${working} working · ${villagers.length - working} ready for orders`;
     detail.textContent = gatherers
-      ? `${gatherers} gathering · ${formatHourly(projected)} assigned · hover and click another resource to redirect`
-      : 'Hover a mine, forest, food source, or farm and click to start gathering.';
+      ? `${gatherers} gathering · ${formatHourly(projected)} assigned · click open ground to move or another resource to redirect`
+      : 'Click open ground to move, or hover a mine, forest, food source, or farm and click to gather.';
     context.textContent = gatherers ? 'Selected output and construction' : 'Construct a building';
     for (const resourceType of RESOURCE_KEYS) {
       if (economy[resourceType].workers) addEconomyMetric(grid, economy[resourceType]);

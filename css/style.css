@@ -25,6 +25,7 @@ button, select { font: inherit; }
 #app { position: relative; width: 100vw; height: 100vh; }
 #game { position: absolute; inset: 0; display: block; cursor: crosshair; }
 #game.cursor-gather { cursor: pointer; }
+#game.cursor-move { cursor: pointer; }
 .hidden { display: none !important; }
 .hud { position: absolute; z-index: 10; }
 .eyebrow {

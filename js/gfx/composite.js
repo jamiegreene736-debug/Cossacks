@@ -1445,6 +1445,66 @@ function drawHealthBars(ctx, units, alpha, spritesRef) {
  * 1-8 entries); the per-flag alpha writes here are irrelevant to frame cost
  * and are NOT in the unit loop.
  */
+function cDrawMoveRoute(ctx, flag, scale, life, age) {
+  if (!flag.route || !Number.isFinite(flag.fromX) || !Number.isFinite(flag.fromY)) return;
+  const dx = flag.x - flag.fromX;
+  const dy = flag.y - flag.fromY;
+  const distance = Math.hypot(dx, dy);
+  if (distance < 18) return;
+
+  const ux = dx / distance;
+  const uy = dy / distance;
+  const bend = Math.min(34, distance * 0.07);
+  const controlX = (flag.fromX + flag.x) * 0.5 - uy * bend;
+  const controlY = (flag.fromY + flag.y) * 0.5 + ux * bend;
+  const fade = life > 0.25 ? 1 : life / 0.25;
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.globalAlpha = fade * 0.62;
+  ctx.strokeStyle = 'rgba(22,18,11,0.82)';
+  ctx.lineWidth = 3.7 * scale;
+  ctx.setLineDash([7 * scale, 7 * scale]);
+  ctx.lineDashOffset = -age * 18 * scale;
+  ctx.beginPath();
+  ctx.moveTo(flag.fromX, flag.fromY);
+  ctx.quadraticCurveTo(controlX, controlY, flag.x, flag.y);
+  ctx.stroke();
+
+  ctx.globalAlpha = fade * 0.85;
+  ctx.strokeStyle = '#d4b860';
+  ctx.lineWidth = 1.55 * scale;
+  ctx.beginPath();
+  ctx.moveTo(flag.fromX, flag.fromY);
+  ctx.quadraticCurveTo(controlX, controlY, flag.x, flag.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  for (const t of [0.3, 0.55, 0.78]) {
+    const oneMinusT = 1 - t;
+    const x = oneMinusT * oneMinusT * flag.fromX
+      + 2 * oneMinusT * t * controlX + t * t * flag.x;
+    const y = oneMinusT * oneMinusT * flag.fromY
+      + 2 * oneMinusT * t * controlY + t * t * flag.y;
+    const tangentX = 2 * oneMinusT * (controlX - flag.fromX) + 2 * t * (flag.x - controlX);
+    const tangentY = 2 * oneMinusT * (controlY - flag.fromY) + 2 * t * (flag.y - controlY);
+    const tangentLength = Math.hypot(tangentX, tangentY) || 1;
+    const tx = tangentX / tangentLength;
+    const ty = tangentY / tangentLength;
+    const px = -ty;
+    const py = tx;
+    const backX = x - tx * 6 * scale;
+    const backY = y - ty * 6 * scale;
+    ctx.beginPath();
+    ctx.moveTo(backX + px * 3.2 * scale, backY + py * 3.2 * scale);
+    ctx.lineTo(x, y);
+    ctx.lineTo(backX - px * 3.2 * scale, backY - py * 3.2 * scale);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function drawOrderFlags(ctx, world) {
   const flags = world.flags;
   if (!flags.length || !cmp.flags || !cmp.flagPulse) return;
@@ -1457,6 +1517,8 @@ function drawOrderFlags(ctx, world) {
     const life = cClamp(f.life / f.max, 0, 1);
     const age = 1 - life;
 
+    cDrawMoveRoute(ctx, f, s, life, f.max - f.life);
+
     // (a) ground pulse over the first ~40% of the flag's life
     if (age < 0.42) {
       const k = age / 0.42;
@@ -1466,8 +1528,8 @@ function drawOrderFlags(ctx, world) {
     }
 
     // (b) the pennant, fluttering, with a short plant-in hop at spawn
-    const kind = f.attack ? 'attack' : f.gather ? 'gather' : f.rally ? 'rally' : 'move';
-    const set = cmp.flags[kind];
+    const kind = f.kind || (f.attack ? 'attack' : f.gather ? 'gather' : f.rally ? 'rally' : 'move');
+    const set = cmp.flags[kind] || cmp.flags.move;
     const fr = set[((f.max - f.life) * 13) & 3];
     const hop = age < 0.14 ? (1 - age / 0.14) * 5 * s : 0;
     // fade out over the last 35% only, so the flag is solid while it matters
