@@ -3026,6 +3026,244 @@ function bdPaintTower(g, o) {
   return G;
 }
 
+function bdCastleBastion(g, cx, yBase, width, height, stone, seed) {
+  const top = yBase - height;
+  const rr = bdRnd(seed);
+  const outline = [
+    cx - width * 0.58, yBase,
+    cx - width * 0.52, top + height * 0.22,
+    cx - width * 0.34, top,
+    cx + width * 0.34, top,
+    cx + width * 0.52, top + height * 0.22,
+    cx + width * 0.58, yBase,
+  ];
+  bdPoly(g, outline, stone, { litW: 1.1, edge: true, shadeX: 0.64 });
+
+  // A separate down-light face makes every bastion project from the curtain
+  // wall instead of reading as a flat badge pasted onto it.
+  bdPoly(g, [
+    cx + width * 0.14, top,
+    cx + width * 0.34, top,
+    cx + width * 0.52, top + height * 0.22,
+    cx + width * 0.58, yBase,
+    cx + width * 0.12, yBase,
+  ], stone, { fill: stone.shade, shade: false, litW: 0.55, edge: true });
+
+  g.save();
+  g.beginPath();
+  g.moveTo(outline[0], outline[1]);
+  for (let index = 2; index < outline.length; index += 2) {
+    g.lineTo(outline[index], outline[index + 1]);
+  }
+  g.closePath();
+  g.clip();
+  g.strokeStyle = bdRgba(stone.line, 0.48);
+  g.lineWidth = 0.62;
+  const course = Math.max(4, height / 7);
+  for (let y = top + course; y < yBase; y += course) {
+    g.beginPath();
+    g.moveTo(cx - width * 0.6, y + rr(-0.3, 0.3));
+    g.lineTo(cx + width * 0.6, y + rr(-0.3, 0.3));
+    g.stroke();
+  }
+  g.restore();
+
+  const deck = bdRamp(bdMix(BMAT.STONE, BMAT.LIMESTONE, 0.18));
+  bdPoly(g, [
+    cx - width * 0.34, top,
+    cx - width * 0.16, top - height * 0.11,
+    cx + width * 0.33, top - height * 0.08,
+    cx + width * 0.34, top,
+  ], deck, { fill: deck.lit, shade: false, litW: 0.6, edge: true });
+
+  // Merlons and true dark embrasures form the stepped artillery silhouette.
+  const merlonWidth = width * 0.13;
+  for (let index = -2; index <= 2; index++) {
+    const x = cx + index * width * 0.17;
+    bdRect(g, x - merlonWidth * 0.5, top - 8.5, merlonWidth, 9,
+      stone, { litW: 0.65, edge: true, lineW: 0.72 });
+  }
+  g.fillStyle = bdShadow(0.74);
+  for (let index = -2; index < 2; index++) {
+    const x = cx + (index + 0.5) * width * 0.17;
+    g.fillRect(x - width * 0.025, top - 4.2, width * 0.05, 4.4);
+  }
+  return { top, width };
+}
+
+function bdCastleCannon(g, x, y, direction, scale) {
+  const k = scale || 1;
+  const dir = direction < 0 ? -1 : 1;
+  const iron = bdRamp('#343941');
+  const timber = bdRamp(BMAT.TIMBER);
+  const bronze = bdRamp('#665238');
+
+  bdBeam(g, timber, x - dir * 3 * k, y + 5 * k, x + dir * 11 * k, y + 1.5 * k,
+    3.8 * k, { cap: 'butt' });
+  bdEllipse(g, x - dir * 1.5 * k, y + 6.3 * k, 4.5 * k, 4.5 * k,
+    timber, { litW: 0.65, edge: true });
+  bdEllipse(g, x - dir * 1.5 * k, y + 6.3 * k, 1.4 * k, 1.4 * k,
+    iron, { litW: 0.35, edge: true });
+  bdBeam(g, bronze, x, y, x + dir * 22 * k, y - 5.2 * k,
+    5.2 * k, { cap: 'butt' });
+  bdEllipse(g, x + dir * 22 * k, y - 5.2 * k, 2.2 * k, 3.2 * k,
+    iron, { litW: 0.6, edge: true });
+  bdEllipse(g, x - dir * 1.5 * k, y + 0.4 * k, 3.3 * k, 3.8 * k,
+    bronze, { litW: 0.55, edge: true });
+}
+
+function bdCastleCurtain(g, x, yTop, width, height, stone, seed) {
+  bdRect(g, x, yTop, width, height, stone, { litW: 1.0, edge: true });
+  bdStoneCourses(g, function (path) { path.rect(x, yTop, width, height); },
+    x, yTop, width, height, stone, seed, Math.max(4, height / 7), { ao: false });
+
+  const count = Math.max(5, Math.floor(width / 18));
+  const step = width / count;
+  for (let index = 0; index < count; index++) {
+    const mx = x + step * index + step * 0.12;
+    bdRect(g, mx, yTop - 8, step * 0.58, 8.5, stone,
+      { litW: 0.58, edge: true, lineW: 0.68 });
+  }
+  g.fillStyle = bdShadow(0.76);
+  for (let index = 0; index < count - 1; index++) {
+    const ex = x + step * (index + 0.78);
+    g.fillRect(ex - step * 0.09, yTop - 3.7, step * 0.18, 3.9);
+  }
+}
+
+function bdPaintCastle(g, o) {
+  const def = o.def;
+  const G = bdGeometry({
+    w: def.w, h: def.h, bwK: 0.47, groundK: 0.42, wallK: 0.52,
+    overK: 0.01, roofK: 0.34, hipK: 0.62, plinthK: 0.12,
+  });
+  const ottoman = o.nation === 'ottoman';
+  const stone = bdRamp(ottoman ? bdMix(BMAT.STONE_ROUGH, '#AD9873', 0.20) : BMAT.STONE_ROUGH);
+  const dressed = bdRamp(ottoman ? bdMix(BMAT.LIMESTONE, '#C6A873', 0.18) : BMAT.LIMESTONE);
+  const roof = bdRoofMat(ottoman ? BMAT.TILE : BMAT.SLATE, o.natRoof, 0.46);
+  const iron = bdRamp(BMAT.IRON);
+
+  // A broad dry ditch and revetted glacis frame the fortress before any wall
+  // rises. The broken double ellipse gives the mass a deep defensive shelf.
+  g.save();
+  g.strokeStyle = bdRgba(BT.EARTH_DARK, 0.72);
+  g.lineWidth = 14;
+  g.beginPath();
+  g.ellipse(0, G.yG + 7, def.w * 0.55, def.h * 0.31, 0, Math.PI * 1.03, Math.PI * 1.97);
+  g.stroke();
+  g.strokeStyle = bdRgba(dressed.base, 0.62);
+  g.lineWidth = 3.2;
+  g.beginPath();
+  g.ellipse(0, G.yG + 4, def.w * 0.54, def.h * 0.29, 0, Math.PI * 1.02, Math.PI * 1.98);
+  g.stroke();
+  g.restore();
+
+  // Rear works are painted first; their upper decks remain visible through
+  // the central courtyard, establishing three distinct depth layers.
+  bdCastleCurtain(g, -78, -10, 156, 34, stone, o.seed * 7 + 1);
+  const rearLeft = bdCastleBastion(g, -79, 22, 62, 39, stone, o.seed * 11 + 3);
+  const rearRight = bdCastleBastion(g, 79, 22, 62, 39, stone, o.seed * 13 + 5);
+
+  // Barracks and arsenal blocks form the inner ward. The courtyard gap stays
+  // genuinely open between their side wings instead of becoming a flat wall.
+  const keep = bdGeometry({
+    w: def.w * 0.54, h: def.h * 0.82, bwK: 0.39, groundK: 0.13,
+    wallK: 0.43, overK: 0.04, roofK: ottoman ? 0.31 : 0.23,
+    hipK: 0.64, plinthK: 0.12, depthK: 0.14,
+  });
+  const keepWall = bdRamp(ottoman ? BMAT.PLASTER_WARM : bdMix(BMAT.BRICK_RED, BMAT.STONE, 0.42));
+  bdWalls(g, keep, { wall: keepWall, seed: o.seed * 17, material: ottoman ? 'plain' : 'stone' });
+  for (const x of [-keep.bw * 0.58, keep.bw * 0.58]) {
+    if (ottoman) bdArchedWindow(g, x, keep.yE + keep.wallH * 0.36, 8.5, 14);
+    else bdSashWindow(g, x, keep.yE + keep.wallH * 0.36, 8.5, 14, { keystone: true });
+  }
+  bdDoor(g, 0, keep.yG - keep.plinth, 15, keep.wallH * 0.44, BD_SIDE[o.side].rim, { arch: true });
+  if (ottoman) bdDome(g, keep, { roof });
+  else bdRoof(g, keep, { roof, roofKind: 'slate', seed: o.seed * 19, pitch: 3.6 });
+
+  // Twin powder-magazine wings step forward from the keep and expose their
+  // shaded side planes. Their roofs sit below the command block's ridge.
+  for (const side of [-1, 1]) {
+    const cx = side * 61;
+    bdCivicIsoBlock(g, cx, 24, 43, 31, side < 0 ? -9 : 9, side < 0 ? 4 : -4, stone);
+    bdPoly(g, [cx - 25, -7, cx + 25, -7, cx + 18, -21, cx - 18, -21],
+      roof, { litW: 0.75, edge: true, shadeX: side < 0 ? 0.76 : 0.58 });
+    g.fillStyle = bdShadow(0.83);
+    g.fillRect(cx - 3.4, 4, 6.8, 12);
+    bdRect(g, cx - 5.3, 2.3, 10.6, 2.2, dressed, { litW: 0.5, edge: true });
+  }
+
+  // Side curtains enclose the ward before the nearer gatehouse is layered in.
+  bdCastleCurtain(g, -99, 16, 34, 43, stone, o.seed * 23 + 7);
+  bdCastleCurtain(g, 65, 16, 34, 43, stone, o.seed * 29 + 11);
+  bdCastleCurtain(g, -70, 25, 140, 43, stone, o.seed * 31 + 13);
+
+  // A deep arched gate, portcullis, voussoirs and drawbridge occupy the front
+  // curtain. The layered dark reveal is intentionally the focal depth cue.
+  const gateY = 68;
+  const gateW = 28;
+  const gateH = 36;
+  g.fillStyle = bdShadow(0.92);
+  g.beginPath();
+  g.moveTo(-gateW / 2, gateY);
+  g.lineTo(-gateW / 2, gateY - gateH + gateW * 0.5);
+  g.arc(0, gateY - gateH + gateW * 0.5, gateW * 0.5, Math.PI, 0);
+  g.lineTo(gateW / 2, gateY);
+  g.closePath();
+  g.fill();
+  g.strokeStyle = dressed.lit;
+  g.lineWidth = 2.5;
+  g.stroke();
+  g.strokeStyle = bdRgba(iron.lit, 0.84);
+  g.lineWidth = 1;
+  for (let x = -10; x <= 10; x += 5) {
+    g.beginPath(); g.moveTo(x, gateY - 25); g.lineTo(x, gateY); g.stroke();
+  }
+  for (let y = gateY - 20; y <= gateY - 5; y += 5) {
+    g.beginPath(); g.moveTo(-12, y); g.lineTo(12, y); g.stroke();
+  }
+  const bridge = bdRamp(BMAT.TIMBER);
+  bdPoly(g, [-15, gateY - 1, 15, gateY - 1, 28, gateY + 24, -28, gateY + 24],
+    bridge, { litW: 0.85, edge: true, shadeY: 0.68 });
+  g.strokeStyle = bdRgba(bridge.line, 0.72);
+  g.lineWidth = 0.8;
+  for (let y = gateY + 3; y < gateY + 23; y += 4) {
+    g.beginPath(); g.moveTo(-18 - (y - gateY) * 0.4, y); g.lineTo(18 + (y - gateY) * 0.4, y); g.stroke();
+  }
+
+  const frontLeft = bdCastleBastion(g, -88, 72, 70, 50, stone, o.seed * 37 + 17);
+  const frontRight = bdCastleBastion(g, 88, 72, 70, 50, stone, o.seed * 41 + 19);
+
+  // The actual ordnance is visible on every projecting work: bronze barrels,
+  // trucks, wheels and dark muzzles aimed across overlapping approaches.
+  bdCastleCannon(g, -82, rearLeft.top - 5, -1, 0.82);
+  bdCastleCannon(g, 82, rearRight.top - 5, 1, 0.82);
+  bdCastleCannon(g, -91, frontLeft.top - 5, -1, 0.96);
+  bdCastleCannon(g, 91, frontRight.top - 5, 1, 0.96);
+  bdCastleCannon(g, -29, 20, -1, 0.72);
+  bdCastleCannon(g, 29, 20, 1, 0.72);
+
+  // Powder barrels, shot pyramids, sentry lamps and two standards make the
+  // fortress feel occupied while preserving clear faction recognition.
+  bdBarrel(g, -52, 59, 10, 15);
+  bdBarrel(g, -42, 61, 9, 13);
+  for (const baseX of [43, 51]) {
+    for (let row = 0; row < 3; row++) {
+      for (let ball = 0; ball < 3 - row; ball++) {
+        bdEllipse(g, baseX + ball * 3 + row * 1.5, 60 - row * 2.6,
+          1.6, 1.6, iron, { litW: 0.3, edge: true, lineW: 0.4 });
+      }
+    }
+  }
+  bdLantern(g, -19, 48, o.side);
+  bdLantern(g, 19, 48, o.side);
+  bdBanner(g, -62, -12, 62, o.side, { w: 23, h: 16, dir: -1 });
+  bdBanner(g, 62, -12, 62, o.side, { w: 23, h: 16, dir: 1 });
+  bdBanner(g, 0, keep.yR - 2, 58, o.side, { w: 28, h: 19, dir: o.side === 0 ? 1 : -1 });
+
+  return G;
+}
+
 /* ---------------------------------------------------------------------------
    7. RESOURCE-NODE PROPS
    These are TERRAIN, not architecture, so they are painted in terrain.js's
@@ -4162,6 +4400,7 @@ function bdPaintFortification(
 const BD_TOP_EXTRA = {
   town_center: 112, house: 62, farm: 30, mill: 104, lumber_camp: 54,
   mine: 74, barracks: 78, stable: 72, foundry: 108, tower: 106,
+  castle: 162,
   wall: 72, gate: 94, wall_stairs: 92,
 };
 
@@ -4222,7 +4461,7 @@ function bdResetCaches() {
 }
 
 const BD_VARIANTS = {
-  town_center: 1, tower: 2, farm: 1, house: 3,
+  town_center: 1, tower: 2, castle: 2, farm: 1, house: 3,
   mill: 2, lumber_camp: 2, mine: 2, barracks: 2, stable: 2, foundry: 2,
   wall: 3, gate: 3, wall_stairs: 3,
 };
@@ -4231,6 +4470,7 @@ const BD_PAINTERS = {
   town_center: bdPaintTownCenter, house: bdPaintHouse, mill: bdPaintMill,
   lumber_camp: bdPaintLumberCamp, mine: bdPaintMine, barracks: bdPaintBarracks,
   stable: bdPaintStable, foundry: bdPaintFoundry, tower: bdPaintTower,
+  castle: bdPaintCastle,
 };
 
 const BD_ENGLISH_BUILDING_ART = Object.freeze({
@@ -4260,6 +4500,7 @@ const BD_BUILDING_PRESENTATION = Object.freeze({
   stable: { artWidthScale: 1.48, apronWidthScale: 0.94, apronDepthScale: 0.62 },
   foundry: { artWidthScale: 1.40, apronWidthScale: 0.92, apronDepthScale: 0.60 },
   tower: { artWidthScale: 1.36, apronWidthScale: 0.80, apronDepthScale: 0.56 },
+  castle: { artWidthScale: 1.58, apronWidthScale: 0.80, apronDepthScale: 0.58 },
   wall_stairs: { artWidthScale: 1.58, apronWidthScale: 0.94, apronDepthScale: 0.62 },
 });
 
@@ -4967,7 +5208,8 @@ function bdDrawConstructionReveal(g, building, sprite, structureTop, structureBo
   // or masonry working course rather than a sprite wipe.
   if (shellProgress < 0.985) {
     const course = bdRamp(
-      building.type === 'tower' || building.type === 'mine' || building.type === 'foundry'
+      building.type === 'tower' || building.type === 'castle'
+        || building.type === 'mine' || building.type === 'foundry'
         ? BMAT.STONE_ROUGH
         : BMAT.TIMBER,
     );
@@ -5066,7 +5308,7 @@ function bdDrawRepairOverlay(building, worldTime) {
     + (BD_TOP_EXTRA[building.type] || building.h * 0.75)) + 18;
   const height = Math.max(24, structureBottom - structureTop);
   const workingY = structureBottom - height * (0.14 + p * 0.80);
-  const masonry = building.type === 'tower' || building.type === 'mine'
+  const masonry = building.type === 'tower' || building.type === 'castle' || building.type === 'mine'
     || building.type === 'foundry' || building.type === 'town_center'
     || isFortificationType(building.type) || building.type === 'wall_stairs';
   const course = bdRamp(masonry ? BMAT.STONE_ROUGH : BMAT.TIMBER);
@@ -5325,7 +5567,7 @@ function drawFoundation(building, nation, worldTime) {
     const px = -hw - 20, py = yG + 6;
     const rows = Math.max(1, Math.round(remain * 3));
     bdLogPile(g, px, py, 16 * (0.5 + remain * 0.5), rows, building.id * 13);
-    const masonry = building.type === 'tower' || building.type === 'mine'
+    const masonry = building.type === 'tower' || building.type === 'castle' || building.type === 'mine'
       || building.type === 'foundry' || building.type === 'town_center';
     const pieces = Math.max(1, Math.round(remain * (masonry ? 9 : 5)));
     for (let i = 0; i < pieces; i++) {

@@ -126,6 +126,7 @@ async function startBattle(opts) {
   setupLocalAutoEngagePreview(world);
   setupLocalCurvedWallPreview(world);
   setupLocalTowerCombatPreview(world);
+  setupLocalCastlePreview(world);
   ui.showBattleHud(world);
   ui.setPauseLabel(false);
   ui.setSpeedLabel(1);
@@ -247,6 +248,38 @@ function setupLocalCurvedWallPreview(activeWorld) {
   )));
   camera.x = (walls[0].x + walls.at(-1).x) * 0.5;
   camera.y = (walls[0].y + walls.at(-1).y) * 0.5;
+  camera.zoom = 1.45;
+  clampCamera();
+}
+
+function setupLocalCastlePreview(activeWorld) {
+  const debugName = new URLSearchParams(window.location.search).get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'castle') return;
+
+  const castle = createBuilding(0, 'castle', 1220, 1500, true);
+  castle.selected = true;
+  castle.reload = 0;
+  activeWorld.buildings.push(castle);
+  activeWorld.resources = activeWorld.resources.filter(resource => (
+    Math.hypot(resource.x - castle.x, resource.y - castle.y)
+      > castle.radius + resource.radius + 60
+  ));
+
+  const defenders = [
+    ['gun', 1645, 1405], ['pike', 1680, 1460], ['musk', 1700, 1515],
+    ['cav', 1650, 1570], ['gun', 1720, 1620], ['pike', 1590, 1660],
+  ];
+  for (const [type, x, y] of defenders) {
+    const unit = spawnUnit(activeWorld, 1, type, x, y);
+    unit.acquire = 0;
+    unit.speed = 0;
+    unit.reload = 999;
+  }
+
+  camera.x = castle.x + 150;
+  camera.y = castle.y;
   camera.zoom = 1.45;
   clampCamera();
 }

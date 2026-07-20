@@ -1318,11 +1318,69 @@ function updateTowers(world, dt) {
   }
 }
 
+function nearestEnemyUnitsInRange(world, building, range, limit) {
+  const targets = [];
+  for (const unit of world.units) {
+    if (!unit.alive || unit.side === building.side) continue;
+    const distance = Math.hypot(unit.x - building.x, unit.y - building.y);
+    if (distance > range) continue;
+    targets.push({ unit, distance });
+    targets.sort((a, b) => a.distance - b.distance);
+    if (targets.length > limit) targets.pop();
+  }
+  return targets;
+}
+
+function fireCastleVolley(world, castle, def, targets) {
+  const ports = [
+    { x: -54, y: -70 },
+    { x: 0, y: -86 },
+    { x: 54, y: -70 },
+  ];
+  const volley = Math.max(1, def.volley || 1);
+  for (let index = 0; index < volley; index++) {
+    const target = targets[index % targets.length];
+    const port = ports[index % ports.length];
+    const sx = castle.x + port.x;
+    const sy = castle.y + port.y;
+    const scatterRadius = Math.min(def.splash * 0.45, 4 + target.distance * 0.018);
+    const scatterDistance = Math.random() * scatterRadius;
+    const scatterAngle = Math.random() * Math.PI * 2;
+    const tx = target.unit.x + Math.cos(scatterAngle) * scatterDistance;
+    const ty = target.unit.y + Math.sin(scatterAngle) * scatterDistance;
+    const flightDistance = Math.hypot(tx - sx, ty - sy);
+    world.projectiles.push({
+      kind: 'castle', sx, sy, x: sx, y: sy, px: sx, py: sy,
+      tx, ty, t: 0,
+      dur: Math.min(2, Math.max(0.5, flightDistance / 320)),
+      arc: Math.min(96, Math.max(24, flightDistance * 0.16)),
+      dmg: def.attack, splash: def.splash, target: target.unit,
+    });
+  }
+  sfx.cannonFire(castle.x);
+}
+
+function updateCastles(world, dt) {
+  const def = BUILDING_TYPES.castle;
+  for (const building of world.buildings) {
+    if (!building.alive || !building.complete || building.type !== 'castle') continue;
+    building.reload -= dt;
+    if (building.reload > 0) continue;
+    const targets = nearestEnemyUnitsInRange(
+      world, building, def.range, Math.max(1, def.volley || 1),
+    );
+    if (!targets.length) continue;
+    building.reload = def.reload;
+    fireCastleVolley(world, building, def, targets);
+  }
+}
+
 export function stepEconomy(world, dt) {
   updateWorkers(world, dt);
   updateIncomeTelemetry(world, dt);
   updateQueues(world, dt);
   updateTowers(world, dt);
+  updateCastles(world, dt);
 }
 
 export function onUnitKilled(world, unit) {

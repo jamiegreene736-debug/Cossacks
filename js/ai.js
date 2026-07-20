@@ -96,6 +96,11 @@ export class Commander {
         && buildingsOf(world, this.side, 'tower').length < this.profile.towerLimit) {
       if (this.tryBuild('tower', villagers)) return;
     }
+    if (villagers.length >= buildAt.castle
+        && buildingsOf(world, this.side, 'foundry', true).length
+        && buildingsOf(world, this.side, 'castle').length === 0) {
+      if (this.tryBuild('castle', villagers)) return;
+    }
     if (villagers.length >= 2 && buildingsOf(world, this.side, 'farm').length
           < Math.ceil(villagers.length / this.profile.farmWorkerRatio)) {
       this.tryBuild('farm', villagers);
@@ -137,6 +142,7 @@ export class Commander {
       stable: [[390, 190]],
       foundry: [[410, -205]],
       tower: [[520, -285], [520, 285]],
+      castle: [[650, 20], [650, -180], [650, 220]],
     };
     const options = plans[type] || [[250, 0]];
     const cursor = this.planCursor[type] || 0;
@@ -175,6 +181,11 @@ export class Commander {
         }
       } else if (building.type === 'foundry') {
         queueUnit(world, building, 'gun', this.profile.productionBatch.foundry);
+      } else if (building.type === 'castle') {
+        const roster = ['musk', 'pike', 'cav', 'gun'];
+        const unitType = roster[(military.length + building.queue.length) % roster.length];
+        const count = unitType === 'gun' ? 1 : unitType === 'cav' ? 2 : 3;
+        queueUnit(world, building, unitType, count);
       }
       setRallyPoint(building, WORLD.w / 2 + (this.side === 0 ? -420 : 420), WORLD.h / 2);
     }
