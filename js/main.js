@@ -88,6 +88,15 @@ ui.bindControls({
 });
 refreshSavedCampaign();
 
+function syncAudioPageActivity() {
+  void sfx.setPageActive(document.visibilityState === 'visible');
+}
+
+document.addEventListener('visibilitychange', syncAudioPageActivity);
+window.addEventListener('pagehide', () => { void sfx.setPageActive(false); });
+window.addEventListener('pageshow', syncAudioPageActivity);
+syncAudioPageActivity();
+
 async function startBattle(opts) {
   sfx.ensure();
   await productionArtReady;

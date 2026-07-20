@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  Soundscape,
   campaignTrackOrder,
   findNearestAudibleEntity,
   findNearestAudibleMatch,
@@ -9,6 +10,21 @@ import {
   pausedMusicMultiplier,
   workerSoundKind,
 } from '../js/audio.js';
+
+function createAudioContext(state = 'running') {
+  return {
+    state,
+    transitions: [],
+    async suspend() {
+      this.transitions.push('suspend');
+      this.state = 'suspended';
+    },
+    async resume() {
+      this.transitions.push('resume');
+      this.state = 'running';
+    },
+  };
+}
 
 test('campaign track order starts with the player faction and retains three peaceful cues', () => {
   assert.deepEqual(campaignTrackOrder('england'), ['greenwich', 'lanterns', 'bosphorus']);
@@ -28,6 +44,57 @@ test('audio settings reject unknown pause behavior and clamp every bus', () => {
   }), {
     master: 0, effects: 0.25, music: 1, pauseMusic: 'duck', muted: true,
   });
+});
+
+test('page activity suspends all audio while hidden and resumes it when visible', async () => {
+  const soundscape = new Soundscape();
+  const context = createAudioContext();
+  soundscape.ctx = context;
+
+  await soundscape.setPageActive(false);
+  assert.equal(context.state, 'suspended');
+  assert.deepEqual(context.transitions, ['suspend']);
+  assert.equal(soundscape.pageActive, false);
+
+  await soundscape.setPageActive(true);
+  assert.equal(context.state, 'running');
+  assert.deepEqual(context.transitions, ['suspend', 'resume']);
+  assert.equal(soundscape.pageActive, true);
+});
+
+test('rapid page activity changes converge on the latest requested state', async () => {
+  const soundscape = new Soundscape();
+  const context = createAudioContext();
+  let releaseSuspend;
+  context.suspend = async function suspend() {
+    this.transitions.push('suspend');
+    await new Promise(resolve => { releaseSuspend = resolve; });
+    this.state = 'suspended';
+  };
+  soundscape.ctx = context;
+
+  const hide = soundscape.setPageActive(false);
+  await Promise.resolve();
+  const show = soundscape.setPageActive(true);
+  releaseSuspend();
+  await Promise.all([hide, show]);
+
+  assert.equal(context.state, 'running');
+  assert.deepEqual(context.transitions, ['suspend', 'resume']);
+  assert.equal(soundscape.pageActivityError, null);
+});
+
+test('audio initialization never revives a context while the page is hidden', async () => {
+  const soundscape = new Soundscape();
+  const context = createAudioContext('suspended');
+  soundscape.ctx = context;
+  soundscape.pageActive = false;
+
+  soundscape.ensure();
+  await soundscape.pageActivityTransition;
+
+  assert.equal(context.state, 'suspended');
+  assert.deepEqual(context.transitions, []);
 });
 
 test('worker activities select distinct economic sounds', () => {
