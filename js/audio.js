@@ -103,9 +103,12 @@ function shuffled(values) {
   return result;
 }
 
-class Soundscape {
+export class Soundscape {
   constructor() {
     this.ctx = null;
+    this.pageActive = globalThis.document?.visibilityState !== 'hidden';
+    this.pageActivityTransition = Promise.resolve();
+    this.pageActivityError = null;
     this.master = null;
     this.effects = null;
     this.music = null;
@@ -138,9 +141,10 @@ class Soundscape {
 
   ensure() {
     if (this.ctx) {
-      if (this.ctx.state === 'suspended') this.ctx.resume();
+      if (this.pageActive && this.ctx.state === 'suspended') this.setPageActive(true);
       return;
     }
+    if (!this.pageActive) return;
     const AC = globalThis.window && (window.AudioContext || window.webkitAudioContext);
     if (!AC) return;
     this.ctx = new AC();
@@ -165,6 +169,30 @@ class Soundscape {
     this.noise = this.createNoiseBuffer(3);
     this.startFieldAmbience();
     this.syncGains(true);
+  }
+
+  setPageActive(active) {
+    this.pageActive = Boolean(active);
+    if (!this.pageActive && this.ctx && this.master) {
+      const time = this.ctx.currentTime;
+      this.master.gain.cancelScheduledValues(time);
+      this.master.gain.setValueAtTime(0, time);
+    }
+    const reconcileContextState = async () => {
+      const context = this.ctx;
+      if (!context || context.state === 'closed') return;
+      if (this.pageActive && context.state === 'suspended') await context.resume();
+      else if (!this.pageActive && context.state === 'running') await context.suspend();
+      if (this.pageActive && this.master) this.syncGains(true);
+    };
+    // Serialize browser lifecycle promises so the newest visibility state always wins.
+    this.pageActivityTransition = this.pageActivityTransition
+      .then(reconcileContextState, reconcileContextState)
+      .then(
+        () => { this.pageActivityError = null; },
+        error => { this.pageActivityError = error?.message || String(error); },
+      );
+    return this.pageActivityTransition;
   }
 
   createNoiseBuffer(duration) {
@@ -246,6 +274,8 @@ class Soundscape {
   getDiagnostics() {
     return {
       context: this.ctx?.state || 'unavailable',
+      pageActive: this.pageActive,
+      pageActivityError: this.pageActivityError,
       track: this.getNowPlaying(),
       paused: this.paused,
       gains: this.ctx ? {
@@ -695,7 +725,7 @@ class Soundscape {
   }
 
   update(dt, world, listenerX = this.listenerX) {
-    if (!this.ctx) return;
+    if (!this.ctx || !this.pageActive || this.ctx.state !== 'running') return;
     this.listenerX = Number.isFinite(listenerX) ? listenerX : this.listenerX;
     if (this.pendingTrack && this.ctx.currentTime >= this.pendingTrack.startTime) {
       this.currentTrack = this.pendingTrack.id;
