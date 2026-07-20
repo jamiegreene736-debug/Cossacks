@@ -1,13 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createWorld, spawnUnit, step } from '../js/sim.js';
+import { createWorld, damage, spawnUnit, step } from '../js/sim.js';
 import {
-  createBuilding, placeBuilding, placeWallRun, planWallRun, validatePlacement,
+  assignBuilders, createBuilding, placeBuilding, placeWallRun, planWallRun, validatePlacement,
 } from '../js/economy.js';
 import {
-  fortificationAxis, fortificationEndpoints, lineIntersectsFortification,
-  resolveUnitFortificationCollision,
+  assignMusketeersToWall, dismountWallUnit, fortificationAxis,
+  fortificationEndpoints, lineIntersectsFortification,
+  resolveUnitFortificationCollision, updateWallAssignment,
 } from '../js/fortifications.js';
 
 function makeWorld() {
@@ -140,4 +141,122 @@ test('wall masonry blocks units and fire while a gate remains passable', () => {
   moving.state = 'move';
   for (let tick = 0; tick < 90; tick++) step(world, 1 / 30);
   assert.ok(moving.y < wall.y, 'the simulation keeps the villager on the near side of the wall');
+});
+
+test('stone staircases snap to a completed wall and preserve their attachment', () => {
+  const world = makeWorld();
+  world.buildings = [];
+  world.resources = [];
+  world.sides[0].resources = { food: 1000, wood: 1000, gold: 1000, stone: 1000 };
+  const worker = builder();
+  const unfinished = createBuilding(0, 'wall', 900, 1600, false, { orientation: 'horizontal' });
+  world.buildings.push(unfinished);
+
+  const blocked = validatePlacement(world, 0, 'wall_stairs', 900, 1635);
+  assert.equal(blocked.ok, false);
+  assert.match(blocked.message, /completed friendly Stone Wall/i);
+
+  unfinished.complete = true;
+  unfinished.progress = 1;
+  const stairs = placeBuilding(world, 0, 'wall_stairs', 900, 1635, [worker]);
+  assert.equal(stairs.ok, true);
+  assert.equal(stairs.building.wallId, unfinished.id);
+  assert.equal(stairs.building.orientation, unfinished.orientation);
+  assert.equal(stairs.building.stairSide, 1);
+  assert.equal(world.sides[0].resources.stone, 945);
+  assert.equal(world.sides[0].resources.wood, 985);
+});
+
+test('a staircase builder uses an accessible work face instead of stalling against the wall', () => {
+  const world = makeWorld();
+  world.resources = [];
+  const wall = createBuilding(0, 'wall', 900, 1600, true, { orientation: 'horizontal' });
+  const stairs = createBuilding(0, 'wall_stairs', 900, 1635, false, {
+    orientation: 'horizontal', wallId: wall.id, stairSide: 1, stairAlong: 0,
+  });
+  world.buildings.push(wall, stairs);
+  const worker = spawnUnit(world, 0, 'villager', 900, 1550);
+  assignBuilders(world, [worker], stairs);
+
+  for (let tick = 0; tick < 900 && !stairs.complete; tick++) step(world, 1 / 30);
+
+  assert.equal(stairs.complete, true);
+  assert.ok(worker.y < wall.y, 'the villager uses the reachable wall-side hoist position');
+});
+
+test('musketeers use a completed staircase, hold wall slots, and keep moderate range', () => {
+  const world = makeWorld();
+  world.buildings = [];
+  world.resources = [];
+  const wall = createBuilding(0, 'wall', 900, 1600, true, { orientation: 'horizontal' });
+  const stairs = createBuilding(0, 'wall_stairs', 900, 1633, true, {
+    orientation: 'horizontal', wallId: wall.id, stairSide: 1, stairAlong: 0,
+  });
+  world.buildings.push(wall, stairs);
+  const musketeer = spawnUnit(world, 0, 'musk', stairs.x, stairs.y);
+
+  const order = assignMusketeersToWall(world, [musketeer], wall);
+  assert.equal(order.assigned, 1);
+  assert.equal(updateWallAssignment(world, musketeer), 'mounted');
+  assert.equal(musketeer.wallMount.wallId, wall.id);
+  assert.equal(musketeer.wallElevation, 30);
+  assert.equal(musketeer.range, 190, 'the firing walk does not turn a musket into artillery');
+
+  const mounted = { x: musketeer.x, y: musketeer.y };
+  for (let tick = 0; tick < 30; tick++) step(world, 1 / 30);
+  assert.deepEqual({ x: musketeer.x, y: musketeer.y }, mounted);
+
+  dismountWallUnit(world, musketeer);
+  assert.equal(musketeer.wallMount, null);
+  assert.equal(musketeer.wallElevation, 0);
+  assert.ok(Math.hypot(musketeer.x - stairs.x, musketeer.y - stairs.y) <= 9);
+});
+
+test('a wall-top musketeer can fire over its host masonry at nearby enemies', () => {
+  const world = makeWorld();
+  world.buildings = [];
+  world.resources = [];
+  const wall = createBuilding(0, 'wall', 900, 1600, true, { orientation: 'horizontal' });
+  const stairs = createBuilding(0, 'wall_stairs', 900, 1633, true, {
+    orientation: 'horizontal', wallId: wall.id, stairSide: 1, stairAlong: 0,
+  });
+  world.buildings.push(wall, stairs);
+  const defender = spawnUnit(world, 0, 'musk', stairs.x, stairs.y);
+  const enemy = spawnUnit(world, 1, 'musk', 900, 1490);
+  defender.reload = 0;
+  defender.acc = 1;
+  defender.acquireT = 0;
+  enemy.reload = 999;
+  assignMusketeersToWall(world, [defender], wall);
+  updateWallAssignment(world, defender);
+
+  const startingHp = enemy.hp;
+  const oldRandom = Math.random;
+  Math.random = () => 0;
+  try {
+    for (let tick = 0; tick < 12 && enemy.hp === startingHp; tick++) step(world, 1 / 30);
+  } finally {
+    Math.random = oldRandom;
+  }
+  assert.ok(enemy.hp < startingHp, 'the host wall must not block its defender’s musket fire');
+  assert.ok(defender.wallMount, 'the defender remains on the firing walk while engaging');
+});
+
+test('destroying a host wall collapses its staircase and safely dismounts defenders', () => {
+  const world = makeWorld();
+  const wall = createBuilding(0, 'wall', 900, 1600, true, { orientation: 'horizontal' });
+  const stairs = createBuilding(0, 'wall_stairs', 900, 1633, true, {
+    orientation: 'horizontal', wallId: wall.id, stairSide: 1, stairAlong: 0,
+  });
+  world.buildings.push(wall, stairs);
+  const defender = spawnUnit(world, 0, 'musk', stairs.x, stairs.y);
+  assignMusketeersToWall(world, [defender], wall);
+  updateWallAssignment(world, defender);
+
+  damage(world, wall, wall.maxHp + 1, null);
+  assert.equal(stairs.alive, false);
+  step(world, 1 / 30);
+  assert.equal(defender.wallMount, null);
+  assert.equal(defender.wallElevation, 0);
+  assert.ok(Math.hypot(defender.x - stairs.x, defender.y - stairs.y) <= 9);
 });

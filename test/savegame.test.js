@@ -9,6 +9,7 @@ import {
   getCampaignSummary, loadCampaign, restoreGameSnapshot, saveCampaign,
 } from '../js/savegame.js';
 import { createWorld, spawnUnit } from '../js/sim.js';
+import { assignMusketeersToWall, updateWallAssignment } from '../js/fortifications.js';
 
 function memoryStorage() {
   const values = new Map();
@@ -94,6 +95,29 @@ test('local campaign storage exposes metadata and supports discard', () => {
   assert.equal(loadCampaign(storage).version, 1);
   deleteCampaign(storage);
   assert.equal(loadCampaign(storage), null);
+});
+
+test('wall staircase links and mounted firing positions survive save and resume', () => {
+  const world = createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
+  const wall = createBuilding(0, 'wall', 900, 1600, true, { orientation: 'horizontal' });
+  const stairs = createBuilding(0, 'wall_stairs', 900, 1633, true, {
+    orientation: 'horizontal', wallId: wall.id, stairSide: 1, stairAlong: 0,
+  });
+  world.buildings.push(wall, stairs);
+  const defender = spawnUnit(world, 0, 'musk', stairs.x, stairs.y);
+  assignMusketeersToWall(world, [defender], wall);
+  updateWallAssignment(world, defender);
+
+  const restored = restoreGameSnapshot(createGameSnapshot(
+    world, new Commander(world, 1), { x: 900, y: 1600, zoom: 1 },
+  )).world;
+  const restoredStairs = restored.buildings.find(building => building.id === stairs.id);
+  const restoredDefender = restored.units.find(unit => unit.id === defender.id);
+  assert.equal(restoredStairs.wallId, wall.id);
+  assert.equal(restoredStairs.stairSide, 1);
+  assert.equal(restoredDefender.wallMount.wallId, wall.id);
+  assert.equal(restoredDefender.wallMount.stairId, stairs.id);
+  assert.equal(restoredDefender.wallElevation, 30);
 });
 
 test('legacy standalone fields attach to the nearest completed mill on restore', () => {

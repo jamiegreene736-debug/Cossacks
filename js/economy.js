@@ -7,10 +7,11 @@ import {
 } from './config.js';
 import { applyMoveOrder } from './formations.js';
 import {
-  fortificationAxis, fortificationCorners, fortificationsOverlap, fortificationsShareEndpoint,
+  fortificationAxis, fortificationCorners, fortificationFrame,
+  fortificationsOverlap, fortificationsShareEndpoint,
   isFortificationType, normalizeFortificationOrientation,
   pointDistanceToFortification, pointInsideFortification,
-  snapFortificationPlacement,
+  resolveWallStairAttachment, snapFortificationPlacement,
 } from './fortifications.js';
 import { resolveWorkerAction } from './worker-animation.js';
 import { sfx } from './audio.js';
@@ -82,6 +83,12 @@ export function createBuilding(side, type, x, y, complete = false, options = {})
   };
   if (def.fortification) {
     building.orientation = normalizeFortificationOrientation(options.orientation);
+  }
+  if (def.wallAttachment) {
+    building.orientation = normalizeFortificationOrientation(options.orientation);
+    building.wallId = Number.isFinite(options.wallId) ? options.wallId : null;
+    building.stairSide = options.stairSide === -1 ? -1 : 1;
+    building.stairAlong = Number.isFinite(options.stairAlong) ? options.stairAlong : 0;
   }
   if (type === 'farm') {
     building.millId = Number.isFinite(options.millId) ? options.millId : null;
@@ -282,11 +289,16 @@ export function validatePlacement(world, side, type, x, y, options = {}) {
   const def = BUILDING_TYPES[type];
   if (!def || type === 'town_center') return { ok: false, message: 'That building cannot be placed.' };
   const fortification = isFortificationType(type);
+  const wallAttachment = Boolean(def.wallAttachment);
   const fieldAttachment = type === 'farm' ? resolveFieldAttachment(world, side, x, y) : null;
-  const snapped = fieldAttachment || (fortification
+  const stairAttachment = wallAttachment ? resolveWallStairAttachment(world, side, x, y) : null;
+  const snapped = fieldAttachment || stairAttachment || (fortification
     ? snapFortificationPlacement(world, side, type, x, y, options.orientation)
     : { x, y, orientation: null, snappedToId: null });
-  const candidate = { type, x: snapped.x, y: snapped.y, orientation: snapped.orientation };
+  const candidate = {
+    type, x: snapped.x, y: snapped.y, orientation: snapped.orientation,
+    wallId: snapped.wallId ?? null,
+  };
   const placement = {
     x: candidate.x,
     y: candidate.y,
@@ -294,10 +306,16 @@ export function validatePlacement(world, side, type, x, y, options = {}) {
     snappedToId: snapped.snappedToId,
     millId: snapped.millId ?? null,
     fieldSlot: snapped.fieldSlot ?? null,
+    wallId: snapped.wallId ?? null,
+    stairSide: snapped.stairSide ?? null,
+    stairAlong: snapped.stairAlong ?? null,
   };
   const reject = message => ({ ok: false, message, ...placement });
   if (fieldAttachment?.error) return reject(fieldAttachment.error);
-  const outsideMap = fortification
+  if (wallAttachment && !stairAttachment) {
+    return reject('Place the staircase beside a completed friendly Stone Wall.');
+  }
+  const outsideMap = fortification || wallAttachment
     ? fortificationCorners(type, candidate.x, candidate.y, candidate.orientation, 35)
       .some(point => point.x < 0 || point.y < 0 || point.x > WORLD.w || point.y > WORLD.h)
     : candidate.x < def.radius + 35 || candidate.y < def.radius + 35
@@ -308,6 +326,13 @@ export function validatePlacement(world, side, type, x, y, options = {}) {
   for (const b of world.buildings) {
     if (!b.alive) continue;
     const existingFortification = isFortificationType(b.type);
+    if (wallAttachment && b.id === candidate.wallId) continue;
+    if (wallAttachment && (existingFortification || BUILDING_TYPES[b.type]?.wallAttachment)) {
+      if (fortificationsOverlap(candidate, b, 1)) {
+        return reject('The staircase needs a clear wall-side approach.');
+      }
+      continue;
+    }
     if (fortification && existingFortification) {
       if (fortificationsOverlap(candidate, b, 1)
         && !(b.side === side && fortificationsShareEndpoint(candidate, b))) {
@@ -315,7 +340,7 @@ export function validatePlacement(world, side, type, x, y, options = {}) {
       }
       continue;
     }
-    const blocked = fortification
+    const blocked = fortification || wallAttachment
       ? pointDistanceToFortification(candidate, b.x, b.y) < b.radius + 18
       : existingFortification
         ? pointDistanceToFortification(b, candidate.x, candidate.y) < def.radius + 18
@@ -326,10 +351,10 @@ export function validatePlacement(world, side, type, x, y, options = {}) {
   }
   for (const r of world.resources) {
     if (!r.alive || r.amount <= 0) continue;
-    const distance = fortification
+    const distance = fortification || wallAttachment
       ? pointDistanceToFortification(candidate, r.x, r.y)
       : Math.hypot(candidate.x - r.x, candidate.y - r.y);
-    if (distance < (fortification ? r.radius + 10 : def.radius + r.radius + 10)) {
+    if (distance < ((fortification || wallAttachment) ? r.radius + 10 : def.radius + r.radius + 10)) {
       return reject('Resource deposits must remain accessible.');
     }
   }
@@ -472,6 +497,9 @@ export function placeBuilding(world, sideIndex, type, x, y, builders, options = 
       orientation: placement.orientation,
       millId: placement.millId,
       fieldSlot: placement.fieldSlot,
+      wallId: placement.wallId,
+      stairSide: placement.stairSide,
+      stairAlong: placement.stairAlong,
     },
   );
   world.buildings.push(building);
@@ -583,7 +611,40 @@ function findTarget(world, targetId) {
     || world.buildings.find(b => b.id === targetId) || null;
 }
 
-function nearestPoint(target, worker) {
+function wallStairConstructionPoint(world, target, worker) {
+  if (target.type !== 'wall_stairs' || worker.job?.kind !== 'build') return null;
+  const wall = world.buildings.find(building => building.id === target.wallId);
+  const frame = wall && fortificationFrame(wall.type, wall.x, wall.y, wall.orientation);
+  if (!frame) return null;
+
+  const relativeX = worker.x - frame.x;
+  const relativeY = worker.y - frame.y;
+  const workerAcross = relativeX * frame.normal.x + relativeY * frame.normal.y;
+  const stairSide = target.stairSide === -1 ? -1 : 1;
+  const safeAcross = frame.halfThickness + worker.radius + 9;
+  let along = target.stairAlong || 0;
+  let across = stairSide * (frame.halfThickness + target.h + 9);
+
+  // A staircase can be ordered from the far side of its host wall. Use a
+  // wall-side masonry position there (the construction art includes a hoist),
+  // rather than sending the villager directly through blocking masonry.
+  if (workerAcross * stairSide < 0) {
+    across = Math.sign(workerAcross || -stairSide) * safeAcross;
+  }
+
+  const x = frame.x + frame.axis.x * along + frame.normal.x * across;
+  const y = frame.y + frame.axis.y * along + frame.normal.y * across;
+  return {
+    x,
+    y,
+    distance: Math.hypot(worker.x - x, worker.y - y),
+    arrivalDistance: 11,
+  };
+}
+
+function nearestPoint(world, target, worker) {
+  const stairPoint = wallStairConstructionPoint(world, target, worker);
+  if (stairPoint) return stairPoint;
   if (target.type === 'farm' && target.complete && worker.job?.kind === 'gather') {
     const point = getFieldWorkPoint(target, worker.id);
     return {
@@ -798,7 +859,7 @@ function updateWorkers(world, dt) {
       if (!worker.job && worker.state === 'work') worker.state = 'idle';
       continue;
     }
-    const point = nearestPoint(target, worker);
+    const point = nearestPoint(world, target, worker);
     // Movement stops within five pixels of its assigned slot, so the work
     // threshold includes that tolerance and avoids workers orbiting a site.
     if (point.distance > point.arrivalDistance) {
@@ -982,6 +1043,22 @@ export function onBuildingDestroyed(world, building) {
       });
     }
   }
+  if (building.type === 'wall') {
+    let removed = 0;
+    for (const staircase of world.buildings) {
+      if (!staircase.alive || staircase.type !== 'wall_stairs' || staircase.wallId !== building.id) continue;
+      staircase.alive = false;
+      staircase.selected = false;
+      removed++;
+    }
+    if (removed) {
+      world.events.push({
+        side: building.side,
+        text: `${removed} attached Stone Staircase${removed === 1 ? '' : 's'} collapsed with the wall.`,
+        tone: 'danger',
+      });
+    }
+  }
   for (const worker of world.units) {
     if (worker.job?.targetId === building.id || removedFieldIds.has(worker.job?.targetId)) {
       worker.job = null;
@@ -1018,7 +1095,7 @@ export function findEntityAt(world, x, y, sideFilter = null) {
   for (const building of world.buildings) {
     if (!building.alive || (sideFilter !== null && building.side !== sideFilter)) continue;
     const distance = Math.hypot(building.x - x, building.y - y);
-    const contains = isFortificationType(building.type)
+    const contains = isFortificationType(building.type) || BUILDING_TYPES[building.type]?.wallAttachment
       ? pointInsideFortification(building, x, y, 8)
       : distance <= building.radius;
     if (contains && distance < bestDistance + 20) {

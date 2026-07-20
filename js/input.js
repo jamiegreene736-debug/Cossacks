@@ -10,6 +10,7 @@ import {
   findResourceAt, setRallyPoint,
 } from './economy.js';
 import {
+  assignMusketeersToWall, dismountWallUnits,
   isFortificationType, rotateFortificationOrientation,
 } from './fortifications.js';
 import { assignVillagerPath, clearVillagerPath } from './navigation.js';
@@ -229,11 +230,25 @@ function issueOrder(screenX, screenY) {
   }
 
   const ownEntity = findEntityAt(world, point.x, point.y, 0);
-  if (workers.length && ownEntity?.entityKind === 'building' && !ownEntity.complete) {
-    assignBuilders(world, workers, ownEntity);
+  if (assignVillagersToConstruction(world, workers, ownEntity)) {
     world.flags.push({ x: ownEntity.x, y: ownEntity.y, life: 1.2, max: 1.2 });
     callbacks.onOrder?.('build');
     return;
+  }
+
+  const musketeers = units.filter(unit => unit.type === 'musk');
+  if (musketeers.length && ownEntity?.entityKind === 'building' && ownEntity.complete) {
+    const result = assignMusketeersToWall(world, musketeers, ownEntity);
+    if (result.assigned) {
+      world.flags.push({ x: ownEntity.x, y: ownEntity.y, life: 1.2, max: 1.2, rally: true });
+      callbacks.onToast?.(result.message, 'good');
+      callbacks.onOrder?.('move');
+      return;
+    }
+    if (ownEntity.type === 'wall' || ownEntity.type === 'gate' || ownEntity.type === 'wall_stairs') {
+      callbacks.onToast?.(result.message, 'danger');
+      return;
+    }
   }
 
   const resource = findResourceAt(world, point.x, point.y);
@@ -261,6 +276,7 @@ function issueOrder(screenX, screenY) {
 
 function moveUnitsTo(world, units, x, y, formation) {
   if (!units.length) return false;
+  dismountWallUnits(world, units);
   let fromX = 0;
   let fromY = 0;
   for (const unit of units) {
@@ -298,24 +314,28 @@ export function issueVillagerGroundMove(world, selected, x, y, formation = 'line
   return moveUnitsTo(world, units, x, y, formation);
 }
 
-function hoverableResourceAt(screenX, screenY) {
+function hoverableWorkerTargetAt(screenX, screenY) {
   const world = getWorld();
   const workers = getSelection().filter(entity => entity.type === 'villager');
   if (!world || placement || workers.length === 0) return null;
   const point = screenToWorld(screenX, screenY);
+  const construction = findEntityAt(world, point.x, point.y, 0);
+  if (construction?.entityKind === 'building' && !construction.complete) return construction;
   const target = findResourceAt(world, point.x, point.y);
   if (target?.entityKind === 'building' && !workers.some(worker => worker.side === target.side)) return null;
   return target;
 }
 
 function updateResourceHover(screenX, screenY) {
-  const target = hoverableResourceAt(screenX, screenY);
+  const target = hoverableWorkerTargetAt(screenX, screenY);
   resourceHover = target;
   const selected = getSelection();
   const point = !target && selected.some(entity => entity.type === 'villager')
     ? screenToWorld(screenX, screenY) : null;
   movePreview = point && isOpenGroundMoveTarget(getWorld(), point.x, point.y) ? point : null;
-  inputCanvas?.classList.toggle('cursor-gather', Boolean(target));
+  const construction = target?.entityKind === 'building' && !target.complete;
+  inputCanvas?.classList.toggle('cursor-gather', Boolean(target) && !construction);
+  inputCanvas?.classList.toggle('cursor-build', Boolean(construction));
   inputCanvas?.classList.toggle('cursor-move', Boolean(movePreview));
   callbacks.onResourceHover?.({
     target,
@@ -328,10 +348,12 @@ function updateResourceHover(screenX, screenY) {
 function clearResourceHover() {
   if (!resourceHover && !movePreview
       && !inputCanvas?.classList.contains('cursor-gather')
+      && !inputCanvas?.classList.contains('cursor-build')
       && !inputCanvas?.classList.contains('cursor-move')) return;
   resourceHover = null;
   movePreview = null;
   inputCanvas?.classList.remove('cursor-gather');
+  inputCanvas?.classList.remove('cursor-build');
   inputCanvas?.classList.remove('cursor-move');
   callbacks.onResourceHover?.({ target: null, workers: [], screenX: mouseX, screenY: mouseY });
 }
@@ -339,8 +361,17 @@ function clearResourceHover() {
 function gatherAt(screenX, screenY) {
   const world = getWorld();
   const workers = getSelection().filter(entity => entity.type === 'villager');
-  const target = hoverableResourceAt(screenX, screenY);
-  if (!world || !target || workers.length === 0 || !assignGatherers(world, workers, target)) return false;
+  const target = hoverableWorkerTargetAt(screenX, screenY);
+  if (!world || !target || workers.length === 0) return false;
+  if (assignVillagersToConstruction(world, workers, target)) {
+    world.flags.push({ x: target.x, y: target.y, life: 1.2, max: 1.2 });
+    callbacks.onToast?.(`${workers.length} villager${workers.length === 1 ? '' : 's'} continuing ${BUILDING_TYPES[target.type].label}.`, 'good');
+    callbacks.onOrder?.('build');
+    callbacks.onSelection?.(getSelection());
+    updateResourceHover(screenX, screenY);
+    return true;
+  }
+  if (!assignGatherers(world, workers, target)) return false;
   world.flags.push({ x: target.x, y: target.y, life: 1.2, max: 1.2, gather: true });
   const workplace = target.entityKind === 'building' && BUILDING_TYPES[target.type]?.workResources?.length;
   const resourceType = workplace
@@ -353,6 +384,11 @@ function gatherAt(screenX, screenY) {
   callbacks.onSelection?.(getSelection());
   updateResourceHover(screenX, screenY);
   return true;
+}
+
+export function assignVillagersToConstruction(world, workers, target) {
+  return Boolean(world && target?.alive && target.entityKind === 'building' && !target.complete
+    && target.side === 0 && assignBuilders(world, workers, target));
 }
 
 export function setFormation(formation) {
@@ -379,6 +415,9 @@ export function beginPlacement(type) {
     orientation: isFortificationType(type) ? 'horizontal' : null,
     millId: null,
     fieldSlot: null,
+    wallId: null,
+    stairSide: null,
+    stairAlong: null,
   };
   updatePlacement(mouseX || window.innerWidth / 2, mouseY || window.innerHeight / 2);
   callbacks.onPlacement?.(placement);
@@ -408,6 +447,9 @@ function updatePlacement(screenX, screenY) {
   placement.snappedToId = validation.snappedToId ?? null;
   placement.millId = validation.millId ?? null;
   placement.fieldSlot = validation.fieldSlot ?? null;
+  placement.wallId = validation.wallId ?? null;
+  placement.stairSide = validation.stairSide ?? null;
+  placement.stairAlong = validation.stairAlong ?? null;
   placement.valid = validation.ok;
   placement.message = validation.message;
   placement.segments = null;
@@ -487,6 +529,9 @@ function placeAt(screenX, screenY, keepPlacing) {
       orientation: placement.orientation,
       millId: placement.millId,
       fieldSlot: placement.fieldSlot,
+      wallId: placement.wallId,
+      stairSide: placement.stairSide,
+      stairAlong: placement.stairAlong,
     },
   );
   if (!result?.ok) {

@@ -120,6 +120,12 @@ export const BUILDING_TYPES = {
     w: 104, h: 26, radius: 54, hp: 1650, buildTime: 10,
     cost: { wood: 20, stone: 45 }, fortification: true, gate: true, hotkey: 'G',
   },
+  wall_stairs: {
+    label: 'Stone Staircase',
+    description: 'Wall-side steps that let musketeers occupy the protected firing walk.',
+    w: 36, h: 50, radius: 29, hp: 760, buildTime: 9,
+    cost: { wood: 15, stone: 55 }, wallAttachment: true, hotkey: 'X',
+  },
 };
 
 export const GATHER_RATES = { food: 8.5, wood: 7.5, gold: 5.8, stone: 5.2 };
