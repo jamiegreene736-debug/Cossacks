@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { createWorld, damage, spawnUnit, step } from '../js/sim.js';
 import { Commander } from '../js/ai.js';
 import {
-  assignGatherers, createBuilding, findNearestResource, placeBuilding,
+  assignGatherers, createBuilding, findNearestResource, findResourceAt, placeBuilding,
   getBuildingEconomyStats, getEconomyBreakdown, getGatherAssignmentStats,
   queueUnit, stepEconomy, validatePlacement,
 } from '../js/economy.js';
@@ -118,6 +118,32 @@ test('economic-building readouts attribute workers and the exact 20% local bonus
   assert.equal(stats.resources[0].resourceType, 'food');
   assert.equal(stats.resources[0].projectedPerHour, 36_720);
   assert.ok(Math.abs(stats.resources[0].bonusPerHour - 6_120) < 0.001);
+});
+
+test('completed economic buildings accept villagers as renewable workplaces', () => {
+  const world = makeWorld();
+  advance(world, 4.1);
+  const worker = world.units.find(unit => unit.side === 0);
+  const mill = createBuilding(0, 'mill', worker.x + 120, worker.y, true);
+  world.buildings.push(mill);
+  worker.x = mill.x + mill.radius + 5;
+  worker.y = mill.y;
+  const beforeFood = world.sides[0].resources.food;
+
+  assert.equal(findResourceAt(world, mill.x, mill.y), mill);
+  assert.equal(assignGatherers(world, [worker], mill), true);
+  assert.deepEqual(worker.job, { kind: 'workplace', targetId: mill.id, resourceType: 'food' });
+
+  const preview = getGatherAssignmentStats(world, [worker], mill);
+  assert.equal(preview.renewable, true);
+  assert.equal(preview.resourceType, 'food');
+  assert.equal(preview.projectedPerHour, 36_720);
+
+  stepEconomy(world, 1);
+  assert.ok(world.sides[0].resources.food > beforeFood);
+  const stats = getBuildingEconomyStats(world, mill);
+  assert.equal(stats.workers, 1);
+  assert.equal(stats.resources.find(row => row.resourceType === 'food').projectedPerHour, 36_720);
 });
 
 test('construction validates collisions, consumes costs, and expands population on completion', () => {

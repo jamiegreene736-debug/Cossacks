@@ -194,16 +194,29 @@ export function assignGatherers(world, workers, target) {
   const isFarm = target?.entityKind === 'building' && target.type === 'farm'
     && target.complete && target.alive;
   const isDeposit = target?.entityKind === 'resource' && target.alive && target.amount > 0;
-  if (!isFarm && !isDeposit) return false;
+  const workResources = target?.entityKind === 'building'
+    ? BUILDING_TYPES[target.type]?.workResources || [] : [];
+  const isWorkplace = workResources.length > 0 && target.complete && target.alive;
+  if (!isFarm && !isDeposit && !isWorkplace) return false;
+  let assigned = false;
   for (const worker of workers) {
     if (!worker.alive || worker.type !== 'villager') continue;
-    if (isFarm && worker.side !== target.side) continue;
-    worker.job = { kind: 'gather', targetId: target.id };
+    if ((isFarm || isWorkplace) && worker.side !== target.side) continue;
+    if (isWorkplace) {
+      const side = world.sides[worker.side];
+      const resourceType = workResources.reduce((best, resource) => (
+        (side.resources[resource] || 0) < (side.resources[best] || 0) ? resource : best
+      ), workResources[0]);
+      worker.job = { kind: 'workplace', targetId: target.id, resourceType };
+    } else {
+      worker.job = { kind: 'gather', targetId: target.id };
+    }
     worker.workAction = resolveWorkerAction(worker.job, target);
     worker.orderTarget = null;
     worker.target = null;
+    assigned = true;
   }
-  return true;
+  return assigned;
 }
 
 export function clearWorkerJobs(units) {
@@ -303,8 +316,8 @@ function findGatherBoostBuilding(world, worker, resourceType, x, y) {
   return null;
 }
 
-function gatherProfileAt(world, worker, target, x, y) {
-  const resourceType = target?.resourceType;
+function gatherProfileAt(world, worker, target, x, y, resourceOverride = null) {
+  const resourceType = resourceOverride || target?.resourceType;
   if (!resourceType || !GATHER_RATES[resourceType]) return null;
   let mult = 1;
   const nation = NATIONS[world.sides[worker.side].nation];
@@ -326,9 +339,18 @@ function gatherProfileAt(world, worker, target, x, y) {
 }
 
 function gatherProfile(world, worker) {
-  if (worker.job?.kind !== 'gather') return null;
+  if (worker.job?.kind !== 'gather' && worker.job?.kind !== 'workplace') return null;
   const target = findTarget(world, worker.job.targetId);
-  if (!target?.alive || target.amount <= 0) return null;
+  if (!target?.alive) return null;
+  if (worker.job.kind === 'workplace') {
+    const workResources = BUILDING_TYPES[target.type]?.workResources || [];
+    if (target.entityKind !== 'building' || !target.complete || target.side !== worker.side
+      || !workResources.includes(worker.job.resourceType)) return null;
+    return gatherProfileAt(
+      world, worker, target, target.x, target.y, worker.job.resourceType,
+    );
+  }
+  if (target.amount <= 0) return null;
   if (target.entityKind === 'building' && (!target.complete || target.side !== worker.side)) return null;
   return gatherProfileAt(world, worker, target, target.x, target.y);
 }
@@ -356,28 +378,40 @@ export function getEconomyBreakdown(world, sideIndex, workers = null) {
 }
 
 export function getGatherAssignmentStats(world, workers, target) {
-  if (!target?.alive || target.amount <= 0 || !target.resourceType) return null;
+  if (!target?.alive) return null;
+  const workResources = target.entityKind === 'building'
+    ? BUILDING_TYPES[target.type]?.workResources || [] : [];
+  const isWorkplace = workResources.length > 0 && target.complete;
+  const resourceType = isWorkplace
+    ? workResources.reduce((best, resource) => {
+      const side = world.sides[workers[0]?.side ?? target.side];
+      return (side.resources[resource] || 0) < (side.resources[best] || 0) ? resource : best;
+    }, workResources[0])
+    : target.resourceType;
+  if (!resourceType || (!isWorkplace && target.amount <= 0)) return null;
   const validWorkers = workers.filter(worker => worker.alive && worker.type === 'villager'
     && (target.entityKind !== 'building' || target.side === worker.side));
   let projectedPerHour = 0;
   for (const worker of validWorkers) {
-    const profile = gatherProfileAt(world, worker, target, target.x, target.y);
+    const profile = gatherProfileAt(world, worker, target, target.x, target.y, resourceType);
     projectedPerHour += profile?.projectedPerHour || 0;
   }
   return {
-    resourceType: target.resourceType,
+    resourceType,
     workers: validWorkers.length,
     projectedPerHour,
-    amount: target.amount,
+    amount: isWorkplace ? null : target.amount,
+    renewable: isWorkplace,
     assignedWorkers: world.units.filter(worker => worker.alive && worker.type === 'villager'
-      && worker.job?.kind === 'gather' && worker.job.targetId === target.id).length,
+      && worker.job?.targetId === target.id
+      && (worker.job.kind === 'gather' || worker.job.kind === 'workplace')).length,
   };
 }
 
 export function getBuildingEconomyStats(world, building) {
   if (!building?.alive || !building.complete) return null;
   const def = BUILDING_TYPES[building.type];
-  if (!building.resourceType && !def.boost) return null;
+  if (!building.resourceType && !def.boost && !def.workResources?.length) return null;
   const resources = Object.fromEntries(RESOURCE_KEYS.map(resourceType => [resourceType, {
     resourceType, workers: 0, projectedPerHour: 0, bonusPerHour: 0,
   }]));
@@ -386,8 +420,9 @@ export function getBuildingEconomyStats(world, building) {
     const profile = gatherProfile(world, worker);
     if (!profile) continue;
     const belongsToFarm = building.resourceType && profile.target.id === building.id;
+    const employedHere = worker.job?.kind === 'workplace' && worker.job.targetId === building.id;
     const boostedHere = def.boost && profile.boostBuildingId === building.id;
-    if (!belongsToFarm && !boostedHere) continue;
+    if (!belongsToFarm && !employedHere && !boostedHere) continue;
     const row = resources[profile.resourceType];
     row.workers++;
     row.projectedPerHour += profile.projectedPerHour;
@@ -395,6 +430,7 @@ export function getBuildingEconomyStats(world, building) {
   }
   const activeResources = RESOURCE_KEYS.map(key => resources[key])
     .filter(row => row.workers > 0 || row.resourceType === building.resourceType
+      || def.workResources?.includes(row.resourceType)
       || resourceMatchesBoost(def.boost, row.resourceType));
   return {
     buildingId: building.id,
@@ -470,6 +506,26 @@ function updateWorkers(world, dt) {
         worker.workAction = null;
         worker.state = 'idle';
       }
+      continue;
+    }
+
+    if (worker.job.kind === 'workplace') {
+      const workResources = BUILDING_TYPES[target.type]?.workResources || [];
+      const resourceType = worker.job.resourceType;
+      if (target.entityKind !== 'building' || !target.complete || target.side !== worker.side
+        || !workResources.includes(resourceType)) {
+        worker.job = null;
+        worker.workAction = null;
+        worker.state = 'idle';
+        continue;
+      }
+      const profile = gatherProfileAt(
+        world, worker, target, worker.x, worker.y, resourceType,
+      );
+      const produced = GATHER_RATES[resourceType] * (profile?.multiplier || 1) * dt;
+      const side = world.sides[worker.side];
+      side.resources[resourceType] += produced;
+      side.incomeSample[resourceType] += produced;
     }
   }
 }
@@ -604,9 +660,15 @@ export function findEntityAt(world, x, y, sideFilter = null) {
 export function findResourceAt(world, x, y) {
   let best = null;
   let bestDistance = Infinity;
-  const targets = world.resources.concat(world.buildings.filter(b => b.type === 'farm'));
+  const targets = world.resources.concat(world.buildings.filter(building => {
+    const def = BUILDING_TYPES[building.type];
+    return building.type === 'farm' || def.workResources?.length;
+  }));
   for (const target of targets) {
-    if (!target.alive || target.amount <= 0) continue;
+    const isWorkplace = target.entityKind === 'building'
+      && BUILDING_TYPES[target.type]?.workResources?.length;
+    if (!target.alive || (target.entityKind === 'building' && !target.complete)
+      || (!isWorkplace && target.amount <= 0)) continue;
     const distance = Math.hypot(target.x - x, target.y - y);
     if (distance <= target.radius + 16 && distance < bestDistance) {
       best = target; bestDistance = distance;

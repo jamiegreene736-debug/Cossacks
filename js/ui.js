@@ -212,7 +212,7 @@ function renderSelection(world, selection) {
     const gathering = RESOURCE_KEYS.reduce((sum, resourceType) => sum + economy[resourceType].workers, 0);
     title.textContent = 'Settlement';
     info.textContent = 'Live economy overview';
-    detail.textContent = `${world.units.filter(unit => unit.alive && unit.side === 0 && unit.type === 'villager').length} villagers · ${gathering} assigned to resources · ${world.buildings.filter(b => b.alive && b.side === 0).length} buildings`;
+    detail.textContent = `${world.units.filter(unit => unit.alive && unit.side === 0 && unit.type === 'villager').length} villagers · ${gathering} assigned to the economy · ${world.buildings.filter(b => b.alive && b.side === 0).length} buildings`;
     context.textContent = 'Assigned output / actual income per hour';
     for (const resourceType of RESOURCE_KEYS) addEconomyMetric(grid, economy[resourceType], { showActual: true });
     return;
@@ -267,8 +267,8 @@ function renderSelection(world, selection) {
     const working = villagers.filter(worker => worker.job).length;
     info.textContent = `${working} working · ${villagers.length - working} ready for orders`;
     detail.textContent = gatherers
-      ? `${gatherers} gathering · ${formatHourly(projected)} assigned · click open ground to move or another resource to redirect`
-      : 'Click open ground to move, or hover a mine, forest, food source, or farm and click to gather.';
+      ? `${gatherers} working · ${formatHourly(projected)} assigned · click open ground to move or another resource or workplace to redirect`
+      : 'Click open ground to move, or click a mill, economic building, mine, forest, food source, or farm to work.';
     context.textContent = gatherers ? 'Selected output and construction' : 'Construct a building';
     for (const resourceType of RESOURCE_KEYS) {
       if (economy[resourceType].workers) addEconomyMetric(grid, economy[resourceType]);
@@ -368,9 +368,9 @@ function updateObjective(world) {
   if (villagers.length === 0) {
     titleText = 'The first resident';
     body = 'Your Town Center is preparing a free first villager.';
-  } else if (!hasFarm && !villagers.some(worker => worker.job?.kind === 'gather')) {
+  } else if (!hasFarm && !villagers.some(worker => ['gather', 'workplace'].includes(worker.job?.kind))) {
     titleText = 'Stock the storehouses';
-    body = 'Select your villager, hover berries or a forest, then click to gather.';
+    body = 'Select your villager, then click a resource or completed economic building.';
   } else if (!hasFarm) {
     titleText = 'Secure the food supply';
     body = 'Select a villager, choose Farm, then place and construct it.';
@@ -414,11 +414,15 @@ export function setResourceHover(world, hover) {
     wood: 'Forest', gold: 'Gold deposit', stone: 'Stone deposit',
   };
   const title = document.createElement('strong');
-  title.textContent = labels[stats.resourceType] || 'Resource';
+  const workplace = hover.target.entityKind === 'building' && stats.renewable;
+  title.textContent = workplace
+    ? BUILDING_TYPES[hover.target.type].label : labels[stats.resourceType] || 'Resource';
   const output = document.createElement('span');
   output.textContent = `${stats.workers} selected · ${formatHourly(stats.projectedPerHour)}`;
   const instruction = document.createElement('small');
-  instruction.textContent = `Click to gather · ${Math.floor(stats.amount).toLocaleString()} remaining · ${stats.assignedWorkers} already assigned`;
+  instruction.textContent = stats.renewable
+    ? `Click to work here · renewable ${stats.resourceType} · ${stats.assignedWorkers} already assigned`
+    : `Click to gather · ${Math.floor(stats.amount).toLocaleString()} remaining · ${stats.assignedWorkers} already assigned`;
   tooltip.replaceChildren(title, output, instruction);
   tooltip.style.left = `${Math.max(12, Math.min(window.innerWidth - 294, hover.screenX + 18))}px`;
   tooltip.style.top = `${Math.max(90, Math.min(window.innerHeight - 235, hover.screenY + 18))}px`;

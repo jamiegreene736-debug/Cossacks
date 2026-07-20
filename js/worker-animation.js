@@ -15,6 +15,7 @@ const RESOURCE_ACTIONS = Object.freeze({
 
 export function resolveWorkerAction(job, target) {
   if (job?.kind === 'build') return 'build';
+  if (job?.kind === 'workplace') return RESOURCE_ACTIONS[job.resourceType] || null;
   if (job?.kind !== 'gather' || !target) return null;
   if (target.entityKind === 'building' && target.type === 'farm') return 'farm';
   return RESOURCE_ACTIONS[target.resourceType] || null;
