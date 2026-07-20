@@ -470,7 +470,7 @@ function unitIcon(type) {
 function buildingIcon(type) {
   return {
     house: '⌂', farm: '≋', mill: '✣', lumber_camp: '♣', mine: '◆',
-    barracks: '⚔', stable: '♞', foundry: '◉', tower: '♜',
+    barracks: '⚔', stable: '♞', foundry: '◉', tower: '♜', castle: '♛',
     wall: '▥', gate: '∩', wall_stairs: '▰',
   }[type] || '▦';
 }

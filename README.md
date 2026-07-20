@@ -29,11 +29,13 @@ npm start
   opening cannot deadlock.
 - Gather food, wood, gold, and stone from deposits across a 5,200 × 3,200 map.
 - Build houses, mills with attached renewable fields, lumber and mining camps, barracks,
-  stables, artillery foundries, and defensive towers.
+  stables, artillery foundries, defensive towers, and a late-game Grand Artillery Castle.
 - Employ villagers directly at completed mills and economic camps, with exact
   assigned and live income-per-hour readouts for each resource.
 - Train villagers, musketeers, pikemen, hussars, and cannon individually or in
   batches of 5 and 20.
+- Raise the costly bastioned castle to fire long-range three-cannon volleys and
+  recruit infantry, cavalry, or artillery from one fortified command post.
 - Expand population capacity to 1,200 and retain the optimized formation,
   morale, volley, cavalry-charge, artillery, and spatial-grid combat systems.
 - Marching trained soldiers automatically engage nearby enemies, reposition for

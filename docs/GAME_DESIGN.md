@@ -13,7 +13,7 @@ with light, historically flavored bonuses rather than opaque hard counters.
    Town-Center-only start cannot deadlock.
 2. Villagers gather food, wood, gold, and stone from visible map deposits.
 3. Villagers place and construct houses, mills with attached fields, economic camps, barracks,
-   stables, artillery foundries, and towers.
+   stables, artillery foundries, towers, and the late-game Grand Artillery Castle.
 4. Buildings train individual units or batches of 5 and 20. Houses expand the
    population cap to a maximum of 1,200.
 5. The enemy follows the same economic progression, fortifies its settlement,
@@ -35,6 +35,17 @@ combat rules as the player.
 Lower levels also defend a smaller radius and wait longer between attacks.
 Campaign saves persist the selected level; saves from before this feature use
 Hard so their opponent behavior does not silently change.
+
+## Grand Artillery Castle
+
+The castle is the settlement's final military investment: 900 wood, 650 gold,
+and 1,400 stone with a 52-second build. Its 8,500 integrity and 118-unit
+footprint make it the largest structure in the roster. It automatically fires a
+three-round cannon volley with splash damage to 590 range, well beyond the
+Watch Tower's 330, and can train musketeers, pikes, cavalry, and cannon. Both
+nations receive the same combat values and roster; their command keeps and roof
+profiles remain visually distinct. The CPU may build one after completing its
+artillery foundry and reaching its late-game villager threshold.
 
 ## Deliberate boundaries
 

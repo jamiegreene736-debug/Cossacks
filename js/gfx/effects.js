@@ -1447,34 +1447,34 @@ function updateEffectFields(world) {
     smokeBankCtx.drawImage(bankScratch, dx, dy);
   }
 
-  // --- muzzle events for projectiles that have no particle of their own ---
-  // economy.js's updateTowers() pushes a projectile and nothing else: no flash,
-  // no smoke, no report. A defended settlement therefore shoots silently and
-  // invisibly, which reads as a bug rather than as a design. Catch each
-  // projectile on the frame it first appears and give it its muzzle event.
-  // (Cannon fire is already served by fireCannon's own smokePuff + flash.)
+  // --- muzzle events for defensive-building projectiles ------------------
+  // Economy-owned emplacements cannot call the simulator's private particle
+  // helpers. Catch each new projectile here and give towers a compact powder
+  // flash while the castle's embrasures receive full cannon smoke and light.
+  // Mobile cannon are already served by fireCannon's smokePuff + flash.
   {
     const projs = world.projectiles;
     for (let i = 0; i < projs.length; i++) {
       const p = projs[i];
       if (p.fxSeen === 1) continue;
       p.fxSeen = 1;
-      if (p.kind !== 'tower') continue;
+      if (p.kind !== 'tower' && p.kind !== 'castle') continue;
       const dx = p.tx - p.sx, dy = p.ty - p.sy;
+      const castle = p.kind === 'castle';
       const distance = Math.max(1, Math.hypot(dx, dy));
       const nx = dx / distance, ny = dy / distance;
-      stampSpill(p.sx, p.sy, 30);
-      stampBank(p.sx, p.sy, 18, true);
+      stampSpill(p.sx, p.sy, castle ? 34 : 30);
+      stampBank(p.sx, p.sy, castle ? 24 : 18, true);
       fxPush(world, {
         kind: 'flash', cls: 2, big: true,
         a: Math.atan2(dy, dx),
         x: p.sx, y: p.sy, vx: 0, vy: 0,
-        max: 0.15, size: 7.4, grow: 0,
+        max: castle ? 0.18 : 0.15, size: castle ? 9.4 : 7.4, grow: 0,
       });
       fxPush(world, {
         kind: 'smoke', big: true,
         x: p.sx, y: p.sy, vx: nx * 18, vy: ny * 8 - 11,
-        max: 1.35, size: 5.3, grow: 10,
+        max: castle ? 1.45 : 1.35, size: castle ? 6.0 : 5.3, grow: castle ? 11 : 10,
       });
       fxPush(world, {
         kind: 'smoke', big: false,

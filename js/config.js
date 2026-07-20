@@ -26,7 +26,7 @@ export const CPU_DIFFICULTIES = {
       towerLimit: 1,
       buildAt: {
         lumber_camp: 4, mill: 6, barracks: 8, mine: 10,
-        stable: 12, foundry: 14, tower: 14,
+        stable: 12, foundry: 14, tower: 14, castle: 14,
       },
       productionQueueLimit: 4,
       productionBatch: { barracks: 3, stable: 2, foundry: 1 },
@@ -59,7 +59,7 @@ export const CPU_DIFFICULTIES = {
       towerLimit: 2,
       buildAt: {
         lumber_camp: 3, mill: 5, barracks: 6, mine: 8,
-        stable: 10, foundry: 14, tower: 15,
+        stable: 10, foundry: 14, tower: 15, castle: 17,
       },
       productionQueueLimit: 8,
       productionBatch: { barracks: 4, stable: 2, foundry: 1 },
@@ -92,7 +92,7 @@ export const CPU_DIFFICULTIES = {
       towerLimit: 2,
       buildAt: {
         lumber_camp: 3, mill: 4, barracks: 5, mine: 6,
-        stable: 9, foundry: 13, tower: 12,
+        stable: 9, foundry: 13, tower: 12, castle: 20,
       },
       productionQueueLimit: 12,
       productionBatch: { barracks: 5, stable: 3, foundry: 2 },
@@ -225,6 +225,15 @@ export const BUILDING_TYPES = {
     w: 52, h: 52, radius: 29, visualScale: 1.28, hp: 1400, buildTime: 14,
     cost: { wood: 130, stone: 180 },
     attack: 14, range: 320, reload: 4.0, accuracy: 0.78, hotkey: 'W',
+  },
+  castle: {
+    label: 'Grand Artillery Castle',
+    description: 'A bastioned late-game fortress that fires cannon volleys and musters every military arm.',
+    w: 216, h: 168, radius: 118, visualScale: 1.25, hp: 8500, buildTime: 52,
+    cost: { wood: 900, gold: 650, stone: 1400 },
+    trains: ['musk', 'pike', 'cav', 'gun'],
+    attackKind: 'cannon', attack: 30, splash: 30, volley: 3,
+    range: 590, reload: 8.5, hotkey: 'C',
   },
   wall: {
     label: 'Stone Wall', description: 'Heavy masonry that blocks troops and musket fire.',
