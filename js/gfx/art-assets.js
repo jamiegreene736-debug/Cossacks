@@ -7,21 +7,44 @@ const VILLAGER_COMBAT_ART_SPEC = Object.freeze({
   key: 'villagerMuskets', file: 'villager-muskets.webp', columns: 4, rows: 2,
   sourceW: 384, sourceH: 512,
 });
+
+// The production sheets are composed from detailed figures whose weapons and
+// strides do not always stay inside the nominal 384 px grid. These exclusive
+// x-bounds isolate each complete pose so an adjacent soldier cannot leak into
+// the baked frame. Rows are keyed by nation because the silhouettes differ.
+const MILITARY_FRAME_X_BOUNDS = Object.freeze({
+  musk: Object.freeze({
+    england: Object.freeze([[83, 388], [455, 662], [837, 1033], [1100, 1511]]),
+    ottoman: Object.freeze([[68, 366], [443, 666], [806, 1018], [1078, 1516]]),
+  }),
+  pike: Object.freeze({
+    england: Object.freeze([[115, 272], [348, 611], [699, 966], [1079, 1503]]),
+    ottoman: Object.freeze([[115, 280], [350, 606], [692, 992], [1073, 1514]]),
+  }),
+  cav: Object.freeze({
+    england: Object.freeze([[43, 355], [379, 769], [768, 1077], [1074, 1522]]),
+    ottoman: Object.freeze([[34, 353], [358, 767], [770, 1093], [1080, 1517]]),
+  }),
+});
+
 const MILITARY_ART_SPECS = Object.freeze({
   musk: Object.freeze({
     key: 'musketeers', file: 'musketeers.webp', columns: 4, rows: 2,
     sourceW: 384, sourceH: 512, w: 44, h: 50, ax: 22, ay: 45.5,
     baseRadiusX: 13, baseRadiusY: 2.8,
+    frameXBounds: MILITARY_FRAME_X_BOUNDS.musk,
   }),
   pike: Object.freeze({
     key: 'partisans', file: 'partisans.webp', columns: 4, rows: 2,
     sourceW: 384, sourceH: 512, w: 44, h: 50, ax: 22, ay: 45.5,
     baseRadiusX: 13, baseRadiusY: 2.8,
+    frameXBounds: MILITARY_FRAME_X_BOUNDS.pike,
   }),
   cav: Object.freeze({
     key: 'cavalry', file: 'cavalry.webp', columns: 4, rows: 2,
     sourceW: 384, sourceH: 512, w: 60, h: 52, ax: 30, ay: 46.5,
     baseRadiusX: 25, baseRadiusY: 3.6,
+    frameXBounds: MILITARY_FRAME_X_BOUNDS.cav,
   }),
   gun: Object.freeze({
     key: 'artillery', file: 'artillery.webp', columns: 2, rows: 2,
@@ -29,6 +52,28 @@ const MILITARY_ART_SPECS = Object.freeze({
     baseRadiusX: 34, baseRadiusY: 4.2,
   }),
 });
+
+function getProductionFrameSlice(sourceW, sourceFrame, frameXBounds, destW) {
+  const bounds = frameXBounds?.[sourceFrame];
+  if (!bounds) {
+    return {
+      sourceX: sourceFrame * sourceW,
+      sourceW,
+      destX: 0,
+      destW,
+    };
+  }
+
+  const [sourceX, sourceEndX] = bounds;
+  const isolatedSourceW = sourceEndX - sourceX;
+  const isolatedDestW = Math.min(destW, destW * (isolatedSourceW / sourceW));
+  return {
+    sourceX,
+    sourceW: isolatedSourceW,
+    destX: (destW - isolatedDestW) / 2,
+    destW: isolatedDestW,
+  };
+}
 
 const ART_URLS = Object.freeze({
   englishTownCenter: new URL('../../assets/buildings/english-town-center.png', import.meta.url).href,
@@ -105,6 +150,7 @@ export {
   MILITARY_ART_ROWS,
   MILITARY_ART_SPECS,
   VILLAGER_COMBAT_ART_SPEC,
+  getProductionFrameSlice,
   preloadProductionArt,
   getProductionArt,
 };

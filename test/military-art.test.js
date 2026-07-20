@@ -4,7 +4,8 @@ import test from 'node:test';
 
 import { BUILDING_TYPES, NATIONS } from '../js/config.js';
 import {
-  MILITARY_ART_ROWS, MILITARY_ART_SPECS, VILLAGER_COMBAT_ART_SPEC,
+  getProductionFrameSlice, MILITARY_ART_ROWS, MILITARY_ART_SPECS,
+  VILLAGER_COMBAT_ART_SPEC,
 } from '../js/gfx/art-assets.js';
 
 const MILITARY_BUILDINGS = ['barracks', 'stable', 'foundry'];
@@ -43,6 +44,47 @@ test('each nation addresses a unique in-range military-art row', () => {
       assert.ok(row >= 0 && row < spec.rows);
     }
   }
+});
+
+test('each detailed military pose has an isolated, in-range source bound', () => {
+  for (const [type, spec] of Object.entries(MILITARY_ART_SPECS)) {
+    if (!spec.frameXBounds) continue;
+
+    for (const nationKey of Object.keys(NATIONS)) {
+      const bounds = spec.frameXBounds[nationKey];
+      assert.equal(bounds.length, spec.columns, `${type}/${nationKey} needs every pose bounded`);
+
+      for (let frame = 0; frame < bounds.length; frame++) {
+        const [sourceX, sourceEndX] = bounds[frame];
+        assert.ok(sourceX >= 0 && sourceX < sourceEndX, `${type}/${nationKey}/${frame} has invalid bounds`);
+        assert.ok(sourceEndX <= spec.sourceW * spec.columns, `${type}/${nationKey}/${frame} exceeds its sheet`);
+
+        const cellCenter = (frame + 0.5) * spec.sourceW;
+        assert.ok(
+          sourceX < cellCenter && sourceEndX > cellCenter,
+          `${type}/${nationKey}/${frame} must still target its own grid cell`,
+        );
+      }
+    }
+  }
+});
+
+test('isolated production poses are centered without enlarging their source scale', () => {
+  const spec = MILITARY_ART_SPECS.musk;
+  const slice = getProductionFrameSlice(spec.sourceW, 2, spec.frameXBounds.england, spec.w);
+
+  assert.equal(slice.sourceX, 837);
+  assert.equal(slice.sourceW, 196);
+  assert.equal(slice.destW, spec.w * (196 / spec.sourceW));
+  assert.equal(slice.destX, (spec.w - slice.destW) / 2);
+  assert.ok(slice.destX > 0, 'the detached neighboring attack pose must not fill the march frame');
+
+  assert.deepEqual(getProductionFrameSlice(384, 2, undefined, 44), {
+    sourceX: 768,
+    sourceW: 384,
+    destX: 0,
+    destW: 44,
+  });
 });
 
 test('military art assets are checked-in WebP files with substantial source detail', async () => {
