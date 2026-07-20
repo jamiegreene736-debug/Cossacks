@@ -19,6 +19,7 @@ import {
 } from './gfx/art-assets.js';
 import { fortificationCorners, isFortificationType } from './fortifications.js';
 import { getWorkerFrame } from './worker-animation.js';
+import { getMilitaryFrame } from './military-animation.js';
 import {
   chooseRenderDpr, circleIntersectsBounds, getVisibleWorldBounds,
 } from './render-performance.js';
@@ -783,16 +784,10 @@ export function draw(
     const ix = u.px + (u.x - u.px) * alpha;
     const iy = u.py + (u.y - u.py) * alpha - (u.wallElevation || 0);
     let frame;
-    if (u.type === 'gun') {
-      frame = u.fireT > 0 ? 1 : 0;
-    } else if (u.type === 'villager') {
+    if (u.type === 'villager') {
       frame = getWorkerFrame(u);
-    } else if (u.moving) {
-      frame = 1 + (((u.animT * 6) | 0) % 2);
-    } else if (u.fireT > 0) {
-      frame = 3;
     } else {
-      frame = 0;
+      frame = getMilitaryFrame(u);
     }
     const rearView = rotation >= Math.PI / 2;
     const dir = (u.facing >= 0) !== rearView ? 0 : 1;
