@@ -94,6 +94,7 @@ Measured at 1,625 living units: 0.4ms median frame draw against a 16.7ms budget.
 | `assets/units/` | English and Ottoman civilian, musketeer, polearm-guard, cavalry, and artillery production sheets. |
 | `infantry.js` | `drawSoldier()` — resilient procedural musketeer and polearm fallback. |
 | `mounted.js` | Resilient procedural `drawCavalry()` and `drawCannon()` fallbacks. |
+| `military-animation.js` | Shared ready/travel/attack frame selection. Travel frames sling muskets, trail polearms, and sheath cavalry sabres. |
 | `docs/military-art-references.md` | Museum references and chronology decisions for the production military roster. |
 | `villager.js` | `drawWorker()` — resilient procedural civilian fallback with axe, pickaxe, hoe, sickle, and mallet poses. |
 | `worker-animation.js` | Shared job-to-tool action mapping and cached atlas-frame selection. |
