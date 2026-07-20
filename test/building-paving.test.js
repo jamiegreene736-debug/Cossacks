@@ -60,3 +60,17 @@ test('every ordinary building receives paving beyond its gameplay footprint', ()
     assert.ok(layout.borderCount >= 28, `${type} should have a continuous header course`);
   }
 });
+
+test('every courtyard shares the building selection footprint centre', () => {
+  const pavedTypes = Object.entries(BUILDING_TYPES)
+    .filter(([type, definition]) => type !== 'farm' && !definition.fortification);
+
+  for (const [type, definition] of pavedTypes) {
+    const presentation = getBuildingPresentation(type, definition);
+    assert.equal(
+      presentation.pavingCenterY,
+      definition.h * 0.22,
+      `${type} paving should remain centred beneath its building footprint`,
+    );
+  }
+});
