@@ -208,8 +208,11 @@ export function updateHud(world, selection) {
     const buildProgress = entity.complete === false ? Math.floor(entity.progress * 100) : '';
     const job = entity.job
       ? `${entity.job.kind}:${entity.job.targetId || ''}:${entity.job.resourceType || ''}` : '';
+    const wallState = entity.wallMount
+      ? `mounted:${entity.wallMount.wallId}`
+      : entity.wallOrder ? `mounting:${entity.wallOrder.wallId}` : '';
     return `${entity.entityKind || 'unit'}:${entity.id}:${entity.queue?.length || 0}:${queueProgress}`
-      + `:${entity.complete ?? ''}:${buildProgress}:${Math.ceil(entity.hp || 0)}:${job}`;
+      + `:${entity.complete ?? ''}:${buildProgress}:${Math.ceil(entity.hp || 0)}:${job}:${wallState}`;
   }).join('|');
   // Economy telemetry changes every 0.75 seconds. Rebuilding its cards faster
   // only creates DOM/layout work without showing the player newer information.
@@ -292,7 +295,7 @@ function renderSelection(world, selection) {
     info.textContent = `${working} working · ${villagers.length - working} ready for orders`;
     detail.textContent = gatherers
       ? `${gatherers} working · ${formatHourly(projected)} assigned · click open ground to move or another resource or workplace to redirect`
-      : 'Click open ground to move, or click a field, economic camp, mine, forest, or food source to work.';
+      : 'Click open ground to move, or hover and click a resource, workplace, or unfinished structure to work.';
     context.textContent = gatherers ? 'Selected output and construction' : 'Construct a building';
     for (const resourceType of RESOURCE_KEYS) {
       if (economy[resourceType].workers) addEconomyMetric(grid, economy[resourceType]);
@@ -311,9 +314,12 @@ function renderSelection(world, selection) {
 
   const byType = {};
   for (const unit of units) byType[unit.type] = (byType[unit.type] || 0) + 1;
+  const wallDefenders = units.filter(unit => unit.wallMount).length;
   title.textContent = `${units.length.toLocaleString()} Soldiers`;
   info.textContent = Object.entries(byType).map(([type, count]) => `${count} ${UNIT_TYPES[type].label}`).join(' · ');
-  detail.textContent = 'Right-click ground to march or an enemy to focus the attack.';
+  detail.textContent = wallDefenders
+    ? `${wallDefenders} defending the wall · right-click ground to descend or an enemy to focus fire.`
+    : 'Right-click ground to march, an enemy to attack, or an accessible wall to mount musketeers.';
   context.textContent = 'Formation and movement';
   formations.classList.remove('hidden');
 }
@@ -383,7 +389,7 @@ function buildingIcon(type) {
   return {
     house: '⌂', farm: '≋', mill: '✣', lumber_camp: '♣', mine: '◆',
     barracks: '⚔', stable: '♞', foundry: '◉', tower: '♜',
-    wall: '▥', gate: '∩',
+    wall: '▥', gate: '∩', wall_stairs: '▰',
   }[type] || '▦';
 }
 
@@ -428,6 +434,8 @@ export function setPlacement(active, label = '', type = '', orientation = '') {
   if (active && label) {
     $('placement-message').textContent = type === 'farm'
       ? 'Field: move beside a completed Mill · snaps to an open attached plot · HUD or Esc cancels'
+      : BUILDING_TYPES[type]?.wallAttachment
+      ? `${label}: move beside a completed Stone Wall · snaps to the wall face · HUD or Esc cancels`
       : BUILDING_TYPES[type]?.fortification
       ? type === 'wall'
         ? `${label}: press and drag for a continuous affordable run · R turns ${orientation === 'diagonal' ? 'diagonal' : 'straight'} · HUD or Esc cancels`
@@ -443,6 +451,20 @@ export function setPlacement(active, label = '', type = '', orientation = '') {
 
 export function setResourceHover(world, hover) {
   const tooltip = $('resource-tooltip');
+  const construction = hover?.target?.entityKind === 'building' && !hover.target.complete;
+  if (world && construction && hover.workers?.length) {
+    const title = document.createElement('strong');
+    title.textContent = `Continue ${BUILDING_TYPES[hover.target.type].label}`;
+    const output = document.createElement('span');
+    output.textContent = `${hover.workers.length} villager${hover.workers.length === 1 ? '' : 's'} selected · ${Math.floor(hover.target.progress * 100)}% built`;
+    const instruction = document.createElement('small');
+    instruction.textContent = 'Click to assign the selected villagers and finish this construction.';
+    tooltip.replaceChildren(title, output, instruction);
+    tooltip.style.left = `${Math.max(12, Math.min(window.innerWidth - 294, hover.screenX + 18))}px`;
+    tooltip.style.top = `${Math.max(90, Math.min(window.innerHeight - 235, hover.screenY + 18))}px`;
+    tooltip.classList.remove('hidden');
+    return;
+  }
   const stats = world && hover?.target
     ? getGatherAssignmentStats(world, hover.workers || [], hover.target) : null;
   if (!stats || stats.workers === 0) {

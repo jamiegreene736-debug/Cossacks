@@ -11,7 +11,8 @@ import { WORLD, NATIONS, UNIT_TYPES,
 import { sfx } from './audio.js';
 import { initializeEconomy, stepEconomy, onUnitKilled, onBuildingDestroyed } from './economy.js';
 import {
-  lineIntersectsFortification, resolveUnitFortificationCollision,
+  dismountWallUnit, lineIntersectsFortification, resolveUnitFortificationCollision,
+  updateWallAssignment,
 } from './fortifications.js';
 import {
   assignVillagerPath, clearVillagerPath, segmentBlocksVillager,
@@ -181,8 +182,9 @@ function flash(world, x, y, big) {
 
 // ---------- Damage, morale, death ----------
 
-function flee(u) {
+function flee(world, u) {
   if (u.type === 'gun') return; // crews stand by their guns
+  dismountWallUnit(world, u);
   u.state = 'flee';
   u.orderX = NaN;
   u.orderTarget = null;
@@ -198,7 +200,7 @@ function maybeBreak(world, u) {
     // Armies close to collapse break far more easily.
     const s = world.sides[u.side];
     const desperation = s.alive < s.start * 0.4 ? 0.55 : 0.3;
-    if (Math.random() < desperation) flee(u);
+    if (Math.random() < desperation) flee(world, u);
   }
 }
 
@@ -253,7 +255,7 @@ function kill(world, entity) {
     if (v !== u && v.alive && v.side === u.side) {
       v.morale -= 4;
       if (v.morale < 0) v.morale = 0;
-      if (v.morale < 25 && Math.random() < 0.12) flee(v);
+      if (v.morale < 25 && Math.random() < 0.12) flee(world, v);
     }
   });
 }
@@ -265,7 +267,8 @@ function kill(world, entity) {
 // This is what makes wide Lines beat deep blobs, as it did historically.
 function fireBlocked(world, u, t, d) {
   for (const wall of blockingFortifications) {
-    if (wall !== t && lineIntersectsFortification(u.x, u.y, t.x, t.y, wall, 1)) return true;
+    if (wall !== t && wall.id !== u.wallMount?.wallId
+      && lineIntersectsFortification(u.x, u.y, t.x, t.y, wall, 1)) return true;
   }
   const nx = (t.x - u.x) / d, ny = (t.y - u.y) / d;
   const active = world.active;
@@ -287,8 +290,9 @@ function fireMusket(world, u, t, d, accMul = 1) {
   u.reload = u.reloadTime * (0.85 + Math.random() * 0.3);
   u.fireT = 0.13;
   const nx = (t.x - u.x) / d, ny = (t.y - u.y) / d;
-  smokePuff(world, u.x + nx * 9, u.y + ny * 9 - 4, false);
-  if (Math.random() < 0.5) flash(world, u.x + nx * 8, u.y + ny * 8 - 4, false);
+  const visualY = u.y - (u.wallElevation || 0);
+  smokePuff(world, u.x + nx * 9, visualY + ny * 9 - 4, false);
+  if (Math.random() < 0.5) flash(world, u.x + nx * 8, visualY + ny * 8 - 4, false);
   sfx.musket(u.x);
   const hitChance = Math.min(0.95, Math.max(0.08, accMul * u.acc * (1.05 - 0.6 * d / u.range)));
   if (Math.random() < hitChance) {
@@ -362,6 +366,9 @@ function updateUnit(world, u, dt) {
   }
 
   if (u.morale < 100) u.morale = Math.min(100, u.morale + 1.5 * dt);
+
+  const wallState = updateWallAssignment(world, u);
+  if (wallState === 'mounted') u.state = 'wall';
 
   // -- Target upkeep / acquisition (staggered) --
   if (u.target && !u.target.alive) u.target = null;
@@ -437,6 +444,10 @@ function updateUnit(world, u, dt) {
     u.charge = Math.max(0, u.charge - dt * 2);
     return;
   }
+
+  // Wall defenders hold their authored firing positions. An explicit ground
+  // move uses the staircase and clears this state in the input layer.
+  if (u.wallMount) return;
 
   // -- Choose a destination --
   if (t && !isRanged && (u.orderTarget === t || d <= u.chase)) {

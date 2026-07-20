@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createWorld, spawnUnit } from '../js/sim.js';
-import { isOpenGroundMoveTarget, issueVillagerGroundMove } from '../js/input.js';
+import {
+  assignVillagersToConstruction, isOpenGroundMoveTarget, issueVillagerGroundMove,
+} from '../js/input.js';
+import { createBuilding } from '../js/economy.js';
 
 class FakeElement extends EventTarget {
   constructor(tagName = 'DIV') {
@@ -165,6 +168,22 @@ test('a villager ground click clears work and creates a routed destination flag'
   assert.equal(Number.isFinite(flag.fromX), true);
   assert.equal(Number.isFinite(flag.fromY), true);
   assert.ok(flag.life > 1.2);
+});
+
+test('selected villagers can take over any unfinished friendly construction', () => {
+  const world = makeWorld();
+  const first = spawnUnit(world, 0, 'villager', 720, 1420);
+  const second = spawnUnit(world, 0, 'villager', 735, 1420);
+  const wall = createBuilding(0, 'wall', 900, 1600, false, { orientation: 'horizontal' });
+  const enemyWall = createBuilding(1, 'wall', 1100, 1600, false, { orientation: 'horizontal' });
+  world.buildings.push(wall, enemyWall);
+
+  assert.equal(assignVillagersToConstruction(world, [first, second], wall), true);
+  assert.deepEqual(first.job, { kind: 'build', targetId: wall.id });
+  assert.deepEqual(second.job, { kind: 'build', targetId: wall.id });
+  assert.equal(assignVillagersToConstruction(world, [first], enemyWall), false);
+  wall.complete = true;
+  assert.equal(assignVillagersToConstruction(world, [first], wall), false);
 });
 
 test('primary ground movement requires a villager and refuses occupied terrain', () => {

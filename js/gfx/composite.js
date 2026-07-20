@@ -1154,7 +1154,7 @@ function drawSelection(ctx, units, alpha) {
       const u = units[i];
       if (!u.selected) continue;
       const ix = u.px + (u.x - u.px) * alpha;
-      const iy = u.py + (u.y - u.py) * alpha;
+      const iy = u.py + (u.y - u.py) * alpha - (u.wallElevation || 0);
       ctx.drawImage(p.c, ix - pax, iy - pay, pw, ph);
       if (ix < minX) minX = ix; if (ix > maxX) maxX = ix;
       if (iy < minY) minY = iy; if (iy > maxY) maxY = iy;
@@ -1166,7 +1166,7 @@ function drawSelection(ctx, units, alpha) {
       const u = units[i];
       if (!u.selected) continue;
       const ix = u.px + (u.x - u.px) * alpha;
-      const iy = u.py + (u.y - u.py) * alpha;
+      const iy = u.py + (u.y - u.py) * alpha - (u.wallElevation || 0);
       const r = u.radius | 0;
       const g = (r >= 0 && r < 17) ? rings[r] : cmp.ringFallback;
       ctx.drawImage(g.c, ix - g.ax, iy - g.ay, g.w, g.h);
@@ -1422,7 +1422,7 @@ function drawHealthBars(ctx, units, alpha, spritesRef) {
     if (!routing && !showBar) continue;
 
     const ix = u.px + (u.x - u.px) * alpha;
-    const iy = u.py + (u.y - u.py) * alpha;
+    const iy = u.py + (u.y - u.py) * alpha - (u.wallElevation || 0);
     const sp = spritesRef[u.side][u.type];
     let top = iy - sp.ay - 2;
 

@@ -416,14 +416,18 @@ function buildNationSprites(nationKey, side = 0) {
 const sortBuf = [];
 
 function drawResourceHover(target, zoom) {
-  if (!target?.alive || target.amount <= 0) return;
+  if (!target?.alive) return;
+  const construction = target.entityKind === 'building' && !target.complete;
+  if (!construction && target.amount <= 0) return;
   const colors = {
     food: ['#f4d58a', '#9fc96b'],
     wood: ['#d7e8a8', '#6fa455'],
     gold: ['#fff0a4', '#d0a23d'],
     stone: ['#e5e7df', '#9fa8a6'],
+    construction: ['#fff0bb', '#d2a34d'],
   };
-  const [light, base] = colors[target.resourceType] || colors.food;
+  const [light, base] = construction
+    ? colors.construction : colors[target.resourceType] || colors.food;
   const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.006);
   const rx = target.radius + 11 + pulse * 3;
   const ry = Math.max(15, target.radius * 0.48 + pulse * 2);
@@ -594,7 +598,7 @@ export function draw(
           ctx.restore();
         }
       }
-      if (isFortificationType(placementPreview.type)) {
+      if (isFortificationType(placementPreview.type) || def.wallAttachment) {
         const previews = placementPreview.segments?.length
           ? placementPreview.segments : [placementPreview];
         for (const preview of previews) {
@@ -638,6 +642,18 @@ export function draw(
             ctx.stroke();
           }
         }
+        if (def.wallAttachment && Number.isFinite(placementPreview.wallId)) {
+          const wall = world.buildings.find(building => building.id === placementPreview.wallId);
+          if (wall) {
+            ctx.setLineDash([6 / z, 4 / z]);
+            ctx.lineWidth = 1.5 / z;
+            ctx.beginPath();
+            ctx.moveTo(wall.x, wall.y);
+            ctx.lineTo(placementPreview.x, placementPreview.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+        }
         if (placementPreview.segments?.length
           && (placementPreview.limitedByResources || placementPreview.limitedByObstacle)) {
           const last = placementPreview.segments.at(-1);
@@ -679,7 +695,7 @@ export function draw(
   for (const u of sortBuf) {
     const sp = sprites[u.side][u.type];
     const ix = u.px + (u.x - u.px) * alpha;
-    const iy = u.py + (u.y - u.py) * alpha;
+    const iy = u.py + (u.y - u.py) * alpha - (u.wallElevation || 0);
     let frame;
     if (u.type === 'gun') {
       frame = u.fireT > 0 ? 1 : 0;
