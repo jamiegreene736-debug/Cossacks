@@ -1,7 +1,9 @@
 // Settlement and battlefield AI. It uses the same costs, queues, construction,
 // gathering and population rules as the player; only its decisions are scripted.
 
-import { WORLD, BUILDING_TYPES } from './config.js';
+import {
+  WORLD, BUILDING_TYPES, CPU_DIFFICULTIES, normalizeCpuDifficulty,
+} from './config.js';
 import { applyMoveOrder, applyAttackOrder } from './formations.js';
 import {
   assignBuilders, assignGatherers, buildingsOf, findNearestResource, getTownCenter,
@@ -18,11 +20,13 @@ function centroid(units) {
 }
 
 export class Commander {
-  constructor(world, side = 1) {
+  constructor(world, side = 1, difficulty = world?.difficulty) {
     this.world = world;
     this.side = side;
+    this.difficulty = normalizeCpuDifficulty(difficulty);
+    this.profile = CPU_DIFFICULTIES[this.difficulty].ai;
     this.thinkTimer = 0.5;
-    this.attackTimer = 92;
+    this.attackTimer = this.profile.firstAttackDelay;
     this.committed = new Set();
     this.planCursor = {};
   }
@@ -33,7 +37,7 @@ export class Commander {
     this.thinkTimer -= dt;
     this.attackTimer -= dt;
     if (this.thinkTimer > 0) return;
-    this.thinkTimer = 1;
+    this.thinkTimer = this.profile.planningInterval;
     this.manageEconomy();
     this.manageProduction();
     this.manageArmy();
@@ -48,8 +52,9 @@ export class Commander {
 
     // Keep the economy growing, but never bury military production beneath a
     // long villager queue.
-    if (villagers.length + tc.queue.filter(item => item.type === 'villager').length < 22
-        && tc.queue.length < 2) {
+    if (villagers.length + tc.queue.filter(item => item.type === 'villager').length
+          < this.profile.villagerTarget
+        && tc.queue.length < this.profile.villagerQueueLimit) {
       queueUnit(world, tc, 'villager', 1);
     }
 
@@ -66,29 +71,33 @@ export class Commander {
     // workforce from being reassigned across several abandoned building sites.
     const unfinished = buildingsOf(world, this.side).find(building => !building.complete);
     if (unfinished) {
-      assignBuilders(world, villagers.slice(0, 4), unfinished);
+      assignBuilders(world, villagers.slice(0, this.profile.builderCount), unfinished);
       return;
     }
 
     const usedPop = side.population + side.queuedPopulation;
-    if (side.popCap - usedPop < 18 && buildingsOf(world, this.side, 'house').length < 29) {
+    if (side.popCap - usedPop < this.profile.houseBuffer
+        && buildingsOf(world, this.side, 'house').length < this.profile.houseLimit) {
       if (this.tryBuild('house', villagers)) return;
     }
 
-    if (villagers.length >= 3 && this.ensureBuilding('lumber_camp', villagers)) return;
-    if (villagers.length >= 4 && this.ensureBuilding('mill', villagers)) return;
-    if (villagers.length >= 5 && this.ensureBuilding('barracks', villagers)) return;
-    if (villagers.length >= 6 && this.ensureBuilding('mine', villagers)) return;
-    if (villagers.length >= 9 && buildingsOf(world, this.side, 'barracks', true).length) {
+    const buildAt = this.profile.buildAt;
+    if (villagers.length >= buildAt.lumber_camp && this.ensureBuilding('lumber_camp', villagers)) return;
+    if (villagers.length >= buildAt.mill && this.ensureBuilding('mill', villagers)) return;
+    if (villagers.length >= buildAt.barracks && this.ensureBuilding('barracks', villagers)) return;
+    if (villagers.length >= buildAt.mine && this.ensureBuilding('mine', villagers)) return;
+    if (villagers.length >= buildAt.stable && buildingsOf(world, this.side, 'barracks', true).length) {
       if (this.ensureBuilding('stable', villagers)) return;
     }
-    if (villagers.length >= 13 && buildingsOf(world, this.side, 'stable', true).length) {
+    if (villagers.length >= buildAt.foundry && buildingsOf(world, this.side, 'stable', true).length) {
       if (this.ensureBuilding('foundry', villagers)) return;
     }
-    if (villagers.length >= 12 && buildingsOf(world, this.side, 'tower').length < 2) {
+    if (villagers.length >= buildAt.tower
+        && buildingsOf(world, this.side, 'tower').length < this.profile.towerLimit) {
       if (this.tryBuild('tower', villagers)) return;
     }
-    if (villagers.length >= 2 && buildingsOf(world, this.side, 'farm').length < Math.ceil(villagers.length / 4)) {
+    if (villagers.length >= 2 && buildingsOf(world, this.side, 'farm').length
+          < Math.ceil(villagers.length / this.profile.farmWorkerRatio)) {
       this.tryBuild('farm', villagers);
     }
   }
@@ -99,8 +108,9 @@ export class Commander {
   }
 
   tryBuild(type, villagers) {
-    const freeWorkers = villagers.filter(worker => !worker.job).slice(0, 3);
-    const builders = freeWorkers.length ? freeWorkers : villagers.slice(0, 3);
+    const crewSize = Math.min(3, this.profile.builderCount);
+    const freeWorkers = villagers.filter(worker => !worker.job).slice(0, crewSize);
+    const builders = freeWorkers.length ? freeWorkers : villagers.slice(0, crewSize);
     if (builders.length === 0) return false;
     const tc = getTownCenter(this.world, this.side);
     if (!tc) return false;
@@ -152,13 +162,19 @@ export class Commander {
     const hasFoundry = buildingsOf(world, this.side, 'foundry').length > 0;
     for (const building of buildingsOf(world, this.side, null, true)) {
       const trains = BUILDING_TYPES[building.type].trains || [];
-      if (trains.length === 0 || building.type === 'town_center' || building.queue.length >= 12) continue;
+      if (trains.length === 0 || building.type === 'town_center'
+          || building.queue.length >= this.profile.productionQueueLimit) continue;
       if (building.type === 'barracks') {
-        queueUnit(world, building, !hasFoundry || military.length % 3 === 0 ? 'pike' : 'musk', 5);
+        queueUnit(
+          world, building, !hasFoundry || military.length % 3 === 0 ? 'pike' : 'musk',
+          this.profile.productionBatch.barracks,
+        );
       } else if (building.type === 'stable') {
-        if (hasFoundry || world.time > 240) queueUnit(world, building, 'cav', 3);
+        if (hasFoundry || world.time > this.profile.cavalryFallbackTime) {
+          queueUnit(world, building, 'cav', this.profile.productionBatch.stable);
+        }
       } else if (building.type === 'foundry') {
-        queueUnit(world, building, 'gun', 2);
+        queueUnit(world, building, 'gun', this.profile.productionBatch.foundry);
       }
       setRallyPoint(building, WORLD.w / 2 + (this.side === 0 ? -420 : 420), WORLD.h / 2);
     }
@@ -170,9 +186,11 @@ export class Commander {
     if (!tc) return;
     const enemyUnits = unitsOf(world, 1 - this.side);
     const defenders = unitsOf(world, this.side).filter(unit => MILITARY_TYPES.has(unit.type));
-    const nearbyEnemy = enemyUnits.find(unit => Math.hypot(unit.x - tc.x, unit.y - tc.y) < 720);
+    const nearbyEnemy = enemyUnits.find(unit => (
+      Math.hypot(unit.x - tc.x, unit.y - tc.y) < this.profile.defenseRadius
+    ));
     if (nearbyEnemy && defenders.length) {
-      applyAttackOrder(defenders.slice(0, 120), nearbyEnemy);
+      applyAttackOrder(defenders.slice(0, this.profile.defenseLimit), nearbyEnemy);
       return;
     }
 
@@ -181,12 +199,16 @@ export class Commander {
     }
     if (this.attackTimer > 0) return;
     const ready = defenders.filter(unit => !this.committed.has(unit.id));
-    const minimumWave = world.time < 240 ? 24 : 40;
+    const minimumWave = world.time < this.profile.earlyWaveUntil
+      ? this.profile.earlyWaveMinimum : this.profile.lateWaveMinimum;
     if (ready.length < minimumWave) {
-      this.attackTimer = 12;
+      this.attackTimer = this.profile.waveRetryDelay;
       return;
     }
-    const waveSize = Math.min(240, Math.max(minimumWave, Math.floor(ready.length * 0.8)));
+    const waveSize = Math.min(
+      this.profile.maxWaveSize,
+      Math.max(minimumWave, Math.floor(ready.length * this.profile.waveFraction)),
+    );
     const wave = ready.slice(0, waveSize);
     const enemyTc = getTownCenter(world, 1 - this.side);
     if (!enemyTc) return;
@@ -196,8 +218,11 @@ export class Commander {
     // brief staging move produces the Cossacks-like wall of troops.
     const stageX = center.x + (enemyTc.x - center.x) * 0.22;
     applyMoveOrder(wave, stageX, center.y, 'line');
-    for (const unit of wave) unit.deferredAttack = { target: enemyTc, at: world.time + 8 };
-    this.attackTimer = world.time < 300 ? 52 : 38;
+    for (const unit of wave) {
+      unit.deferredAttack = { target: enemyTc, at: world.time + this.profile.stagingDelay };
+    }
+    this.attackTimer = world.time < 300
+      ? this.profile.earlyAttackInterval : this.profile.lateAttackInterval;
     world.events.push({ side: 0, text: 'Enemy formations are marching on your settlement!', tone: 'danger' });
   }
 }

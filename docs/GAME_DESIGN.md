@@ -20,6 +20,22 @@ with light, historically flavored bonuses rather than opaque hard counters.
    and launches increasingly large attack waves.
 6. Destroying the enemy Town Center wins the skirmish; losing yours ends it.
 
+## CPU difficulty plan
+
+Every new campaign chooses CPU difficulty before the country selector unlocks.
+All levels obey the same resource, construction, population, unit-stat, and
+combat rules as the player.
+
+| Level | Economy and production | Battlefield pressure |
+| --- | --- | --- |
+| Low | Slower 1.75-second planning, 14 villagers, later military buildings, smaller batches, one tower | First attack timer 160s; 14/24 minimum troops and at most 55% of the ready army per wave |
+| Medium | 1.25-second planning, 18 villagers, balanced building milestones and batches, up to two towers | First attack timer 125s; 20/32 minimum troops and at most 70% of the ready army per wave |
+| Hard | Original one-second planning, 22 villagers, original milestones and batches, two towers | Original 92s first attack; 24/40 minimum troops and at most 80% of the ready army per wave |
+
+Lower levels also defend a smaller radius and wait longer between attacks.
+Campaign saves persist the selected level; saves from before this feature use
+Hard so their opponent behavior does not silently change.
+
 ## Deliberate boundaries
 
 This is an original 1700s RTS core loop inspired by the readability of classic

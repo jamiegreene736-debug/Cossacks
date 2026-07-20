@@ -40,7 +40,18 @@ npm start
 
 The Ottoman or English opponent uses the same resource costs, construction,
 population, and training queues as the player. It develops a settlement and
-then sends progressively larger, staged formations into battle.
+then sends progressively larger, staged formations into battle. Before choosing
+a country, each new campaign requires one CPU difficulty choice:
+
+- **Low** plans less often, grows to 14 villagers, delays military expansion,
+  and sends smaller waves beginning around 160 seconds.
+- **Medium** grows to 18 villagers and uses measured production and attack
+  timings, with its first assault planned around 125 seconds.
+- **Hard** preserves the original 22-villager, rapid-production opponent and
+  its massed attacks beginning around 92 seconds.
+
+Difficulty changes CPU planning, production, defense, and attack pressure. It
+does not alter unit combat stats or give the CPU free resources.
 
 ## Nations
 

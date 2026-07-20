@@ -6,7 +6,7 @@
 //  - Target acquisition is staggered (each unit re-scans every ~0.5s)
 //  - Collision separation only runs for units that moved this tick
 
-import { WORLD, NATIONS, UNIT_TYPES,
+import { WORLD, NATIONS, UNIT_TYPES, normalizeCpuDifficulty,
          PIKE_VS_CAV, CAV_CHARGE_BONUS, SQUARE_VS_CAV } from './config.js';
 import { sfx } from './audio.js';
 import { initializeEconomy, stepEconomy, onUnitKilled, onBuildingDestroyed } from './economy.js';
@@ -133,12 +133,13 @@ export function createWorld(opts) {
     pendingDecals: [], decals: [],
     time: 0, state: 'running', winner: -1, checkT: 1,
     speed: 1, killLog: {},
+    difficulty: normalizeCpuDifficulty(opts?.difficulty),
     navigationVersion: 0,
     sepGrid: new FlatGrid(20, WORLD.w, WORLD.h),
     tgtGrid: new FlatGrid(64, WORLD.w, WORLD.h),
     sides: [
-      { nation: opts.playerNation || 'england', start: 0, alive: 0, kills: 0, losses: 0 },
-      { nation: opts.enemyNation || 'ottoman', start: 0, alive: 0, kills: 0, losses: 0 },
+      { nation: opts?.playerNation || 'england', start: 0, alive: 0, kills: 0, losses: 0 },
+      { nation: opts?.enemyNation || 'ottoman', start: 0, alive: 0, kills: 0, losses: 0 },
     ],
   };
   world.spawnUnit = (side, type, x, y) => spawnUnit(world, side, type, x, y);

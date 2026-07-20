@@ -1,6 +1,9 @@
 // DOM HUD and contextual command cards.
 
-import { NATIONS, UNIT_TYPES, BUILDING_TYPES, RESOURCE_KEYS } from './config.js';
+import {
+  NATIONS, UNIT_TYPES, BUILDING_TYPES, RESOURCE_KEYS,
+  CPU_DIFFICULTIES, DEFAULT_CPU_DIFFICULTY,
+} from './config.js';
 import {
   formatCost, getBuildingEconomyStats, getEconomyBreakdown,
   getFieldAttachmentStatus, getGatherAssignmentStats, getRallyTarget,
@@ -9,11 +12,27 @@ import {
 const $ = id => document.getElementById(id);
 let callbacks = {};
 let selectedNation = 'england';
+let selectedDifficulty = null;
 let lastSelectionKey = '';
 let toastTimer = 0;
 let activePlacementType = null;
 
 export function initMenu(menuCallbacks) {
+  const difficultyOptions = $('difficulty-options');
+  for (const [key, difficulty] of Object.entries(CPU_DIFFICULTIES)) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.difficulty = key;
+    button.setAttribute('aria-pressed', 'false');
+    const name = document.createElement('b');
+    name.textContent = difficulty.name;
+    const summary = document.createElement('span');
+    summary.textContent = difficulty.summary;
+    button.append(name, summary);
+    button.addEventListener('click', () => selectDifficulty(key));
+    difficultyOptions.appendChild(button);
+  }
+
   const select = $('sel-player-nation');
   for (const [key, nation] of Object.entries(NATIONS)) {
     const option = document.createElement('option');
@@ -28,11 +47,28 @@ export function initMenu(menuCallbacks) {
     updateNationPreview();
   });
   $('btn-start').addEventListener('click', () => {
+    if (!selectedDifficulty) return;
     const enemyNation = selectedNation === 'england' ? 'ottoman' : 'england';
-    menuCallbacks.onStart({ playerNation: selectedNation, enemyNation });
+    menuCallbacks.onStart({ playerNation: selectedNation, enemyNation, difficulty: selectedDifficulty });
   });
   $('btn-load-save').addEventListener('click', () => menuCallbacks.onLoad?.());
   $('btn-delete-save').addEventListener('click', () => menuCallbacks.onDelete?.());
+}
+
+function selectDifficulty(difficulty) {
+  if (!CPU_DIFFICULTIES[difficulty]) return;
+  selectedDifficulty = difficulty;
+  for (const button of $('difficulty-options').querySelectorAll('button[data-difficulty]')) {
+    const active = button.dataset.difficulty === difficulty;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  }
+  const nationStep = $('nation-step');
+  nationStep.classList.remove('locked');
+  nationStep.setAttribute('aria-disabled', 'false');
+  $('sel-player-nation').disabled = false;
+  $('btn-start').disabled = false;
+  $('preview-difficulty').textContent = CPU_DIFFICULTIES[difficulty].name.toLowerCase();
 }
 
 function updateNationPreview() {
@@ -83,6 +119,8 @@ export function showBattleHud(world) {
   for (const id of ['hud-top', 'time-controls', 'panel', 'minimap', 'hint-bar']) $(id).classList.remove('hidden');
   $('hud-player-nation').textContent = NATIONS[world.sides[0].nation].name;
   $('hud-enemy-nation').textContent = NATIONS[world.sides[1].nation].name;
+  const difficulty = CPU_DIFFICULTIES[world.difficulty] || CPU_DIFFICULTIES[DEFAULT_CPU_DIFFICULTY];
+  $('hud-enemy-role').textContent = `${difficulty.name} CPU realm`;
   $('player-crest').textContent = NATIONS[world.sides[0].nation].name[0];
   $('player-crest').style.background = NATIONS[world.sides[0].nation].coat;
   $('enemy-crest').textContent = NATIONS[world.sides[1].nation].name[0];
@@ -153,11 +191,12 @@ export function setSavedCampaign(summary) {
   $('btn-load-save').disabled = false;
   const player = NATIONS[summary.nation];
   const enemy = NATIONS[summary.enemyNation];
+  const difficulty = CPU_DIFFICULTIES[summary.difficulty] || CPU_DIFFICULTIES[DEFAULT_CPU_DIFFICULTY];
   $('saved-game-title').textContent = `${player?.name || 'Unknown realm'} vs ${enemy?.name || 'Unknown rival'}`;
   const date = new Date(summary.savedAt);
   $('saved-game-date').textContent = date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
   $('saved-game-date').dateTime = date.toISOString();
-  $('saved-game-summary').textContent = `${formatCampaignTime(summary.elapsed)} campaign · ${summary.population.toLocaleString()} population · ${summary.military.toLocaleString()} soldiers · ${summary.buildings.toLocaleString()} buildings`;
+  $('saved-game-summary').textContent = `${difficulty.name} CPU · ${formatCampaignTime(summary.elapsed)} campaign · ${summary.population.toLocaleString()} population · ${summary.military.toLocaleString()} soldiers · ${summary.buildings.toLocaleString()} buildings`;
 }
 
 export function setSpeedLabel(speed) { $('btn-speed').textContent = `${speed}×`; }

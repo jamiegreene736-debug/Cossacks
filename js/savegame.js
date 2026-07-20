@@ -3,7 +3,9 @@
 // stored as ids and rehydrated after the fresh world has been constructed.
 
 import { Commander } from './ai.js';
-import { NATIONS, UNIT_TYPES } from './config.js';
+import {
+  NATIONS, UNIT_TYPES, DEFAULT_CPU_DIFFICULTY, normalizeCpuDifficulty,
+} from './config.js';
 import { repairFieldAttachments, reserveEntityIds } from './economy.js';
 import { createWorld, reserveUnitIds } from './sim.js';
 
@@ -15,7 +17,9 @@ const WORLD_ARRAYS = [
   'buildings', 'resources', 'particles', 'flags', 'destructions',
   'pendingDecals', 'decals', 'events',
 ];
-const WORLD_VALUES = ['time', 'winner', 'checkT', 'speed', 'killLog', 'sides', 'navigationVersion'];
+const WORLD_VALUES = [
+  'time', 'winner', 'checkT', 'speed', 'killLog', 'sides', 'difficulty', 'navigationVersion',
+];
 
 function encodeNumber(value) {
   if (Number.isNaN(value)) return { [NUMBER_TAG]: 'nan' };
@@ -74,6 +78,7 @@ function campaignSummary(world, savedAt) {
     savedAt,
     nation: player.nation,
     enemyNation: world.sides[1].nation,
+    difficulty: normalizeCpuDifficulty(world.difficulty),
     elapsed: world.time,
     population: player.population,
     military: world.units.filter(unit => unit.alive && unit.side === 0 && unit.type !== 'villager').length,
@@ -97,6 +102,7 @@ export function createGameSnapshot(world, commander, camera, savedAt = Date.now(
     world: worldData,
     commander: {
       side: commander.side,
+      difficulty: commander.difficulty,
       thinkTimer: commander.thinkTimer,
       attackTimer: commander.attackTimer,
       committed: [...commander.committed],
@@ -126,15 +132,22 @@ function validateSnapshot(snapshot) {
 export function restoreGameSnapshot(snapshot) {
   validateSnapshot(snapshot);
   const data = snapshot.world;
+  // Saves made before difficulty selection used today's Hard policy.
+  const difficulty = normalizeCpuDifficulty(
+    data.difficulty || snapshot.commander?.difficulty,
+    DEFAULT_CPU_DIFFICULTY,
+  );
   const world = createWorld({
     playerNation: data.sides[0].nation,
     enemyNation: data.sides[1].nation,
+    difficulty,
   });
 
   for (const key of WORLD_ARRAYS) world[key] = clone(data[key] || []);
   for (const key of WORLD_VALUES) {
     if (data[key] !== undefined) world[key] = clone(data[key]);
   }
+  world.difficulty = difficulty;
   world.units = clone(data.units);
   world.projectiles = clone(data.projectiles || []);
   world.active = [];
@@ -174,7 +187,7 @@ export function restoreGameSnapshot(snapshot) {
   reserveUnitIds(Math.max(0, ...world.units.map(unit => unit.id)));
   reserveEntityIds(Math.max(99999, ...world.buildings.map(building => building.id), ...world.resources.map(resource => resource.id)));
 
-  const commander = new Commander(world, snapshot.commander?.side ?? 1);
+  const commander = new Commander(world, snapshot.commander?.side ?? 1, difficulty);
   commander.thinkTimer = Number(snapshot.commander?.thinkTimer) || 0;
   commander.attackTimer = Number(snapshot.commander?.attackTimer) || 0;
   commander.committed = new Set(snapshot.commander?.committed || []);
