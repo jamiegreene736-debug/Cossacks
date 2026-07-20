@@ -11,7 +11,7 @@ import { initInput, updateInput, getSelection, getDragRect,
 import { placeBuilding, queueUnit, validatePlacement } from './economy.js';
 import * as ui from './ui.js';
 import { sfx } from './audio.js';
-import { preloadBuildingAssets } from './gfx/buildings.js';
+import { preloadProductionArt } from './gfx/art-assets.js';
 import {
   deleteCampaign, getCampaignSummary, loadCampaign, restoreGameSnapshot, saveCampaign,
 } from './savegame.js';
@@ -22,7 +22,7 @@ let endShown = false;
 
 const canvas = document.getElementById('game');
 const minimap = document.getElementById('minimap');
-const buildingAssetsReady = preloadBuildingAssets();
+const productionArtReady = preloadProductionArt();
 
 initRender(canvas, minimap);
 initInput(canvas, minimap, () => world, {
@@ -69,7 +69,7 @@ refreshSavedCampaign();
 
 async function startBattle(opts) {
   sfx.ensure();
-  await buildingAssetsReady;
+  await productionArtReady;
   world = createWorld(opts);
   commander = new Commander(world, 1);
   resetForBattle();
@@ -130,7 +130,7 @@ function saveCurrentCampaign(exitToMap = false) {
 async function resumeSavedCampaign() {
   sfx.ensure();
   try {
-    await buildingAssetsReady;
+    await productionArtReady;
     const snapshot = loadCampaign();
     if (!snapshot) {
       refreshSavedCampaign();

@@ -1,6 +1,7 @@
 // Terrain: modelled diorama board — material field, parcels, hedgerows,
 // road, stream, foliage. Baked once into frustum-culled tiles.
 import { WORLD } from '../config.js';
+import { getProductionArt } from './art-assets.js';
 let terrainCanvas = null;
 // ===========================================================================
 //  TERRAIN SUBSYSTEM — "Kriegsspiel Table": a modelled 1:72 diorama board
@@ -576,6 +577,25 @@ function paintMaterialField(g, fw, fh) {
 
   scratch.width = 1; scratch.height = 1;
   soft.width = 1; soft.height = 1;
+}
+
+function paintMeadowTexture(g) {
+  const meadow = getProductionArt('englishMeadow');
+  if (!meadow) return;
+  const pattern = g.createPattern(meadow, 'repeat');
+  if (!pattern) return;
+
+  g.save();
+  // Preserve the low-frequency material field while replacing its flat fill
+  // with real blade, clover and dead-grass structure from the seamless tile.
+  g.globalCompositeOperation = 'source-over';
+  g.globalAlpha = 0.38;
+  g.fillStyle = pattern;
+  g.fillRect(0, 0, WORLD.w, WORLD.h);
+  g.globalCompositeOperation = 'soft-light';
+  g.globalAlpha = 0.20;
+  g.fillRect(0, 0, WORLD.w, WORLD.h);
+  g.restore();
 }
 
 // ===========================================================================
@@ -1569,7 +1589,7 @@ function paintFlock(g) {
   const cols = Math.ceil(WORLD.w / TILE);
   const rows = Math.ceil(WORLD.h / TILE);
   g.save();
-  g.globalAlpha = 0.86;
+  g.globalAlpha = 0.24;
   for (let j = 0; j < rows; j++) {
     for (let i = 0; i < cols; i++) {
       const t = tiles[(Math.random() * tiles.length) | 0];
@@ -2297,11 +2317,11 @@ function paintGrain(g, scale) {
 
   g.save();
   g.globalCompositeOperation = 'overlay';
-  g.globalAlpha = 0.30;
+  g.globalAlpha = 0.10;
   g.fillStyle = p1;
   g.fillRect(0, 0, WORLD.w, WORLD.h);
   g.globalCompositeOperation = 'soft-light';
-  g.globalAlpha = 0.18;
+  g.globalAlpha = 0.06;
   g.fillStyle = p2;
   g.fillRect(0, 0, WORLD.w, WORLD.h);
   g.restore();
@@ -2341,6 +2361,7 @@ function buildTerrain() {
   terrainFieldH = Math.round(WORLD.h / terrainFieldStep);
   terrainField = buildMaterialField(terrainFieldW, terrainFieldH, seed);
   paintMaterialField(g, terrainFieldW, terrainFieldH);
+  paintMeadowTexture(g);
 
   // ---- geometry that later layers need ------------------------------------
   const stream = buildStream();
@@ -2367,7 +2388,7 @@ function buildTerrain() {
 
   // ---- L7  STATIC GRASS / FLOCK -------------------------------------------
   paintFlock(g);
-  paintHeroTufts(g, 34000);
+  paintHeroTufts(g, 9000);
 
   // ---- L8  TREES, BUSHES, ROCKS, SCRUB ------------------------------------
   const trees = placeWoods(g, road, stream, parcels);

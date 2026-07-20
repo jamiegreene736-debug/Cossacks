@@ -1,10 +1,12 @@
 # Graphics subsystems
 
-Most art in this game is drawn procedurally in code. Signature landmarks may
-use checked-in, high-resolution pre-rendered sprites when fine masonry,
-weathering, glazing, and carved ornament need to survive close gameplay zoom.
-Those assets are preloaded before battle setup and baked into the same cache as
-procedural buildings, so a completed building still costs one runtime blit.
+The renderer combines procedural art with checked-in, high-resolution sprites
+where fine masonry, weathering, glazing, foliage, and carved ornament need to
+survive close gameplay zoom. England's complete building roster and natural
+resource nodes use one coordinated production-art set. Those assets are
+preloaded before battle setup and enter the same caches as procedural art, so a
+completed building or resource still costs one runtime blit. Procedural paths
+remain as resilient fallbacks and continue to render the Ottoman roster.
 
 Everything here implements one art direction — **Kriegsspiel Table**: the player
 is looking down at a painted 1:72 wargame diorama under a single warm gallery
@@ -33,7 +35,7 @@ produces cool shadows, and pure black desaturates the flock underneath.
 **Hard-edged shading, not gradients, in procedural painters.** Each procedural material is painted from a ramp
 (`out` / `shade` / `base` / `lit`) derived programmatically from one base hex, so
 every nation's colours work automatically. Gradients inside a material read as
-muddy realism; the ramp reads as painted. Pre-rendered landmarks are the
+muddy realism; the ramp reads as painted. Pre-rendered production assets are the
 deliberate exception: their material response is already baked into the source
 art and must bypass lining and gallery-light post-processes.
 
@@ -57,9 +59,9 @@ A battle can put thousands of units on the field, so:
 - Work done **once** — sprite atlas painting, terrain baking, decal stamping,
   texture pre-baking — is effectively free. Be lavish there. That is where all
   the quality comes from.
-- Buildings bake at 4x, resources at 3x. Functional yard props, material
-  patina, mill animation frames and three structural-damage states all remain
-  lazy cache variants; a completed building still costs one runtime blit.
+- Procedural buildings bake at 4x and procedural resources at 3x. Production
+  sprites load once, then use lazy scale/damage/depletion variants. The Town
+  Center's waving flag is the only live overlay in England's architectural set.
 - Work done **per unit per frame** must stay at about one `drawImage`. Per-unit
   gradients, shadow ellipses, `save`/`restore` churn, `ctx.filter` or
   `ctx.shadowBlur` in the hot loop are regressions.
@@ -71,9 +73,12 @@ Measured at 1,625 living units: 0.4ms median frame draw against a 16.7ms budget.
 
 | File | Owns |
 | --- | --- |
-| `terrain.js` | The board: material field, parcels, hedgerows, road, stream, foliage. Bakes 1:1 into frustum-culled tiles; `drawTerrain()` is ≤12 blits. |
-| `buildings.js` | Nation-specific 18th-century architecture, production-landmark preloading, farms, resource nodes, scene props, animated mill frames and cached damage states. |
-| `assets/buildings/` | Transparent high-resolution sources for production landmarks; currently the British Town Center. |
+| `art-assets.js` | Central URL registry, preload lifecycle and lookup for production art. |
+| `terrain.js` | The board: production meadow texture, material field, parcels, hedgerows, road, stream, and restrained procedural foliage. Bakes 1:1 into frustum-culled tiles; `drawTerrain()` is ≤12 blits. |
+| `buildings.js` | Nation-specific 18th-century architecture, farms, production and procedural resource nodes, scene props, waving Union flag, and cached damage/depletion states. |
+| `assets/buildings/` | Transparent high-resolution sources for every completed England structure. |
+| `assets/resources/` | Transparent woodland, berry, stone, and gold sources. |
+| `assets/terrain/` | Seamless production meadow source. |
 | `infantry.js` | `drawSoldier()` — musketeers and pikemen. |
 | `mounted.js` | `drawCavalry()`, `drawCannon()`. |
 | `villager.js` | `drawWorker()` — civilian, deliberately distinct in silhouette from a soldier. |
