@@ -13,6 +13,12 @@ test('worker jobs resolve to historically legible tool actions', () => {
   assert.equal(resolveWorkerAction(gather, {
     entityKind: 'building', type: 'farm', resourceType: 'food',
   }), 'farm');
+  assert.equal(resolveWorkerAction({
+    kind: 'workplace', targetId: 9, resourceType: 'food',
+  }, { entityKind: 'building', type: 'mill' }), 'forage');
+  assert.equal(resolveWorkerAction({
+    kind: 'workplace', targetId: 10, resourceType: 'stone',
+  }, { entityKind: 'building', type: 'mine' }), 'mine');
 });
 
 test('work animation alternates two cached frames for each tool', () => {

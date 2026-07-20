@@ -28,6 +28,10 @@ test('a campaign round trip preserves economy, AI, camera and entity references'
   world.decals.push({ kind: 'crater', x: 222, y: 333 });
   const attacker = spawnUnit(world, 0, 'musk', 900, 1500);
   const defender = spawnUnit(world, 1, 'pike', 1100, 1500);
+  const mill = createBuilding(0, 'mill', 760, 1380, true);
+  world.buildings.push(mill);
+  const millWorker = spawnUnit(world, 0, 'villager', 800, 1420);
+  millWorker.job = { kind: 'workplace', targetId: mill.id, resourceType: 'food' };
   const enemyTownCenter = world.buildings.find(building => building.side === 1);
   attacker.target = defender;
   attacker.orderTarget = enemyTownCenter;
@@ -46,6 +50,7 @@ test('a campaign round trip preserves economy, AI, camera and entity references'
   const restored = restoreGameSnapshot(decodeSnapshot(encoded));
   const restoredAttacker = restored.world.units.find(unit => unit.id === attacker.id);
   const restoredDefender = restored.world.units.find(unit => unit.id === defender.id);
+  const restoredMillWorker = restored.world.units.find(unit => unit.id === millWorker.id);
 
   assert.equal(restored.world.state, 'paused');
   assert.equal(restored.world.time, 187.25);
@@ -60,6 +65,9 @@ test('a campaign round trip preserves economy, AI, camera and entity references'
   assert.deepEqual(restored.world.decals, world.decals);
   assert.equal(restored.commander.committed.has(defender.id), true);
   assert.deepEqual(restored.commander.planCursor, { house: 4 });
+  assert.deepEqual(restoredMillWorker.job, {
+    kind: 'workplace', targetId: mill.id, resourceType: 'food',
+  });
   assert.deepEqual(restored.camera, { x: 777, y: 888, zoom: 1.4 });
 
   const maxUnitId = Math.max(...restored.world.units.map(unit => unit.id));

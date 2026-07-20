@@ -626,6 +626,18 @@ function drawCountryVegetation(g, image, frame, x, baseY, width, flip) {
   g.restore();
 }
 
+function fillProductionMaterial(g, key, bounds, alpha) {
+  const image = getProductionArt(key);
+  const pattern = image ? g.createPattern(image, 'repeat') : null;
+  if (!pattern) return false;
+  g.save();
+  g.globalAlpha = alpha;
+  g.fillStyle = pattern;
+  g.fillRect(bounds.x0 - 8, bounds.y0 - 8, bounds.w + 16, bounds.h + 16);
+  g.restore();
+  return true;
+}
+
 // ===========================================================================
 //  L2 — PARCEL MAP
 //  14-20 enclosed farmland parcels. This is the structure that makes a
@@ -732,6 +744,7 @@ function paintParcel(g, p) {
 function paintPloughed(g, p, b, R, soil, dark, lightC, pitch, crossRows) {
   g.fillStyle = soil;
   g.fillRect(b.x0 - 8, b.y0 - 8, b.w + 16, b.h + 16);
+  fillProductionMaterial(g, 'countrySoil', b, 0.68);
 
   // Soil mottle: broad irregular tone shifts so the earth is not a flat slab.
   for (let i = 0; i < 26; i++) {
@@ -796,6 +809,7 @@ function paintPloughed(g, p, b, R, soil, dark, lightC, pitch, crossRows) {
 function paintWheat(g, p, b, R) {
   g.fillStyle = T.STRAW;
   g.fillRect(b.x0 - 8, b.y0 - 8, b.w + 16, b.h + 16);
+  fillProductionMaterial(g, 'countryStubble', b, 0.56);
   for (let i = 0; i < 22; i++) {
     const pts = blobPoints(rnd(b.x0, b.x1), rnd(b.y0, b.y1), rnd(50, 150), rnd(35, 100), 8, 0.34, rnd(0, 6.28));
     g.fillStyle = Math.random() < 0.5
@@ -836,6 +850,7 @@ function paintWheat(g, p, b, R) {
 function paintFallow(g, p, b, R) {
   g.fillStyle = mixHex(T.TURF_MID, T.EARTH, 0.35);
   g.fillRect(b.x0 - 8, b.y0 - 8, b.w + 16, b.h + 16);
+  fillProductionMaterial(g, 'countryStubble', b, 0.48);
   for (let i = 0; i < 34; i++) {
     const pts = blobPoints(rnd(b.x0, b.x1), rnd(b.y0, b.y1), rnd(30, 120), rnd(22, 80), 9, 0.42, rnd(0, 6.28));
     const c = Math.random();
@@ -1240,6 +1255,15 @@ function paintRoad(g, road, seed) {
     g.closePath();
   }
   g.clip();
+  const roadTexture = getProductionArt('countryRoad');
+  const roadPattern = roadTexture ? g.createPattern(roadTexture, 'repeat') : null;
+  if (roadPattern) {
+    g.save();
+    g.globalAlpha = 0.84;
+    g.fillStyle = roadPattern;
+    g.fillRect(0, 0, WORLD.w, WORLD.h);
+    g.restore();
+  }
   for (let i = 0; i < 420; i++) {
     const q = road[(Math.random() * road.length) | 0];
     const pts = blobPoints(q[0] + rnd(-24, 24), q[1] + rnd(-24, 24), rnd(6, 26), rnd(4, 16), 8, 0.45, rnd(0, 6.28));
@@ -1361,6 +1385,8 @@ function paintRoad(g, road, seed) {
 // Puddles with a sky glint on the up-left edge — small, cheap, and exactly the
 // kind of specific incident that makes baked terrain look observed.
 function paintPuddles(g, road, seed, near) {
+  const waterTexture = getProductionArt('countryWater');
+  const waterPattern = waterTexture ? g.createPattern(waterTexture, 'repeat') : null;
   for (let i = 0; i < 26; i++) {
     let x, y;
     if (near && Math.random() < 0.6) {
@@ -1372,8 +1398,8 @@ function paintPuddles(g, road, seed, near) {
       y = road[idx][1] + rnd(-9, 9);
     }
     if (x < 30 || x > WORLD.w - 30 || y < 30 || y > WORLD.h - 30) continue;
-    const rx = rnd(5, 17), ry = rx * rnd(0.34, 0.6);
-    const pts = blobPoints(x, y, rx, ry, 10, 0.4, rnd(0, 6.28));
+    const rx = rnd(4, 12), ry = rx * rnd(0.32, 0.56);
+    const pts = blobPoints(x, y, rx, ry, 13, 0.58, rnd(0, 6.28));
 
     g.fillStyle = rgba(T.EARTH_DARK, 0.55);
     smoothClosedPath(g, blobPoints(x, y, rx * 1.22, ry * 1.25, 10, 0.42, rnd(0, 6.28)));
@@ -1383,9 +1409,16 @@ function paintPuddles(g, road, seed, near) {
     wg.addColorStop(0, rgba(T.WATER_SPEC, 0.85));
     wg.addColorStop(0.4, rgba(T.WATER, 0.9));
     wg.addColorStop(1, rgba(T.WATER_DEEP, 0.92));
-    g.fillStyle = wg;
+    g.fillStyle = waterPattern || wg;
     smoothClosedPath(g, pts);
     g.fill();
+    if (waterPattern) {
+      g.fillStyle = wg;
+      g.globalAlpha = 0.38;
+      smoothClosedPath(g, pts);
+      g.fill();
+      g.globalAlpha = 1;
+    }
 
     // Sky glint: a bright arc on the up-left edge only.
     g.save();
@@ -1431,6 +1464,9 @@ function buildStream() {
 
 function paintStream(g, stream, seed) {
   const wf = function (t) { return 20 + 6 * n1(t * 5, seed); };
+  const waterTexture = getProductionArt('countryWater');
+  const waterPattern = waterTexture ? g.createPattern(waterTexture, 'repeat') : null;
+  const productionAccents = getProductionArt('landscapeAccents');
 
   g.save();
   g.lineCap = 'round';
@@ -1445,8 +1481,8 @@ function paintStream(g, stream, seed) {
   strokeVarying(g, stream, function (t) { return wf(t) + 4.5; }, rgba(T.MUD, 0.9), 0, 0);
 
   // Water body.
-  strokeVarying(g, stream, wf, T.WATER, 0, 0);
-  strokeVarying(g, stream, function (t) { return wf(t) * 0.62; }, T.WATER_DEEP, 0, 0);
+  strokeVarying(g, stream, wf, waterPattern || T.WATER, 0, 0);
+  strokeVarying(g, stream, function (t) { return wf(t) * 0.62; }, rgba(T.WATER_DEEP, 0.42), 0, 0);
 
   // Specular streak on the sun side.
   strokeVarying(g, stream, function (t) { return wf(t) * 0.20; }, rgba(T.WATER_SPEC, 0.75),
@@ -1471,9 +1507,24 @@ function paintStream(g, stream, seed) {
   }
   flushBatch(g, ripples);
 
-  // Reed fringe: short vertical strokes crowding both banks.
+  // Reed fringe: detailed production clumps carry the silhouette, with fine
+  // procedural blades filling the gaps between them.
+  if (productionAccents) {
+    for (let i = 0; i < 180; i++) {
+      const t = Math.random();
+      const q = walk(t);
+      const w = wf(t) * 0.5;
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const size = rnd(20, 34);
+      drawCountryVegetation(
+        g, productionAccents, 2,
+        q.x + rnd(-5, 5), q.y + side * (w + rnd(5, 13)) + size * 0.34,
+        size, side < 0,
+      );
+    }
+  }
   const reeds = makeBatch();
-  for (let i = 0; i < 3400; i++) {
+  for (let i = 0; i < 1200; i++) {
     const t = Math.random();
     const q = walk(t);
     const w = wf(t) * 0.5;
@@ -1486,6 +1537,21 @@ function paintStream(g, stream, seed) {
       0.9, x, y, x + Math.cos(a) * len, y + Math.sin(a) * len);
   }
   flushBatch(g, reeds);
+
+  if (productionAccents) {
+    for (let i = 0; i < 90; i++) {
+      const t = Math.random();
+      const q = walk(t);
+      const w = wf(t) * 0.5;
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const size = rnd(14, 25);
+      drawCountryVegetation(
+        g, productionAccents, 1,
+        q.x + rnd(-5, 5), q.y + side * (w + rnd(1, 8)) + size * 0.30,
+        size, ((i + side) & 1) === 0,
+      );
+    }
+  }
 
   // Stones in the shallows.
   const st = makeDotBatch();
@@ -1761,6 +1827,14 @@ function drawTree(g, x, y, r, opts) {
   g.fill();
   g.restore();
 
+  const productionTrees = getProductionArt('countryTrees');
+  if (productionTrees && species !== 'bare') {
+    const frame = species === 'conifer' ? 2 : species === 'poplar' ? 3 : variant & 1;
+    const width = r * (species === 'poplar' ? 2.55 : species === 'conifer' ? 3.05 : 3.35);
+    drawCountryVegetation(g, productionTrees, frame, x, y + 4, width, (variant & 2) !== 0);
+    return;
+  }
+
   // ---- trunk ---------------------------------------------------------------
   const tw = Math.max(1.6, r * (species === 'poplar' ? 0.11 : 0.17));
   const trunk = ramp(T.TRUNK);
@@ -1952,6 +2026,15 @@ let rockPal = null;
 
 function drawRock(g, x, y, r) {
   contactShadow(g, x, y, r * 1.05, r * 1.1, 1);
+  const productionAccents = getProductionArt('landscapeAccents');
+  if (productionAccents) {
+    const frame = r >= 7.5 ? 0 : 1;
+    drawCountryVegetation(
+      g, productionAccents, frame, x, y + r * 0.7,
+      r * (frame === 0 ? 4.4 : 4.0), ((x + y) | 0) % 2 === 0,
+    );
+    return;
+  }
   if (!rockPal) {
     rockPal = [];
     for (let i = 0; i < 12; i++) {
@@ -2124,6 +2207,7 @@ function placeWoods(g, road, stream, parcels) {
 function placeUndergrowth(g, road, stream, trees) {
   const items = [];
   const productionVegetation = getProductionArt('countryVegetation');
+  const productionAccents = getProductionArt('landscapeAccents');
   const ok = function (x, y) {
     return !(x < 12 || x > WORLD.w - 12 || y < 12 || y > WORLD.h - 12
       || calmness(x, y) > 0.5 || distToPolyline(road, x, y) < 26);
@@ -2161,10 +2245,26 @@ function placeUndergrowth(g, road, stream, trees) {
     if (!ok(x, y)) continue;
     items.push({ k: 'rock', x: x, y: y, r: rnd(2.5, 7) });
   }
+  // Fallen timber gives woodland floors the same physical history and surface
+  // detail as the mature canopies instead of leaving them as clean green mats.
+  if (productionAccents && trees.length) {
+    for (let i = 0; i < 54; i++) {
+      const tree = trees[(Math.random() * trees.length) | 0];
+      const x = tree.x + rnd(-tree.r * 1.5, tree.r * 1.5);
+      const y = tree.y + rnd(tree.r * 0.3, tree.r * 1.4);
+      if (ok(x, y)) items.push({ k: 'deadwood', x: x, y: y, r: rnd(19, 31) });
+    }
+  }
 
   items.sort(function (a, b) { return a.y - b.y; });
   for (const it of items) {
-    if (it.k === 'bush' && productionVegetation) {
+    if (it.k === 'deadwood' && productionAccents) {
+      contactShadow(g, it.x, it.y, it.r * 1.45, it.r * 0.55, 0.72);
+      drawCountryVegetation(
+        g, productionAccents, 3, it.x, it.y + it.r * 0.35,
+        it.r * 2.8, ((it.x * 5 + it.y) | 0) % 2 === 0,
+      );
+    } else if (it.k === 'bush' && productionVegetation) {
       drawCountryVegetation(
         g, productionVegetation, 2, it.x, it.y + it.r * 0.55,
         it.r * 3.2, ((it.x + it.y) | 0) % 2 === 0,

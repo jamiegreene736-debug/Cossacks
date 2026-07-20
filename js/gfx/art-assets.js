@@ -18,6 +18,12 @@ const ART_URLS = Object.freeze({
   goldOutcrop: new URL('../../assets/resources/gold-outcrop.webp', import.meta.url).href,
   englishMeadow: new URL('../../assets/terrain/english-meadow.jpg', import.meta.url).href,
   countryVegetation: new URL('../../assets/terrain/country-vegetation.webp', import.meta.url).href,
+  countryTrees: new URL('../../assets/terrain/country-trees.webp', import.meta.url).href,
+  landscapeAccents: new URL('../../assets/terrain/landscape-accents.webp', import.meta.url).href,
+  countryRoad: new URL('../../assets/terrain/country-road.jpg', import.meta.url).href,
+  countryWater: new URL('../../assets/terrain/country-water.jpg', import.meta.url).href,
+  countrySoil: new URL('../../assets/terrain/country-soil.jpg', import.meta.url).href,
+  countryStubble: new URL('../../assets/terrain/country-stubble.jpg', import.meta.url).href,
   englishVillager: new URL('../../assets/units/english-villager.webp', import.meta.url).href,
   ottomanVillager: new URL('../../assets/units/ottoman-villager.webp', import.meta.url).href,
 });

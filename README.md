@@ -10,7 +10,8 @@ sound, and the Ottoman settlement are generated procedurally with plain HTML,
 CSS, and JavaScript. English and Ottoman civilians use detailed production-art
 animation sheets; England's completed structures use a coordinated
 high-resolution Georgian/colonial set; and the woodland, berry, stone, gold,
-meadow, hedge, and scrub assets share the same grounded palette and lighting.
+meadow, trees, rocks, river, road, cultivated soil, hedge, and scrub assets
+share the same grounded palette and lighting.
 These preloaded sprites retain deterministic damage and depletion states
 without adding per-frame painting work. The British Town Center carries a
 live, cloth-animated Union flag above the cached architectural sprite.
@@ -29,6 +30,8 @@ npm start
 - Gather food, wood, gold, and stone from deposits across a 5,200 × 3,200 map.
 - Build houses, renewable farms, mills, lumber and mining camps, barracks,
   stables, artillery foundries, and defensive towers.
+- Employ villagers directly at completed mills and economic camps, with exact
+  assigned and live income-per-hour readouts for each resource.
 - Train villagers, musketeers, pikemen, hussars, and cannon individually or in
   batches of 5 and 20.
 - Expand population capacity to 1,200 and retain the optimized formation,
@@ -50,7 +53,7 @@ then sends progressively larger, staged formations into battle.
 
 - **Left-click / drag** — select a building, villager, or regiment
 - **Select villagers, then left-click open ground** — move them to a flagged destination
-- **Select villagers, then hover and left-click a deposit** — gather resources
+- **Select villagers, then hover and left-click a deposit or economic building** — gather resources or work there
 - **Right-click** — move, construct, attack, or set a production rally point
 - **Build card, then click terrain** — place a foundation; Shift-click places another
 - **Cancel placement** — click the placement button or any HUD panel; Esc and secondary-click also work

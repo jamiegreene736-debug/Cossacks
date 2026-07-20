@@ -4,6 +4,7 @@
 import { camera, screenToWorld, clampCamera, minimapToWorld } from './render.js';
 import { WORLD } from './config.js';
 import { applyMoveOrder, applyAttackOrder, haltOrder } from './formations.js';
+import { BUILDING_TYPES } from './config.js';
 import {
   assignBuilders, assignGatherers, clearWorkerJobs, findEntityAt,
   findResourceAt, setRallyPoint,
@@ -324,8 +325,13 @@ function gatherAt(screenX, screenY) {
   const target = hoverableResourceAt(screenX, screenY);
   if (!world || !target || workers.length === 0 || !assignGatherers(world, workers, target)) return false;
   world.flags.push({ x: target.x, y: target.y, life: 1.2, max: 1.2, gather: true });
-  const label = target.resourceType === 'wood' ? 'timber' : target.resourceType;
-  callbacks.onToast?.(`${workers.length} villager${workers.length === 1 ? '' : 's'} gathering ${label}.`, 'good');
+  const workplace = target.entityKind === 'building' && BUILDING_TYPES[target.type]?.workResources?.length;
+  const resourceType = workplace
+    ? workers.find(worker => worker.job?.targetId === target.id)?.job?.resourceType
+    : target.resourceType;
+  const label = resourceType === 'wood' ? 'timber' : resourceType;
+  const action = workplace ? `working at ${BUILDING_TYPES[target.type].label}` : `gathering ${label}`;
+  callbacks.onToast?.(`${workers.length} villager${workers.length === 1 ? '' : 's'} ${action}.`, 'good');
   callbacks.onSelection?.(getSelection());
   updateResourceHover(screenX, screenY);
   return true;
