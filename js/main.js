@@ -39,11 +39,13 @@ initInput(canvas, minimap, () => world, {
   },
   onOrder: kind => sfx.command(kind),
   onValidatePlacement: (type, x, y, options) => validatePlacement(world, 0, type, x, y, options),
-  onPlanWallRun: (startX, startY, endX, endY, orientation) => (
-    planWallRun(world, 0, startX, startY, endX, endY, orientation)
+  onPlanWallRun: (startX, startY, endX, endY, orientation, pathPoints) => (
+    planWallRun(world, 0, startX, startY, endX, endY, orientation, pathPoints)
   ),
-  onPlaceWallRun: (startX, startY, endX, endY, workers, orientation) => {
-    const result = placeWallRun(world, 0, startX, startY, endX, endY, workers, orientation);
+  onPlaceWallRun: (startX, startY, endX, endY, workers, orientation, pathPoints) => {
+    const result = placeWallRun(
+      world, 0, startX, startY, endX, endY, workers, orientation, pathPoints,
+    );
     if (result.ok) sfx.buildingPlaced(result.building.x);
     return result;
   },

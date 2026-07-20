@@ -475,7 +475,7 @@ function updatePlacement(screenX, screenY) {
     || { ok: true, message: '' };
   placement.x = Number.isFinite(validation.x) ? validation.x : point.x;
   placement.y = Number.isFinite(validation.y) ? validation.y : point.y;
-  if (validation.orientation) placement.orientation = validation.orientation;
+  if (validation.orientation != null) placement.orientation = validation.orientation;
   placement.snappedToId = validation.snappedToId ?? null;
   placement.millId = validation.millId ?? null;
   placement.fieldSlot = validation.fieldSlot ?? null;
@@ -494,6 +494,7 @@ function beginWallDrag(screenX, screenY) {
     startY: point.y,
     endX: point.x,
     endY: point.y,
+    points: [{ x: point.x, y: point.y }],
   };
   updateWallDrag(screenX, screenY);
 }
@@ -503,8 +504,14 @@ function updateWallDrag(screenX, screenY) {
   const point = screenToWorld(screenX, screenY);
   wallDrag.endX = point.x;
   wallDrag.endY = point.y;
+  const lastPoint = wallDrag.points.at(-1);
+  if (Math.hypot(point.x - lastPoint.x, point.y - lastPoint.y) >= 12) {
+    wallDrag.points.push({ x: point.x, y: point.y });
+  } else if (wallDrag.points.length > 1) {
+    wallDrag.points[wallDrag.points.length - 1] = { x: point.x, y: point.y };
+  }
   const plan = callbacks.onPlanWallRun?.(
-    wallDrag.startX, wallDrag.startY, point.x, point.y, placement.orientation,
+    wallDrag.startX, wallDrag.startY, point.x, point.y, placement.orientation, wallDrag.points,
   ) || { ok: false, segments: [], message: 'Wall planning is unavailable.' };
   const last = plan.segments?.at(-1);
   placement.valid = plan.ok;
@@ -534,7 +541,7 @@ function finishWallDrag(screenX, screenY) {
   const workers = getSelection().filter(entity => entity.type === 'villager');
   const result = callbacks.onPlaceWallRun?.(
     dragState.startX, dragState.startY, dragState.endX, dragState.endY,
-    workers, placement.orientation,
+    workers, placement.orientation, dragState.points,
   );
   if (!result?.ok) {
     callbacks.onToast?.(result?.message || 'Wall construction failed.', 'danger');

@@ -3,10 +3,11 @@
 // the oblique settlement depth axis. Keeping the math here prevents placement,
 // simulation and art from quietly disagreeing about where a wall exists.
 
-import { BUILDING_TYPES } from './config.js';
+import { BUILDING_TYPES, WORLD } from './config.js';
 
 export const FORTIFICATION_ORIENTATIONS = Object.freeze(['horizontal', 'diagonal']);
 export const FORTIFICATION_SNAP_DISTANCE = 34;
+export const FORTIFICATION_ENDPOINT_PICK_DISTANCE = 64;
 export const WALL_WALK_ELEVATION = 30;
 export const WALL_STAIR_ATTACH_DISTANCE = 58;
 
@@ -20,15 +21,24 @@ export function isFortificationType(type) {
 }
 
 export function normalizeFortificationOrientation(orientation) {
+  if (Number.isFinite(orientation)) {
+    let angle = orientation % (Math.PI * 2);
+    if (angle <= -Math.PI) angle += Math.PI * 2;
+    if (angle > Math.PI) angle -= Math.PI * 2;
+    return angle;
+  }
   return orientation === 'diagonal' ? 'diagonal' : 'horizontal';
 }
 
 export function rotateFortificationOrientation(orientation) {
+  if (Number.isFinite(orientation)) return normalizeFortificationOrientation(orientation + Math.PI / 4);
   return normalizeFortificationOrientation(orientation) === 'horizontal' ? 'diagonal' : 'horizontal';
 }
 
 export function fortificationAxis(orientation) {
-  const axis = AXES[normalizeFortificationOrientation(orientation)];
+  const normalized = normalizeFortificationOrientation(orientation);
+  if (Number.isFinite(normalized)) return { x: Math.cos(normalized), y: Math.sin(normalized) };
+  const axis = AXES[normalized];
   return { x: axis.x, y: axis.y };
 }
 
@@ -67,7 +77,10 @@ export function resolveWallStairAttachment(world, side, x, y) {
     const local = pointLocal(frame, x, y);
     const along = clamp(local.along, -frame.halfLength + stairDef.w * 0.55,
       frame.halfLength - stairDef.w * 0.55);
-    const sideSign = local.across < 0 ? -1 : 1;
+    const reference = interiorReferencePoint(world, side, wall);
+    const referenceAcross = (reference.x - frame.x) * frame.normal.x
+      + (reference.y - frame.y) * frame.normal.y;
+    const sideSign = referenceAcross < 0 ? -1 : 1;
     const across = sideSign * (frame.halfThickness + stairDef.h * 0.5 - 3);
     const stairX = frame.x + frame.axis.x * along + frame.normal.x * across;
     const stairY = frame.y + frame.axis.y * along + frame.normal.y * across;
@@ -90,6 +103,23 @@ export function resolveWallStairAttachment(world, side, x, y) {
     };
   }
   return best;
+}
+
+function interiorReferencePoint(world, side, wall) {
+  const townCenterId = world.sides?.[side]?.townCenterId;
+  const townCenter = world.buildings.find(building => building.alive && building.side === side
+    && building.type === 'town_center' && (building.id === townCenterId || townCenterId == null));
+  if (townCenter) return townCenter;
+  const settlementBuilding = world.buildings.filter(building => building.alive
+    && building.side === side && !isFortificationType(building.type)
+    && !BUILDING_TYPES[building.type]?.wallAttachment)
+    .sort((left, right) => Math.hypot(left.x - wall.x, left.y - wall.y)
+      - Math.hypot(right.x - wall.x, right.y - wall.y))[0];
+  if (settlementBuilding) return settlementBuilding;
+  return {
+    x: side === 0 ? WORLD.w * 0.2 : WORLD.w * 0.8,
+    y: WORLD.h * 0.5,
+  };
 }
 
 function connectedWallWalk(world, start) {
@@ -298,6 +328,22 @@ export function fortificationEndpoints(entity) {
     x: frame.x + frame.axis.x * frame.halfLength * sign,
     y: frame.y + frame.axis.y * frame.halfLength * sign,
   }));
+}
+
+export function nearestFriendlyFortificationEndpoint(world, side, x, y,
+  maxDistance = FORTIFICATION_ENDPOINT_PICK_DISTANCE) {
+  let best = null;
+  let bestDistance = maxDistance;
+  for (const building of world.buildings) {
+    if (!building.alive || building.side !== side || !isFortificationType(building.type)) continue;
+    for (const endpoint of fortificationEndpoints(building)) {
+      const distance = Math.hypot(endpoint.x - x, endpoint.y - y);
+      if (distance > bestDistance) continue;
+      bestDistance = distance;
+      best = { ...endpoint, buildingId: building.id, distance };
+    }
+  }
+  return best;
 }
 
 function pointLocal(frame, x, y) {

@@ -6,7 +6,8 @@
 // baking would quantise the one value the art exists to show.
 import { BUILDING_TYPES, NATIONS } from '../config.js';
 import {
-  fortificationAxis, isFortificationType, WALL_WALK_ELEVATION,
+  fortificationAxis, fortificationEndpoints, fortificationsShareEndpoint,
+  isFortificationType, normalizeFortificationOrientation, WALL_WALK_ELEVATION,
 } from '../fortifications.js';
 import { getProductionArt } from './art-assets.js';
 
@@ -3649,9 +3650,12 @@ function bdPaintWallStairs(g, building, progress, construction) {
   const normal = { x: -axis.y * sideSign, y: axis.x * sideSign };
   const p = bdClamp(progress == null ? 1 : progress, 0, 1);
   const built = construction ? bdClamp((p - 0.04) / 0.82, 0, 1) : 1;
-  const halfWidth = BUILDING_TYPES.wall_stairs.w * 0.43;
-  const run = BUILDING_TYPES.wall_stairs.h * 0.88;
-  const steps = 10;
+  const halfWidth = BUILDING_TYPES.wall_stairs.w * 0.48;
+  // The stair projects beyond its collision pad just enough to expose broad,
+  // individually readable treads at gameplay scale. The landing still meets
+  // the host wall while the lowest step remains inside the settlement face.
+  const run = BUILDING_TYPES.wall_stairs.h * 1.18;
+  const steps = 9;
   const tread = run / steps;
   const rise = WALL_WALK_ELEVATION / steps;
   const stone = bdRamp(bdMix(BMAT.STONE, '#C6B58D', 0.32));
@@ -4304,7 +4308,8 @@ function bdFortificationDamage(g, structure, stage, seed) {
 function bdFortificationSprite(building, damageStage) {
   const type = building.type;
   const def = BUILDING_TYPES[type];
-  const orientation = building.orientation === 'diagonal' ? 'diagonal' : 'horizontal';
+  const normalized = normalizeFortificationOrientation(building.orientation);
+  const orientation = Number.isFinite(normalized) ? Math.round(normalized * 1000) / 1000 : normalized;
   const variant = ((building.id % 3) + 3) % 3;
   const key = `fort|${type}|${building.side}|${orientation}|${variant}|${damageStage}`;
   let sprite = bdBuildingCache.get(key);
@@ -4346,7 +4351,8 @@ function bdFortificationSprite(building, damageStage) {
 
 function bdWallStairSprite(building, damageStage) {
   const variant = ((building.id % 3) + 3) % 3;
-  const orientation = building.orientation === 'diagonal' ? 'diagonal' : 'horizontal';
+  const normalized = normalizeFortificationOrientation(building.orientation);
+  const orientation = Number.isFinite(normalized) ? Math.round(normalized * 1000) / 1000 : normalized;
   const sideSign = building.stairSide === -1 ? -1 : 1;
   const key = `stairs|${building.side}|${orientation}|${sideSign}|${variant}|${damageStage}`;
   let sprite = bdBuildingCache.get(key);
@@ -4863,7 +4869,7 @@ function drawFoundation(building, nation, worldTime) {
   if (isFortificationType(building.type)) {
     const constructionArt = getProductionArt('englishFortificationConstruction');
     const completedArt = getProductionArt('englishFortifications');
-    if (constructionArt) {
+    if (constructionArt && !Number.isFinite(building.orientation)) {
       bdDrawProductionFortificationConstruction(g, building, constructionArt, completedArt);
       return;
     }
@@ -5129,7 +5135,7 @@ function drawCompleteBuilding(building, nation, worldTime) {
   }
   if (isFortificationType(building.type)) {
     const productionArt = getProductionArt('englishFortifications');
-    if (productionArt) {
+    if (productionArt && !Number.isFinite(building.orientation)) {
       bdDrawProductionFortification(ctx, building, productionArt, 1);
       return;
     }
@@ -5167,6 +5173,39 @@ function drawCompleteBuilding(building, nation, worldTime) {
     ctx.fillRect(-bw / 2, building.h * 0.30, bw * progress, 4.5);
     ctx.fillStyle = 'rgba(240,233,207,0.5)';
     ctx.fillRect(-bw / 2, building.h * 0.30, bw * progress, 1.2);
+  }
+}
+
+function bdDrawFortificationJunctions(building, world) {
+  if (!building.complete || !isFortificationType(building.type)) return;
+  const neighbors = world.buildings.filter(candidate => candidate !== building
+    && candidate.alive && candidate.complete && candidate.side === building.side
+    && isFortificationType(candidate.type)
+    && fortificationsShareEndpoint(building, candidate, 3.5));
+  if (!neighbors.length) return;
+  const axis = fortificationAxis(building.orientation);
+  const normal = { x: -axis.y, y: axis.x };
+  const halfThickness = building.h * 0.5;
+  const height = building.type === 'gate' ? 47 : 32;
+  const rough = bdRamp(BMAT.STONE_ROUGH);
+  const stone = bdRamp(BMAT.STONE);
+  const endpoints = fortificationEndpoints(building);
+
+  for (const endpoint of endpoints) {
+    const joined = neighbors.some(neighbor => fortificationEndpoints(neighbor)
+      .some(candidate => Math.hypot(candidate.x - endpoint.x, candidate.y - endpoint.y) <= 3.5));
+    if (!joined) continue;
+    const along = (endpoint.x - building.x) * axis.x + (endpoint.y - building.y) * axis.y;
+    bdFortBlock(ctx, axis, normal, along, 0, 7.5, halfThickness + 2.4,
+      height, 0, rough, { lineW: 0.68, litW: 0.52 });
+    bdFortStoneFace(ctx, axis, normal, along, halfThickness + 2.45, 7.1,
+      3, height - 3, (building.id * 4099 + Math.round(along) * 131) | 0, true);
+    bdFortBlock(ctx, axis, normal, along, 0, 8.2, halfThickness + 3,
+      2.2, height - 0.4, stone, { lineW: 0.5, litW: 0.46 });
+    for (const offset of [-4.5, 4.5]) {
+      bdFortBlock(ctx, axis, normal, along + offset, 0, 1.8, halfThickness + 3.4,
+        4.8, height + 1.2, rough, { lineW: 0.46, litW: 0.4 });
+    }
   }
 }
 
@@ -5254,6 +5293,7 @@ function drawBuilding(building, world) {
 
   if (building.complete) drawCompleteBuilding(building, nation, world.time);
   else drawFoundation(building, nation, world.time);
+  bdDrawFortificationJunctions(building, world);
 
   if (building.selected || building.hp < building.maxHp || !building.complete) {
     const width = Math.min(90, building.w * 0.75);
