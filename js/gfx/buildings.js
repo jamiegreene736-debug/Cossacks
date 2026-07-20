@@ -3867,6 +3867,101 @@ function getBuildingPresentation(type, def = BUILDING_TYPES[type]) {
   };
 }
 
+const BD_ARCHITECTURE_SHEET_COLUMNS = 2;
+const BD_ARCHITECTURE_SHEET_ROWS = 2;
+
+function bdArchitectureSheetCell(image, index) {
+  const width = image.naturalWidth / BD_ARCHITECTURE_SHEET_COLUMNS;
+  const height = image.naturalHeight / BD_ARCHITECTURE_SHEET_ROWS;
+  return {
+    sx: (index % BD_ARCHITECTURE_SHEET_COLUMNS) * width,
+    sy: Math.floor(index / BD_ARCHITECTURE_SHEET_COLUMNS) * height,
+    sw: width,
+    sh: height,
+  };
+}
+
+function bdConstructionArtFrame(progress) {
+  const position = bdClamp(progress, 0, 1) * 4;
+  const from = Math.min(3, Math.floor(position));
+  const to = Math.min(3, from + 1);
+  // Keep one physical site fully opaque for most of each quarter. The short
+  // handoff at its end prevents a pop without creating a ghosted double
+  // building from two structurally different stages.
+  const rawMix = bdClamp(((position - Math.floor(position)) - 0.74) / 0.26, 0, 1);
+  const mix = rawMix * rawMix * (3 - 2 * rawMix);
+  return { from, to, mix };
+}
+
+function bdDrawArchitectureCell(g, image, index, x, y, width, height, alpha, mirror) {
+  const cell = bdArchitectureSheetCell(image, index);
+  g.save();
+  g.globalAlpha *= alpha == null ? 1 : alpha;
+  if (mirror) {
+    g.translate(x + width, 0);
+    g.scale(-1, 1);
+    g.drawImage(image, cell.sx, cell.sy, cell.sw, cell.sh, 0, y, width, height);
+  } else {
+    g.drawImage(image, cell.sx, cell.sy, cell.sw, cell.sh, x, y, width, height);
+  }
+  g.restore();
+}
+
+function bdDrawConstructionSheet(g, image, building, alpha) {
+  const presentation = getBuildingPresentation(building.type);
+  const artWidth = Math.max(126, presentation.artWidth * 1.16);
+  const ground = building.h * 0.46 + 15;
+  const top = ground - artWidth * 0.89;
+  const frame = bdConstructionArtFrame(building.progress);
+  const opacity = alpha == null ? 1 : alpha;
+  bdDrawArchitectureCell(g, image, frame.from, -artWidth / 2, top,
+    artWidth, artWidth, (1 - frame.mix) * opacity, false);
+  if (frame.to !== frame.from && frame.mix > 0.001) {
+    bdDrawArchitectureCell(g, image, frame.to, -artWidth / 2, top,
+      artWidth, artWidth, frame.mix * opacity, false);
+  }
+}
+
+function bdFortificationArtGeometry(building) {
+  const isGate = building.type === 'gate';
+  const artWidth = building.w * (isGate ? 1.72 : 1.78);
+  const ground = building.h * 0.52 + (isGate ? 11 : 8);
+  const anchor = isGate ? 0.90 : 0.84;
+  return { artWidth, top: ground - artWidth * anchor };
+}
+
+function bdDrawProductionFortification(g, building, image, alpha) {
+  const orientationIndex = building.orientation === 'diagonal' ? 1 : 0;
+  const index = building.type === 'gate' ? 2 + orientationIndex : orientationIndex;
+  const geometry = bdFortificationArtGeometry(building);
+  bdDrawArchitectureCell(g, image, index, -geometry.artWidth / 2, geometry.top,
+    geometry.artWidth, geometry.artWidth, alpha == null ? 1 : alpha, false);
+}
+
+function bdDrawProductionFortificationConstruction(g, building, image, completedImage) {
+  const isGate = building.type === 'gate';
+  const early = isGate ? 2 : 0;
+  const late = early + 1;
+  const geometry = bdFortificationArtGeometry(building);
+  const p = bdClamp(building.progress, 0, 1);
+  const transition = bdClamp((p - 0.42) / 0.28, 0, 1);
+  const mix = transition * transition * (3 - 2 * transition);
+  const finish = completedImage && p > 0.80 ? bdClamp((p - 0.80) / 0.20, 0, 1) : 0;
+  const constructionAlpha = 1 - finish;
+  const mirror = building.orientation === 'diagonal';
+  bdDrawArchitectureCell(g, image, early, -geometry.artWidth / 2, geometry.top,
+    geometry.artWidth, geometry.artWidth, (1 - mix) * constructionAlpha, mirror);
+  bdDrawArchitectureCell(g, image, late, -geometry.artWidth / 2, geometry.top,
+    geometry.artWidth, geometry.artWidth, mix * constructionAlpha, mirror);
+
+  // The authored late construction state hands off to the exact finished
+  // fortification during the final fifth, preventing a one-frame silhouette
+  // swap when the building becomes complete.
+  if (completedImage && finish > 0) {
+    bdDrawProductionFortification(g, building, completedImage, finish);
+  }
+}
+
 /**
  * The British civic hall uses a pre-rendered source rather than the general
  * material-lining pipeline. Passing this art through bdPassLining or the hard
@@ -4548,6 +4643,12 @@ function drawFoundation(building, nation, worldTime) {
   const rrPile = bdRnd(base ^ 0x165667b1);   // material pile
   const g = ctx;
   if (isFortificationType(building.type)) {
+    const constructionArt = getProductionArt('englishFortificationConstruction');
+    const completedArt = getProductionArt('englishFortifications');
+    if (constructionArt) {
+      bdDrawProductionFortificationConstruction(g, building, constructionArt, completedArt);
+      return;
+    }
     bdDrawFortificationFoundation(g, building);
     return;
   }
@@ -4555,6 +4656,23 @@ function drawFoundation(building, nation, worldTime) {
 
   if (building.type === 'farm') {
     bdDrawFarmFoundation(g, building, sprite);
+    return;
+  }
+
+  const constructionArt = nation === 'england' ? getProductionArt('englishConstruction') : null;
+  if (constructionArt) {
+    const finish = sprite && p > 0.84 ? bdClamp((p - 0.84) / 0.16, 0, 1) : 0;
+    bdDrawConstructionSheet(g, constructionArt, building, 1 - finish);
+    if (sprite && finish > 0) {
+      g.save();
+      g.globalAlpha = finish;
+      g.drawImage(sprite.c, sprite.x, sprite.y, sprite.w, sprite.h);
+      g.restore();
+    }
+    const artWidth = Math.max(126, getBuildingPresentation(building.type).artWidth * 1.16);
+    const bannerTop = building.h * 0.46 + 15 - artWidth * 0.82;
+    bdBanner(g, -artWidth * 0.39, bannerTop, Math.max(16, building.h * 0.18), building.side,
+      { w: 11, h: 8, dir: building.side === 0 ? -1 : 1 });
     return;
   }
 
@@ -4787,6 +4905,11 @@ function drawCompleteBuilding(building, nation, worldTime) {
   const hpFraction = building.hp / Math.max(1, building.maxHp);
   const damageStage = hpFraction < 0.30 ? 2 : hpFraction < 0.66 ? 1 : 0;
   if (isFortificationType(building.type)) {
+    const productionArt = getProductionArt('englishFortifications');
+    if (productionArt) {
+      bdDrawProductionFortification(ctx, building, productionArt, 1);
+      return;
+    }
     const fortification = bdFortificationSprite(building, damageStage);
     if (fortification) {
       ctx.drawImage(fortification.c, fortification.x, fortification.y,
@@ -4970,7 +5093,7 @@ function drawBuilding(building, world) {
    ------------------------------------------------------------------------ */
 
 export {
-  setBuildingRefs, bdResetCaches, getBuildingPresentation,
+  setBuildingRefs, bdResetCaches, getBuildingPresentation, bdConstructionArtFrame,
   drawResourceNode, drawFarm, drawFarmForeground, drawFoundation,
   drawCompleteBuilding, drawBuilding,
 };

@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+"""Prepare generated architecture sheets for the production-art registry.
+
+The generator returns a pale checkerboard as RGB pixels.  This processor
+removes only neutral, bright pixels connected to a sheet edge, preserving the
+warm limestone highlights inside each sprite while opening scaffold and gate
+negative space.  Equal cell geometry is intentionally retained because the
+renderer addresses the 2x2 sheets by source rectangle.
+"""
+
+from __future__ import annotations
+
+import argparse
+from collections import deque
+from pathlib import Path
+
+from PIL import Image, ImageFilter
+
+
+def is_exterior_checker(pixel: tuple[int, int, int]) -> bool:
+    red, green, blue = pixel
+    return min(pixel) >= 222 and max(pixel) - min(pixel) <= 7
+
+
+def remove_exterior_checkerboard(source: Path) -> Image.Image:
+    image = Image.open(source).convert("RGB")
+    width, height = image.size
+    pixels = image.load()
+    exterior = Image.new("L", image.size, 0)
+    mask = exterior.load()
+    pending: deque[tuple[int, int]] = deque()
+
+    def enqueue(x: int, y: int) -> None:
+        if mask[x, y] or not is_exterior_checker(pixels[x, y]):
+            return
+        mask[x, y] = 255
+        pending.append((x, y))
+
+    for x in range(width):
+        enqueue(x, 0)
+        enqueue(x, height - 1)
+    for y in range(height):
+        enqueue(0, y)
+        enqueue(width - 1, y)
+
+    while pending:
+        x, y = pending.popleft()
+        if x > 0:
+            enqueue(x - 1, y)
+        if x + 1 < width:
+            enqueue(x + 1, y)
+        if y > 0:
+            enqueue(x, y - 1)
+        if y + 1 < height:
+            enqueue(x, y + 1)
+
+    # Feather one pixel at the cut so down-sampling does not reveal a white
+    # fringe around ropes, merlons, or window mouldings.
+    exterior = exterior.filter(ImageFilter.GaussianBlur(0.65))
+    alpha = exterior.point(lambda value: 255 - value)
+    output = image.convert("RGBA")
+    output.putalpha(alpha)
+    return output
+
+
+def write_sheet(source: Path, destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    image = remove_exterior_checkerboard(source)
+    image.save(destination, "WEBP", lossless=True, method=6, exact=True)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--fortifications", type=Path, required=True)
+    parser.add_argument("--construction", type=Path, required=True)
+    parser.add_argument("--fortification-construction", type=Path, required=True)
+    parser.add_argument("--output-dir", type=Path, required=True)
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    write_sheet(args.fortifications, args.output_dir / "english-fortifications.webp")
+    write_sheet(args.construction, args.output_dir / "english-construction.webp")
+    write_sheet(
+        args.fortification_construction,
+        args.output_dir / "english-fortification-construction.webp",
+    )
+
+
+if __name__ == "__main__":
+    main()
