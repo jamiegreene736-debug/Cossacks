@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { Commander } from '../js/ai.js';
 import { normalizeAudioSettings } from '../js/audio.js';
-import { createBuilding, getMillFieldSlots } from '../js/economy.js';
+import { createBuilding, getMillFieldSlots, getRallyTarget, setRallyPoint } from '../js/economy.js';
 import {
   createGameSnapshot, decodeSnapshot, deleteCampaign, encodeSnapshot,
   getCampaignSummary, loadCampaign, restoreGameSnapshot, saveCampaign,
@@ -33,6 +33,8 @@ test('a campaign round trip preserves economy, AI, camera and entity references'
   const fieldSlot = getMillFieldSlots(mill)[2];
   const field = createBuilding(0, 'farm', fieldSlot.x, fieldSlot.y, true, fieldSlot);
   world.buildings.push(mill, field);
+  const townCenter = world.buildings.find(building => building.side === 0 && building.type === 'town_center');
+  setRallyPoint(townCenter, field.x, field.y, field);
   const millWorker = spawnUnit(world, 0, 'villager', 800, 1420);
   millWorker.job = { kind: 'gather', targetId: field.id };
   const enemyTownCenter = world.buildings.find(building => building.side === 1);
@@ -72,6 +74,9 @@ test('a campaign round trip preserves economy, AI, camera and entity references'
     kind: 'gather', targetId: field.id,
   });
   const restoredField = restored.world.buildings.find(building => building.id === field.id);
+  const restoredTownCenter = restored.world.buildings.find(building => building.id === townCenter.id);
+  assert.equal(restoredTownCenter.rallyTargetId, field.id);
+  assert.equal(getRallyTarget(restored.world, restoredTownCenter), restoredField);
   assert.equal(restoredField.millId, mill.id);
   assert.equal(restoredField.fieldSlot, 2);
   assert.deepEqual(restored.camera, { x: 777, y: 888, zoom: 1.4 });

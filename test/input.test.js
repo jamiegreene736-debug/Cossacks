@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { createWorld, spawnUnit } from '../js/sim.js';
 import {
   assignVillagersToConstruction, isOpenGroundMoveTarget, issueVillagerGroundMove,
+  setBuildingRallyAt,
 } from '../js/input.js';
 import { createBuilding } from '../js/economy.js';
 
@@ -143,6 +144,31 @@ test('open-ground move targets exclude units, buildings, and resources', () => {
   assert.equal(isOpenGroundMoveTarget(world, open.x, open.y), true);
   assert.equal(isOpenGroundMoveTarget(world, building.x, building.y), false);
   assert.equal(isOpenGroundMoveTarget(world, resource.x, resource.y), false);
+});
+
+test('production buildings retain the clicked resource or friendly building as their rally target', () => {
+  const world = makeWorld();
+  const townCenter = world.buildings.find(building => building.side === 0);
+  const forest = world.resources.find(resource => resource.resourceType === 'wood');
+  const mill = createBuilding(0, 'mill', 900, 1600, true);
+  world.buildings.push(mill);
+
+  const forestRally = setBuildingRallyAt(world, [townCenter], forest.x, forest.y);
+  assert.equal(forestRally.target, forest);
+  assert.equal(townCenter.rallyTargetId, forest.id);
+  assert.equal(townCenter.rallyX, forest.x);
+  assert.equal(townCenter.rallyY, forest.y);
+
+  const buildingRally = setBuildingRallyAt(world, [townCenter], mill.x, mill.y);
+  assert.equal(buildingRally.target, mill);
+  assert.equal(townCenter.rallyTargetId, mill.id);
+
+  const open = findOpenPoint(world);
+  const groundRally = setBuildingRallyAt(world, [townCenter], open.x, open.y);
+  assert.equal(groundRally.target, null);
+  assert.equal(townCenter.rallyTargetId, null);
+  assert.equal(townCenter.rallyX, open.x);
+  assert.equal(townCenter.rallyY, open.y);
 });
 
 test('a villager ground click clears work and creates a routed destination flag', () => {

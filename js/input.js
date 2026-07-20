@@ -259,11 +259,29 @@ function issueOrder(screenX, screenY) {
   }
 
   if (selectedBuildings.length) {
-    let changed = false;
-    for (const building of selectedBuildings) changed = setRallyPoint(building, point.x, point.y) || changed;
-    if (changed) {
-      world.flags.push({ x: point.x, y: point.y, life: 1.2, max: 1.2, rally: true });
-      callbacks.onToast?.('Rally point set.', 'good');
+    const rally = setBuildingRallyAt(world, selectedBuildings, point.x, point.y);
+    if (rally) {
+      const rallyTarget = rally.target;
+      const targetX = rallyTarget?.x ?? point.x;
+      const targetY = rallyTarget?.y ?? point.y;
+      world.flags.push({ x: targetX, y: targetY, life: 1.2, max: 1.2, rally: true });
+      const townCenterSelected = selectedBuildings.some(building => building.type === 'town_center');
+      const targetDef = rallyTarget?.entityKind === 'building' ? BUILDING_TYPES[rallyTarget.type] : null;
+      const autoWorks = townCenterSelected && rallyTarget && (
+        rallyTarget.entityKind === 'resource'
+        || !rallyTarget.complete
+        || rallyTarget.type === 'farm'
+        || targetDef?.workResources?.length
+      );
+      const label = rallyTarget?.entityKind === 'resource'
+        ? rallyTarget.resourceType
+        : targetDef?.label;
+      callbacks.onToast?.(
+        autoWorks
+          ? `Rally set to ${label}. New villagers will work there automatically.`
+          : label ? `Rally point set at ${label}.` : 'Rally point set.',
+        'good',
+      );
       callbacks.onOrder?.('rally');
       return;
     }
@@ -272,6 +290,20 @@ function issueOrder(screenX, screenY) {
   if (units.length) {
     moveUnitsTo(world, units, point.x, point.y, currentFormation);
   }
+}
+
+export function setBuildingRallyAt(world, selected, x, y) {
+  const buildings = selected.filter(entity => entity?.alive && entity.entityKind === 'building');
+  if (!world || buildings.length === 0) return null;
+  const side = buildings[0].side;
+  const resource = findResourceAt(world, x, y);
+  const ownEntity = findEntityAt(world, x, y, side);
+  const target = resource?.entityKind === 'resource' || resource?.side === side
+    ? resource
+    : ownEntity?.entityKind === 'building' ? ownEntity : null;
+  let changed = false;
+  for (const building of buildings) changed = setRallyPoint(building, x, y, target) || changed;
+  return changed ? { target } : null;
 }
 
 function moveUnitsTo(world, units, x, y, formation) {
