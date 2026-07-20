@@ -69,7 +69,10 @@
     <div id="hint-bar" class="hud hidden">
       Select villagers, then hover and click a resource to gather · Right-click to move, attack, build, or rally · WASD to pan · Wheel to zoom
     </div>
-    <div id="placement-tip" class="hud hidden">Move to place · Click to build · Shift-click for another · Right-click or Esc to cancel</div>
+    <div id="placement-tip" class="hud hidden" role="status" aria-live="polite">
+      <span id="placement-message">Move to place · Click terrain to build</span>
+      <button id="btn-cancel-placement" type="button" title="Cancel building placement (Esc)">Cancel placement</button>
+    </div>
     <div id="resource-tooltip" class="hidden" role="status" aria-live="polite"></div>
     <div id="toast" class="hidden"></div>
 

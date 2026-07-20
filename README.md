@@ -52,6 +52,7 @@ then sends progressively larger, staged formations into battle.
 - **Select villagers, then hover and left-click a deposit** — gather resources
 - **Right-click** — move, construct, attack, or set a production rally point
 - **Build card, then click terrain** — place a foundation; Shift-click places another
+- **Cancel placement** — click the placement button or any HUD panel; Esc and secondary-click also work
 - **L / C / B** — line, column, or square formation
 - **H** — halt; **P** — pause; **F** — select all military units
 - **Ctrl/Command+1–9** — set a control group; **1–9** — recall it

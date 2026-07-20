@@ -186,9 +186,22 @@ button, select { font: inherit; }
   font: 10px Arial, sans-serif; white-space: nowrap; pointer-events: none;
 }
 #placement-tip {
-  left: 50%; top: 105px; transform: translateX(-50%); padding: 8px 15px;
+  left: 50%; top: 105px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 12px; padding: 7px 8px 7px 14px;
   color: #fff4c9; background: rgba(39,45,28,.94); border: 1px solid #b3a35d; border-radius: 4px;
-  box-shadow: 0 4px 14px rgba(0,0,0,.35); font: 12px Arial, sans-serif;
+  box-shadow: 0 4px 14px rgba(0,0,0,.35); font: 12px Arial, sans-serif; pointer-events: auto;
+}
+#btn-cancel-placement {
+  min-height: 34px; padding: 6px 11px; color: #ffe4dc;
+  background: linear-gradient(#93483d, #652f29); border: 1px solid #c06e5f; border-radius: 3px;
+  font: 700 11px Arial, sans-serif; cursor: pointer; white-space: nowrap;
+}
+#btn-cancel-placement:hover, #btn-cancel-placement:focus-visible {
+  background: linear-gradient(#ad5547, #79372f); border-color: #e08a78; outline: none;
+}
+.command-card.placement-active {
+  color: #fff1c9; border-color: #d1b454; background: linear-gradient(#5a5030, #38331f);
+  box-shadow: inset 0 0 0 1px rgba(209,180,84,.28);
 }
 
 #resource-tooltip {
