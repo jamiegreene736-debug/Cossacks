@@ -5,12 +5,14 @@ settlement into an empire and fielding armies at *Cossacks* scale. England and
 the Ottoman Empire begin with one Town Center, grow real economies, construct
 bases, and fight for the rival seat of power.
 
-The game has no runtime dependencies or build step. Terrain, troops, effects,
-sound, and most settlement art are generated procedurally with plain HTML, CSS,
-and JavaScript. Signature landmarks can use checked-in, high-resolution
-pre-rendered art; they enter the same one-blit cache as procedural buildings and
-retain deterministic structural damage states. The British Town Center is the
-first production landmark on this hybrid path.
+The game has no runtime dependencies or build step. Troops, effects, sound, and
+the Ottoman settlement are generated procedurally with plain HTML, CSS, and
+JavaScript. England's completed structures use a coordinated high-resolution
+Georgian/colonial art set, while its woodland, berry, stone, gold, and meadow
+assets share the same grounded palette and lighting. These preloaded sprites
+retain deterministic damage and depletion states without adding per-frame
+painting work. The British Town Center carries a live, cloth-animated Union
+flag above the cached architectural sprite.
 
 ## Play
 
@@ -71,6 +73,7 @@ npm test       # economy, construction, production, victory, and mass-unit tests
 | `js/ai.js` | Enemy settlement development, production and attack waves |
 | `js/formations.js` | Large-formation slot math and order assignment |
 | `js/render.js` | Camera, frame composition and minimap orchestration |
+| `js/gfx/art-assets.js` | Shared preload registry for production buildings, resources and meadow art |
 | `js/gfx/buildings.js` | High-resolution architecture, farms, resources, props and damage variants |
 | `js/gfx/*.js` | Terrain, miniatures, effects, decals and composition passes |
 | `js/input.js` | Selection, contextual orders, placement and camera controls |

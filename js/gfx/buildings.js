@@ -5,45 +5,14 @@
 // stay immediate-mode because construction progress is continuous and
 // baking would quantise the one value the art exists to show.
 import { BUILDING_TYPES, NATIONS } from '../config.js';
+import { getProductionArt } from './art-assets.js';
 
 let ctx = null;
 let camera = { zoom: 1 };
-const BD_ENGLISH_TOWN_CENTER_URL = new URL(
-  '../../assets/buildings/english-town-center.png', import.meta.url,
-).href;
-let bdEnglishTownCenterImage = null;
-let bdBuildingAssetPromise = null;
 
 function setBuildingRefs(refs) {
   if (refs.ctx) ctx = refs.ctx;
   if (refs.camera) camera = refs.camera;
-}
-
-/**
- * Load production building art before a battle is created. A load failure is
- * deliberately non-fatal: the procedural painter remains a complete fallback
- * for offline copies with a missing asset, while the checked-in sprite is the
- * normal rendering path.
- */
-function preloadBuildingAssets() {
-  if (bdEnglishTownCenterImage) return Promise.resolve(true);
-  if (bdBuildingAssetPromise) return bdBuildingAssetPromise;
-  if (typeof Image === 'undefined') return Promise.resolve(false);
-
-  bdBuildingAssetPromise = new Promise(resolve => {
-    const image = new Image();
-    image.decoding = 'async';
-    image.onload = () => {
-      bdEnglishTownCenterImage = image;
-      resolve(true);
-    };
-    image.onerror = () => {
-      console.warn('British Town Center art could not be loaded; using the procedural fallback.');
-      resolve(false);
-    };
-    image.src = BD_ENGLISH_TOWN_CENTER_URL;
-  });
-  return bdBuildingAssetPromise;
 }
 
 /* ============================================================================
@@ -3371,23 +3340,34 @@ const BD_PAINTERS = {
   stable: bdPaintStable, foundry: bdPaintFoundry, tower: bdPaintTower,
 };
 
+const BD_ENGLISH_BUILDING_ART = Object.freeze({
+  town_center: { key: 'englishTownCenter', height: 252 },
+  house: { key: 'englishHouse', height: 116 },
+  mill: { key: 'englishMill', height: 166 },
+  lumber_camp: { key: 'englishLumberCamp', height: 108 },
+  mine: { key: 'englishMine', height: 116 },
+  barracks: { key: 'englishBarracks', height: 128 },
+  stable: { key: 'englishStable', height: 130 },
+  foundry: { key: 'englishFoundry', height: 158 },
+  tower: { key: 'englishTower', height: 174 },
+});
+
 /**
  * The British civic hall uses a pre-rendered source rather than the general
  * material-lining pipeline. Passing this art through bdPassLining or the hard
  * gallery-light bands would destroy the sub-pixel masonry, glazing and carved
  * stone detail that the production asset supplies.
  */
-function bdEnglishTownCenterSprite(def, damageStage, seed) {
-  const imageH = 252;
-  const imageW = imageH * bdEnglishTownCenterImage.naturalWidth
-    / bdEnglishTownCenterImage.naturalHeight;
+function bdProductionBuildingSprite(def, art, image, damageStage, seed) {
+  const imageH = art.height;
+  const imageW = imageH * image.naturalWidth / image.naturalHeight;
   const bottom = def.h * 0.48 + 8;
   const left = -imageW / 2;
   const top = bottom - imageH;
   const box = [left - 24, top - 18, imageW + 48, imageH + 78];
 
   return bdBake(box, BD_SCALE, function (g) {
-    g.drawImage(bdEnglishTownCenterImage, left, top, imageW, imageH);
+    g.drawImage(image, left, top, imageW, imageH);
 
     // Damage remains cached with the sprite. Low-opacity soot and hairline
     // fractures preserve the pre-rendered material response instead of
@@ -3435,14 +3415,18 @@ function bdEnglishTownCenterSprite(def, damageStage, seed) {
 }
 
 function bdBuildingSprite(type, def, side, nation, natRoof, variant, damageStage, animFrame) {
-  const frame = type === 'mill' ? (animFrame || 0) : 0;
+  const art = nation === 'england' ? BD_ENGLISH_BUILDING_ART[type] : null;
+  const image = art ? getProductionArt(art.key) : null;
+  const frame = type === 'mill' && !image ? (animFrame || 0) : 0;
   const damage = damageStage || 0;
   const key = type + '|' + side + '|' + nation + '|' + variant + '|' + damage + '|' + frame;
   let s = bdBuildingCache.get(key);
   if (s) return s;
 
-  if (type === 'town_center' && nation === 'england' && bdEnglishTownCenterImage) {
-    s = bdEnglishTownCenterSprite(def, damage, variant * 7919 + side * 104729 + 1);
+  if (image) {
+    s = bdProductionBuildingSprite(
+      def, art, image, damage, variant * 7919 + side * 104729 + 1,
+    );
     bdBuildingCache.set(key, s);
     return s;
   }
@@ -3506,6 +3490,63 @@ function bdFarmSprite(def, side, stage) {
  */
 const BD_RES_STEPS = 5;
 
+const BD_RESOURCE_ART = Object.freeze({
+  wood: { key: 'woodland', widthK: 2.42 },
+  food: { key: 'berryBushes', widthK: 2.30 },
+  stone: { key: 'stoneOutcrop', widthK: 2.24 },
+  gold: { key: 'goldOutcrop', widthK: 2.24 },
+});
+
+function bdProductionResourceSprite(res, step, image, art) {
+  const frac = step / (BD_RES_STEPS - 1);
+  const maxW = res.radius * art.widthK;
+  const maxH = maxW * image.naturalHeight / image.naturalWidth;
+  const bottom = res.radius * 0.62 + 12;
+  const box = [-maxW / 2 - 28, bottom - maxH - 20, maxW + 56, maxH + 72];
+  const scale = 0.58 + frac * 0.42;
+  const width = maxW * scale;
+  const height = maxH * scale;
+  const left = -width / 2;
+  const top = bottom - height;
+  const rr = bdRnd((res.seed * 1000) | 0);
+
+  return bdBake(box, BD_RES_SCALE, function (g) {
+    g.save();
+    g.globalAlpha = 0.76 + frac * 0.24;
+    if ((((res.seed * 17) | 0) & 1) === 1) {
+      g.translate(width / 2, 0);
+      g.scale(-1, 1);
+      g.drawImage(image, 0, top, width, height);
+    } else {
+      g.drawImage(image, left, top, width, height);
+    }
+    g.restore();
+
+    // The cluster contracts as it is gathered. Persistent stumps and quarry
+    // scars keep depletion physical rather than turning it into transparency.
+    const removed = Math.round((1 - frac) * 8);
+    if (res.type === 'wood') {
+      for (let i = 0; i < removed; i++) {
+        bdStump(g, rr(-maxW * 0.34, maxW * 0.34), bottom + rr(-8, 7), rr(3.2, 5.2), rr);
+      }
+    } else if (res.type === 'stone' || res.type === 'gold') {
+      for (let i = 0; i < removed; i++) {
+        const x = rr(-maxW * 0.36, maxW * 0.36);
+        const y = bottom + rr(-8, 6);
+        g.fillStyle = bdRgba(BT.EARTH_DARK, 0.30 + (1 - frac) * 0.24);
+        g.beginPath();
+        g.ellipse(x, y, rr(5, 11), rr(2.2, 4.8), rr(-0.3, 0.3), 0, BD_TAU);
+        g.fill();
+      }
+    }
+
+    g.save();
+    g.globalCompositeOperation = 'destination-over';
+    bdContactShadow(g, 0, bottom - 5, maxW * 0.38, maxH * 0.24, 0.62);
+    g.restore();
+  });
+}
+
 function bdResourceSprite(res) {
   const step = Math.max(0, Math.min(BD_RES_STEPS - 1,
     Math.round((res.amount / Math.max(1, res.maxAmount)) * (BD_RES_STEPS - 1))));
@@ -3516,6 +3557,14 @@ function bdResourceSprite(res) {
   // held roughly 40 MB of surfaces that could never be drawn again.
   const prev = bdResourceCache.get(res.id);
   if (prev && prev.step === step) return prev.s;
+
+  const art = BD_RESOURCE_ART[res.type];
+  const image = art ? getProductionArt(art.key) : null;
+  if (image) {
+    const production = bdProductionResourceSprite(res, step, image, art);
+    bdResourceCache.set(res.id, { step: step, s: production });
+    return production;
+  }
 
   const r = res.radius;
   const box = [-(r * 0.86 + 42), -(r * 0.52 + 76), (r * 0.86 + 42) * 2, r * 1.04 + 76 + 46];
@@ -3792,6 +3841,101 @@ function drawFarm(building) {
 }
 
 /** COMPLETED BUILDINGS — one blit, plus the two live overlays. */
+function bdDrawWavingBritishFlag(g, worldTime) {
+  const poleX = 72;
+  const poleBaseY = -94;
+  const poleTopY = -170;
+  const clothX = poleX + 1;
+  const clothY = poleTopY + 5;
+  const clothW = 32;
+  const clothH = 18;
+  const phase = worldTime * 2.7;
+  const crest = Math.sin(phase) * 2.1;
+  const tail = Math.sin(phase + 1.35) * 3.2;
+  const tipX = clothX + clothW - 1.2 + Math.sin(phase * 0.73) * 1.4;
+
+  g.save();
+  const pole = g.createLinearGradient(poleX - 2, 0, poleX + 2, 0);
+  pole.addColorStop(0, '#574527');
+  pole.addColorStop(0.42, '#C4A664');
+  pole.addColorStop(1, '#4A3822');
+  g.strokeStyle = pole;
+  g.lineWidth = 1.8;
+  g.beginPath();
+  g.moveTo(poleX, poleBaseY);
+  g.lineTo(poleX, poleTopY);
+  g.stroke();
+  g.fillStyle = '#C6A763';
+  g.beginPath();
+  g.arc(poleX, poleTopY - 1.5, 2.1, 0, BD_TAU);
+  g.fill();
+
+  const cloth = new Path2D();
+  cloth.moveTo(clothX, clothY);
+  cloth.bezierCurveTo(
+    clothX + clothW * 0.30, clothY + crest,
+    clothX + clothW * 0.64, clothY - crest * 0.45,
+    tipX, clothY + tail,
+  );
+  cloth.lineTo(tipX - 0.6, clothY + clothH + tail * 0.48);
+  cloth.bezierCurveTo(
+    clothX + clothW * 0.66, clothY + clothH - crest * 0.25,
+    clothX + clothW * 0.30, clothY + clothH + crest * 0.55,
+    clothX, clothY + clothH,
+  );
+  cloth.closePath();
+
+  // A restrained Union flag rendered inside the moving cloth silhouette. The
+  // soft edge and internal value variation keep it fabric rather than a UI icon.
+  g.save();
+  g.clip(cloth);
+  const blue = g.createLinearGradient(clothX, clothY, tipX, clothY + clothH);
+  blue.addColorStop(0, '#28395C');
+  blue.addColorStop(0.55, '#314970');
+  blue.addColorStop(1, '#1E2D4A');
+  g.fillStyle = blue;
+  g.fillRect(clothX - 2, clothY - 5, clothW + 8, clothH + 12);
+
+  g.lineCap = 'butt';
+  g.strokeStyle = 'rgba(238,232,210,0.92)';
+  g.lineWidth = 4.8;
+  g.beginPath();
+  g.moveTo(clothX - 2, clothY - 2);
+  g.lineTo(tipX + 3, clothY + clothH + 4);
+  g.moveTo(clothX - 2, clothY + clothH + 3);
+  g.lineTo(tipX + 3, clothY - 3);
+  g.stroke();
+  g.strokeStyle = '#A63A36';
+  g.lineWidth = 1.7;
+  g.stroke();
+
+  g.strokeStyle = 'rgba(242,236,216,0.96)';
+  g.lineWidth = 5.4;
+  g.beginPath();
+  g.moveTo(clothX - 2, clothY + clothH * 0.50);
+  g.lineTo(tipX + 3, clothY + clothH * 0.50 + tail * 0.25);
+  g.moveTo(clothX + clothW * 0.43, clothY - 3);
+  g.lineTo(clothX + clothW * 0.43, clothY + clothH + 4);
+  g.stroke();
+  g.strokeStyle = '#A92F31';
+  g.lineWidth = 2.6;
+  g.stroke();
+
+  const fold = g.createLinearGradient(clothX, 0, tipX, 0);
+  fold.addColorStop(0, 'rgba(255,255,255,0.10)');
+  fold.addColorStop(0.38, 'rgba(255,255,255,0.20)');
+  fold.addColorStop(0.68, 'rgba(15,20,31,0.18)');
+  fold.addColorStop(1, 'rgba(255,255,255,0.08)');
+  g.fillStyle = fold;
+  g.fillRect(clothX, clothY - 4, clothW + 4, clothH + 10);
+  g.restore();
+
+  g.strokeStyle = 'rgba(235,224,193,0.48)';
+  g.lineWidth = 0.6;
+  g.stroke(cloth);
+  g.restore();
+}
+
 function drawCompleteBuilding(building, nation, worldTime) {
   const def = BUILDING_TYPES[building.type];
   if (building.type === 'farm') { drawFarm(building); return; }
@@ -3807,6 +3951,10 @@ function drawCompleteBuilding(building, nation, worldTime) {
   const s = bdBuildingSprite(building.type, def, building.side, nation,
     (nat && nat.roof) || BMAT.SLATE, variant, damageStage, animFrame);
   if (s) ctx.drawImage(s.c, s.x, s.y, s.w, s.h);
+
+  if (building.type === 'town_center' && nation === 'england') {
+    bdDrawWavingBritishFlag(ctx, worldTime || 0);
+  }
 
   // Live overlay: the training queue. Kept OUT of the bake because it changes
   // every tick. Drawn in the reserved UI parchment/gold family so it never
@@ -3952,7 +4100,7 @@ function drawBuilding(building, world) {
    ------------------------------------------------------------------------ */
 
 export {
-  setBuildingRefs, preloadBuildingAssets, bdResetCaches,
+  setBuildingRefs, bdResetCaches,
   drawResourceNode, drawFarm, drawFoundation,
   drawCompleteBuilding, drawBuilding,
 };
