@@ -11,12 +11,14 @@ export const NATIONS = {
   england: {
     name: 'England', adjective: 'English',
     coat: '#b33a38', trim: '#f0e7d0', skin: '#e0ad82', roof: '#536274',
+    headgear: 'tricorn',
     blurb: 'Disciplined redcoats and 15% more food from cultivated fields.',
     mults: { reload: 0.9, farmRate: 1.15 },
   },
   ottoman: {
     name: 'Ottoman Empire', adjective: 'Ottoman',
     coat: '#2f7768', trim: '#d7b64b', skin: '#c99669', roof: '#397466',
+    headgear: 'turban',
     blurb: 'Swift cavalry and villagers train 10% faster.',
     mults: { cavSpeed: 1.15, villagerTrain: 0.9 },
   },
@@ -38,13 +40,13 @@ export const UNIT_TYPES = {
     cost: { food: 28, gold: 18 }, trainTime: 3.2, pop: 1,
   },
   pike: {
-    label: 'Pikemen', short: 'Pikeman', hp: 48, speed: 45, radius: 5,
+    label: 'Polearm Guards', short: 'Guard', hp: 48, speed: 45, radius: 5,
     range: 0, acquire: 210, reload: 0, dmg: 0, acc: 0,
     meleeDmg: 10, meleeRate: 1.05, chase: 160,
     cost: { food: 24, wood: 16 }, trainTime: 2.8, pop: 1,
   },
   cav: {
-    label: 'Hussars', short: 'Hussar', hp: 68, speed: 108, radius: 7,
+    label: 'Cavalry', short: 'Cavalryman', hp: 68, speed: 108, radius: 7,
     range: 0, acquire: 340, reload: 0, dmg: 0, acc: 0,
     meleeDmg: 12, meleeRate: 0.92, chase: 260,
     cost: { food: 55, gold: 44 }, trainTime: 5.5, pop: 2,

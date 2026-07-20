@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Military art gallery</title>
+  <style>
+    :root { color-scheme: dark; font: 14px/1.4 system-ui, sans-serif; }
+    body { margin: 0; padding: 24px; background: #25271f; color: #f4ead1; }
+    h1 { margin: 0 0 4px; font: 600 24px Georgia, serif; }
+    p { margin: 0 0 20px; color: #cfc7af; }
+    #gallery { display: grid; grid-template-columns: repeat(2, max-content); gap: 18px; }
+    figure { margin: 0; padding: 12px; background: #414936; border: 1px solid #6f7658; box-shadow: 0 8px 24px #0006; }
+    figcaption { margin-bottom: 8px; color: #fff4d5; text-transform: capitalize; }
+    canvas { display: block; background: #697054; }
+  </style>
+</head>
+<body>
+  <h1>Military production art</h1>
+  <p>All trainable military frames at the game's maximum 2.4× camera zoom.</p>
+  <main id="gallery" aria-live="polite"></main>
+  <script type="module" src="./military-art-gallery.js"></script>
+</body>
+</html>
