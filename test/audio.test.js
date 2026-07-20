@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   Soundscape,
   campaignTrackOrder,
+  findNearestBuildingSiege,
   findNearestAudibleEntity,
   findNearestAudibleMatch,
   normalizeAudioSettings,
@@ -117,4 +118,76 @@ test('ambient sound selection finds the closest matching entity without sorting 
   assert.equal(findNearestAudibleEntity(entities, 100, entity => entity.moving)?.id, 3);
   assert.equal(findNearestAudibleEntity(entities, 100, entity => entity.id === 99), null);
   assert.equal(findNearestAudibleMatch(entities, 100, entity => entity.moving).count, 2);
+});
+
+test('siege ambience selects the nearest recently attacked building and counts engaged soldiers', () => {
+  const near = {
+    id: 20, entityKind: 'building', side: 0, x: 500, y: 400, radius: 60,
+    hp: 640, maxHp: 1000, alive: true, complete: true, lastHostileUnitDamageAt: 96,
+  };
+  const far = {
+    id: 21, entityKind: 'building', side: 1, x: 1800, y: 400, radius: 60,
+    hp: 300, maxHp: 1000, alive: true, complete: true, lastHostileUnitDamageAt: 99,
+  };
+  const melee = { alive: true, type: 'pike', side: 1, x: 550, y: 400, radius: 7, range: 0, target: near };
+  const musketeer = { alive: true, type: 'musk', side: 1, x: 650, y: 400, radius: 7, range: 190, orderTarget: near };
+  const distant = { alive: true, type: 'musk', side: 0, x: 1800, y: 400, radius: 7, range: 190, target: far };
+  const world = { time: 100, units: [melee, musketeer, distant] };
+
+  const siege = findNearestBuildingSiege(world, 480);
+  assert.equal(siege.building, near);
+  assert.equal(siege.attackers, 2);
+  assert.ok(Math.abs(siege.severity - 0.36) < 0.001);
+});
+
+test('siege ambience ignores stale, friendly, idle, villager, and out-of-range attacks', () => {
+  const building = {
+    id: 30, entityKind: 'building', side: 0, x: 500, y: 400, radius: 60,
+    hp: 500, maxHp: 1000, alive: true, complete: true, lastHostileUnitDamageAt: 80,
+  };
+  const base = { alive: true, type: 'pike', x: 545, y: 400, radius: 7, range: 0, target: building };
+  const world = {
+    time: 100,
+    units: [
+      { ...base, side: 0 },
+      { ...base, side: 1, type: 'villager' },
+      { ...base, side: 1, target: null },
+      { ...base, side: 1, x: 900 },
+    ],
+  };
+  assert.equal(findNearestBuildingSiege(world, 500), null);
+
+  building.lastHostileUnitDamageAt = 99;
+  world.units.push({ ...base, side: 1, fireT: 0.1 });
+  assert.equal(findNearestBuildingSiege(world, 500)?.attackers, 1);
+});
+
+test('siege sound scheduling is layered, rate-limited, and silenced when muted', () => {
+  const building = {
+    id: 40, entityKind: 'building', side: 0, x: 500, y: 400, radius: 60,
+    hp: 420, maxHp: 1000, alive: true, complete: true, lastHostileUnitDamageAt: 99,
+  };
+  const attacker = {
+    alive: true, type: 'pike', side: 1, x: 545, y: 400,
+    radius: 7, range: 0, target: building,
+  };
+  const world = { time: 100, state: 'running', units: [attacker] };
+  const soundscape = new Soundscape();
+  const calls = [];
+  soundscape.buildingFire = (...args) => calls.push(['fire', ...args]);
+  soundscape.siegeShouts = (...args) => calls.push(['shout', ...args]);
+
+  soundscape.updateSiegeSounds(0.2, world);
+  assert.deepEqual(calls.map(call => call[0]), ['fire']);
+  soundscape.updateSiegeSounds(0.9, world);
+  assert.deepEqual(calls.map(call => call[0]), ['fire', 'fire', 'shout']);
+  soundscape.updateSiegeSounds(0.01, world);
+  assert.deepEqual(calls.map(call => call[0]), ['fire', 'fire', 'shout']);
+  assert.ok(soundscape.siegeFireCooldown > 0.5);
+  assert.ok(soundscape.siegeShoutCooldown > 1.5);
+
+  soundscape.muted = true;
+  soundscape.updateSiegeSounds(10, world);
+  assert.equal(soundscape.activeSiege, null);
+  assert.deepEqual(calls.map(call => call[0]), ['fire', 'fire', 'shout']);
 });

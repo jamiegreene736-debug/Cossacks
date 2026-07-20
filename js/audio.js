@@ -12,6 +12,7 @@ const DEFAULT_AUDIO = Object.freeze({
 });
 const VALID_PAUSE_MUSIC = new Set(['duck', 'mute']);
 const NOTE = 2 ** (1 / 12);
+const SIEGE_DAMAGE_MEMORY = 7;
 
 const TRACKS = Object.freeze({
   greenwich: {
@@ -93,6 +94,43 @@ export function findNearestAudibleEntity(entities, listenerX, predicate) {
   return findNearestAudibleMatch(entities, listenerX, predicate).entity;
 }
 
+export function findNearestBuildingSiege(world, listenerX, damageMemory = SIEGE_DAMAGE_MEMORY) {
+  const time = Number(world?.time) || 0;
+  const sieges = new Map();
+  for (const unit of world?.units || []) {
+    if (!unit.alive || unit.type === 'villager') continue;
+    const target = unit.target?.entityKind === 'building' ? unit.target
+      : !unit.target && unit.orderTarget?.entityKind === 'building' ? unit.orderTarget : null;
+    if (!target?.alive || !target.complete || target.side === unit.side || target.hp >= target.maxHp) continue;
+
+    const recentDamage = Number.isFinite(target.lastHostileUnitDamageAt)
+      && time - target.lastHostileUnitDamageAt <= damageMemory;
+    if (!recentDamage && !(unit.fireT > 0)) continue;
+    const distance = Math.hypot(target.x - unit.x, target.y - unit.y);
+    const unitRadius = Number(unit.radius) || 0;
+    const targetRadius = Number(target.radius) || 0;
+    const engagementRange = unit.range > 0
+      ? unit.range + 24 : unitRadius + targetRadius + 12;
+    if (distance > engagementRange) continue;
+
+    const siege = sieges.get(target) || { building: target, attackers: 0, severity: 0 };
+    siege.attackers++;
+    siege.severity = Math.max(0, Math.min(1, 1 - target.hp / Math.max(1, target.maxHp)));
+    sieges.set(target, siege);
+  }
+
+  let nearest = null;
+  let nearestDistance = Infinity;
+  for (const siege of sieges.values()) {
+    const distance = Math.abs(siege.building.x - listenerX);
+    if (distance < nearestDistance) {
+      nearest = siege;
+      nearestDistance = distance;
+    }
+  }
+  return nearest;
+}
+
 function midiToHz(midi) { return 440 * NOTE ** (midi - 69); }
 function shuffled(values) {
   const result = [...values];
@@ -132,7 +170,10 @@ export class Soundscape {
     this.workCooldown = 0;
     this.movementCooldown = 0;
     this.natureCooldown = 2 + Math.random() * 4;
-    this.fireCooldown = 0;
+    this.siegeScanCooldown = 0;
+    this.siegeFireCooldown = 0;
+    this.siegeShoutCooldown = 0;
+    this.activeSiege = null;
     this.meleeCooldown = 0;
     this.cannonCooldown = 0;
     this.collapseCooldown = 0;
@@ -284,6 +325,11 @@ export class Soundscape {
         music: this.music.gain.value,
         ambience: this.ambience.gain.value,
       } : null,
+      siege: this.activeSiege ? {
+        buildingId: this.activeSiege.building.id,
+        attackers: this.activeSiege.attackers,
+        severity: this.activeSiege.severity,
+      } : null,
     };
   }
 
@@ -311,6 +357,10 @@ export class Soundscape {
     this.scheduledTrack = null;
     this.lastScheduledTrack = null;
     this.musicNextTime = this.ctx.currentTime + 0.12;
+    this.siegeScanCooldown = 0;
+    this.siegeFireCooldown = 0;
+    this.siegeShoutCooldown = 0;
+    this.activeSiege = null;
     this.setPaused(false);
   }
 
@@ -321,6 +371,7 @@ export class Soundscape {
     this.scheduledTrack = null;
     this.lastScheduledTrack = null;
     this.musicNextTime = Infinity;
+    this.activeSiege = null;
     if (this.ctx) {
       const time = this.ctx.currentTime;
       this.ambience.gain.cancelScheduledValues(time);
@@ -496,12 +547,68 @@ export class Soundscape {
     }
   }
 
-  fireCrackle(x, severity) {
+  buildingFire(x, severity, attackers) {
+    if (!this.ctx || this.muted) return;
     const time = this.ctx.currentTime;
     const pan = this.spatialPan(x);
-    const level = this.spatialLevel(x) * Math.max(0.35, severity);
-    this.noiseBurst(time, 0.065, { filter: 2750 + Math.random() * 1700, q: 1.5, volume: 0.08 * level, pan, reverb: 0.13 });
-    if (Math.random() < 0.34) this.tone(74, time, 0.34, { endFrequency: 38, volume: 0.035 * level, pan, reverb: 0.18 });
+    const force = Math.min(1.35, 0.72 + Math.max(0.2, severity) * 0.62
+      + Math.log2(Math.max(1, attackers)) * 0.08);
+    const level = this.spatialLevel(x) * force;
+    const duration = 0.72 + Math.random() * 0.42;
+
+    // Two overlapping noise bands form a continuous flame bed: low turbulent
+    // air below, dry timber hiss above. Short randomized pops keep it alive.
+    this.noiseBurst(time, duration, {
+      filterType: 'lowpass', filter: 460 + Math.random() * 180, q: 0.28,
+      volume: 0.052 * level, pan, reverb: 0.16,
+    });
+    this.noiseBurst(time + 0.025, duration * 0.78, {
+      filter: 1250 + Math.random() * 650, q: 0.52,
+      volume: 0.034 * level, pan, reverb: 0.12,
+    });
+    const crackles = 2 + Math.min(3, Math.floor(severity * 5));
+    for (let index = 0; index < crackles; index++) {
+      const delay = 0.06 + Math.random() * duration * 0.72;
+      this.noiseBurst(time + delay, 0.025 + Math.random() * 0.04, {
+        filter: 2650 + Math.random() * 2100, q: 1.7,
+        volume: (0.042 + Math.random() * 0.035) * level, pan, reverb: 0.11,
+      });
+    }
+    if (Math.random() < 0.42) {
+      this.tone(68 + Math.random() * 22, time, 0.42, {
+        type: 'triangle', endFrequency: 34, volume: 0.027 * level, pan, reverb: 0.2,
+      });
+    }
+  }
+
+  siegeShouts(x, attackers) {
+    if (!this.ctx || this.muted) return;
+    const time = this.ctx.currentTime;
+    const pan = this.spatialPan(x);
+    const level = this.spatialLevel(x) * Math.min(1.2, 0.72 + Math.log2(attackers + 1) * 0.14);
+    const voices = Math.min(3, 1 + Math.floor(Math.log2(Math.max(1, attackers))));
+    for (let index = 0; index < voices; index++) {
+      const delay = index * (0.08 + Math.random() * 0.1);
+      const base = 112 + Math.random() * 58;
+      const duration = 0.25 + Math.random() * 0.22;
+      const voicePan = Math.max(-0.9, Math.min(0.9, pan + (Math.random() - 0.5) * 0.18));
+      // A sawtooth carrier through two vocal-formant bands makes a short,
+      // distant human cry without shipping or repeatedly looping a sample.
+      this.tone(base, time + delay, duration, {
+        type: 'sawtooth', endFrequency: base * (0.68 + Math.random() * 0.18),
+        filterType: 'bandpass', filter: 680 + Math.random() * 260, q: 1.15,
+        volume: 0.028 * level, pan: voicePan, reverb: 0.62,
+      });
+      this.tone(base * 1.015, time + delay, duration * 0.92, {
+        type: 'sawtooth', endFrequency: base * 0.74,
+        filterType: 'bandpass', filter: 1380 + Math.random() * 520, q: 1.45,
+        volume: 0.014 * level, pan: voicePan, reverb: 0.68,
+      });
+      this.noiseBurst(time + delay, duration * 0.7, {
+        filter: 980 + Math.random() * 620, q: 0.72,
+        volume: 0.011 * level, pan: voicePan, reverb: 0.58,
+      });
+    }
   }
 
   buildingPlaced(x) {
@@ -626,19 +733,36 @@ export class Soundscape {
     this.natureCooldown = 5 + Math.random() * 11;
   }
 
-  updateFireSounds(dt, world) {
-    this.fireCooldown -= dt;
-    if (this.fireCooldown > 0 || world?.state !== 'running') return;
-    const damaged = findNearestAudibleMatch(world.buildings, this.listenerX,
-      candidate => candidate.alive && candidate.complete && candidate.hp / candidate.maxHp < 0.55);
-    const building = damaged.entity;
-    if (!building) {
-      this.fireCooldown = 0.45;
+  updateSiegeSounds(dt, world) {
+    this.siegeScanCooldown -= dt;
+    this.siegeFireCooldown -= dt;
+    this.siegeShoutCooldown -= dt;
+    if (world?.state !== 'running' || this.muted) {
+      this.activeSiege = null;
       return;
     }
-    const severity = 1 - building.hp / building.maxHp;
-    this.fireCrackle(building.x, severity);
-    this.fireCooldown = 0.11 + Math.random() * 0.22 / Math.sqrt(Math.min(6, damaged.count));
+
+    if (this.siegeScanCooldown <= 0) {
+      const previousId = this.activeSiege?.building.id;
+      this.activeSiege = findNearestBuildingSiege(world, this.listenerX);
+      this.siegeScanCooldown = 0.18;
+      if (this.activeSiege && this.activeSiege.building.id !== previousId) {
+        this.siegeFireCooldown = 0;
+        this.siegeShoutCooldown = 0.35 + Math.random() * 0.45;
+      }
+    }
+
+    const siege = this.activeSiege;
+    if (!siege?.building.alive) return;
+    if (this.siegeFireCooldown <= 0) {
+      this.buildingFire(siege.building.x, siege.severity, siege.attackers);
+      this.siegeFireCooldown = 0.56 + Math.random() * 0.34;
+    }
+    if (this.siegeShoutCooldown <= 0) {
+      this.siegeShouts(siege.building.x, siege.attackers);
+      this.siegeShoutCooldown = Math.max(1.55, 4.4 / Math.sqrt(Math.min(16, siege.attackers)))
+        + Math.random() * 1.55;
+    }
   }
 
   combatIntensity(world) {
@@ -745,7 +869,7 @@ export class Soundscape {
     }
     this.updateWorkSounds(dt, world);
     this.updateMovementSounds(dt, world);
-    this.updateFireSounds(dt, world);
+    this.updateSiegeSounds(dt, world);
     this.updateNatureSounds(dt, world);
     if (world && this.musicNextTime <= this.ctx.currentTime + 1) {
       this.scheduleNextMusicBar(world);

@@ -396,6 +396,20 @@ test('destroying a Town Center decides the match', () => {
   assert.equal(world.winner, 0);
 });
 
+test('hostile soldiers mark building damage for siege ambience without treating villagers as attackers', () => {
+  const world = makeWorld();
+  const building = world.buildings.find(candidate => candidate.side === 1);
+  const soldier = spawnUnit(world, 0, 'pike', building.x - 40, building.y);
+  const villager = spawnUnit(world, 0, 'villager', building.x - 30, building.y);
+  world.time = 12.5;
+
+  damage(world, building, 10, villager);
+  assert.equal(building.lastHostileUnitDamageAt, undefined);
+  damage(world, building, 10, soldier);
+  assert.equal(building.lastHostileUnitDamageAt, 12.5);
+  assert.equal(building.lastHostileUnitSide, 0);
+});
+
 test('the rival grows an economy and fields an army through normal production', () => {
   const world = makeWorld();
   const playerTownCenter = world.buildings.find(building => building.side === 0);
