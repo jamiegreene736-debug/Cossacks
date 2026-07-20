@@ -80,32 +80,35 @@ export function reserveUnitIds(maxId) {
   if (Number.isFinite(maxId)) nextId = Math.max(nextId, Math.floor(maxId) + 1);
 }
 
-function makeUnit(side, nationKey, type, x, y) {
+export function getUnitRuntimeStats(type) {
   const base = UNIT_TYPES[type];
-  const m = NATIONS[nationKey].mults;
-  let hp = base.hp, speed = base.speed, meleeDmg = base.meleeDmg, reload = base.reload;
-  if (type === 'musk') {
-    if (m.muskHp) hp *= m.muskHp;
-    if (m.reload) reload *= m.reload;
-  } else if (type === 'pike') {
-    if (m.pikeHp) hp *= m.pikeHp;
-  } else if (type === 'cav') {
-    if (m.cavHp) hp *= m.cavHp;
-    if (m.cavSpeed) speed *= m.cavSpeed;
-    if (m.cavDmg) meleeDmg *= m.cavDmg;
-  } else if (type === 'gun') {
-    if (m.gunReload) reload *= m.gunReload;
-  }
+  if (!base) throw new Error(`Unknown unit type: ${type}`);
+  return {
+    maxHp: base.hp,
+    speed: base.speed,
+    range: base.range,
+    minRange: base.minRange || 0,
+    acquire: base.acquire,
+    reloadTime: base.reload,
+    dmg: base.dmg,
+    acc: base.acc,
+    splash: base.splash || 0,
+    meleeDmg: base.meleeDmg,
+    meleeRate: base.meleeRate,
+    chase: base.chase,
+    radius: base.radius,
+  };
+}
+
+function makeUnit(side, nationKey, type, x, y) {
+  const stats = getUnitRuntimeStats(type);
   return {
     id: nextId++, side, type, nation: nationKey,
     x, y, px: x, py: y,
-    hp, maxHp: hp, speed,
-    range: base.range, minRange: base.minRange || 0, acquire: base.acquire,
-    reloadTime: reload, reload: Math.random() * reload,
-    dmg: base.dmg, acc: base.acc, splash: base.splash || 0,
-    meleeDmg, meleeRate: base.meleeRate,
-    meleeCd: Math.random() * base.meleeRate,
-    chase: base.chase, radius: base.radius,
+    ...stats,
+    hp: stats.maxHp,
+    reload: Math.random() * stats.reloadTime,
+    meleeCd: Math.random() * stats.meleeRate,
     morale: 100, charge: 0,
     state: 'idle', alive: true, selected: false,
     orderX: NaN, orderY: NaN, orderTarget: null,

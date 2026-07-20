@@ -173,6 +173,36 @@ test('legacy campaign villagers receive the current explicit-combat balance on r
   assert.equal(restored.acc, UNIT_TYPES.villager.acc);
 });
 
+test('restored military units receive equal current stats while preserving health percentage', () => {
+  const world = createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
+  const units = ['musk', 'pike', 'cav', 'gun'].flatMap((type, index) => [
+    spawnUnit(world, 0, type, 800 + index * 30, 1450),
+    spawnUnit(world, 1, type, 900 + index * 30, 1550),
+  ]);
+  for (const unit of units) {
+    Object.assign(unit, {
+      hp: 25, maxHp: 100, speed: 999, reloadTime: 0.1, reload: 99,
+      dmg: 999, meleeDmg: 999, meleeCd: 99,
+    });
+  }
+  const snapshot = createGameSnapshot(
+    world, new Commander(world, 1), { x: 900, y: 1500, zoom: 1 },
+  );
+
+  const restored = restoreGameSnapshot(snapshot).world.units.filter(unit => unit.type !== 'villager');
+  for (const unit of restored) {
+    const baseline = UNIT_TYPES[unit.type];
+    assert.equal(unit.maxHp, baseline.hp);
+    assert.equal(unit.hp, baseline.hp * 0.25);
+    assert.equal(unit.speed, baseline.speed);
+    assert.equal(unit.reloadTime, baseline.reload);
+    assert.equal(unit.reload, baseline.reload);
+    assert.equal(unit.dmg, baseline.dmg);
+    assert.equal(unit.meleeDmg, baseline.meleeDmg);
+    assert.equal(unit.meleeCd, baseline.meleeRate);
+  }
+});
+
 test('a maximum-scale army remains within a normal localStorage budget', () => {
   const world = createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
   for (let index = 0; index < 2400; index++) {
