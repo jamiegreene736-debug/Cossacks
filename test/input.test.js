@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import { createWorld, spawnUnit } from '../js/sim.js';
+import { isOpenGroundMoveTarget, issueVillagerGroundMove } from '../js/input.js';
+
 class FakeElement extends EventTarget {
   constructor(tagName = 'DIV') {
     super();
@@ -77,4 +80,65 @@ test('building placement supports one-action click-away, secondary-click, and Es
     globalThis.window = previousWindow;
     globalThis.document = previousDocument;
   }
+});
+
+function makeWorld() {
+  return createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
+}
+
+function findOpenPoint(world) {
+  for (let y = 240; y <= 2960; y += 160) {
+    for (let x = 240; x <= 4960; x += 160) {
+      if (isOpenGroundMoveTarget(world, x, y)) return { x, y };
+    }
+  }
+  throw new Error('Expected the generated battlefield to contain open ground.');
+}
+
+test('open-ground move targets exclude units, buildings, and resources', () => {
+  const world = makeWorld();
+  const open = findOpenPoint(world);
+  const building = world.buildings[0];
+  const resource = world.resources[0];
+
+  assert.equal(isOpenGroundMoveTarget(world, open.x, open.y), true);
+  assert.equal(isOpenGroundMoveTarget(world, building.x, building.y), false);
+  assert.equal(isOpenGroundMoveTarget(world, resource.x, resource.y), false);
+});
+
+test('a villager ground click clears work and creates a routed destination flag', () => {
+  const world = makeWorld();
+  const villager = spawnUnit(world, 0, 'villager', 720, 1420);
+  const soldier = spawnUnit(world, 0, 'musk', 735, 1440);
+  const target = findOpenPoint(world);
+  villager.job = { kind: 'gather', targetId: world.resources[0].id };
+
+  assert.equal(issueVillagerGroundMove(world, [villager, soldier], target.x, target.y), true);
+  assert.equal(villager.job, null);
+  assert.equal(villager.state, 'move');
+  assert.equal(soldier.state, 'move');
+  assert.equal(Number.isFinite(villager.orderX), true);
+  assert.equal(Number.isFinite(villager.orderY), true);
+
+  const flag = world.flags.at(-1);
+  assert.equal(flag.kind, 'move');
+  assert.equal(flag.route, true);
+  assert.equal(flag.x, target.x);
+  assert.equal(flag.y, target.y);
+  assert.equal(Number.isFinite(flag.fromX), true);
+  assert.equal(Number.isFinite(flag.fromY), true);
+  assert.ok(flag.life > 1.2);
+});
+
+test('primary ground movement requires a villager and refuses occupied terrain', () => {
+  const world = makeWorld();
+  const villager = spawnUnit(world, 0, 'villager', 720, 1420);
+  const soldier = spawnUnit(world, 0, 'musk', 735, 1440);
+  const open = findOpenPoint(world);
+  const townCenter = world.buildings[0];
+
+  assert.equal(issueVillagerGroundMove(world, [soldier], open.x, open.y), false);
+  assert.equal(issueVillagerGroundMove(world, [villager], townCenter.x, townCenter.y), false);
+  assert.equal(Number.isNaN(villager.orderX), true);
+  assert.equal(world.flags.length, 0);
 });

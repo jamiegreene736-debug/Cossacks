@@ -2,6 +2,7 @@
 // formations, control groups, camera movement and minimap navigation.
 
 import { camera, screenToWorld, clampCamera, minimapToWorld } from './render.js';
+import { WORLD } from './config.js';
 import { applyMoveOrder, applyAttackOrder, haltOrder } from './formations.js';
 import {
   assignBuilders, assignGatherers, clearWorkerJobs, findEntityAt,
@@ -22,9 +23,11 @@ let mmDown = false;
 let mouseX = 0, mouseY = 0, mouseIn = false;
 let inputCanvas = null;
 let resourceHover = null;
+let movePreview = null;
 
 const EDGE = 26;
 const PAN_SPEED = 720;
+const MOVE_FEEDBACK_LIFE = 2.8;
 
 export function initInput(canvas, minimap, worldGetter, cbs) {
   getWorld = worldGetter;
@@ -169,7 +172,13 @@ function finishSelect(additive) {
   if (dx < 6 && dy < 6) {
     const point = screenToWorld(drag.x1, drag.y1);
     const entity = findEntityAt(world, point.x, point.y, 0);
-    if (entity) picked = [entity];
+    if (entity) {
+      picked = [entity];
+    } else if (!additive && issueVillagerGroundMove(world, getSelection(), point.x, point.y, currentFormation)) {
+      callbacks.onSelection?.(getSelection());
+      updateResourceHover(drag.x1, drag.y1);
+      return;
+    }
   } else {
     picked = world.units.filter(unit => unit.alive && unit.side === 0
       && unit.x >= start.x && unit.x <= end.x && unit.y >= start.y && unit.y <= end.y);
@@ -225,10 +234,42 @@ function issueOrder(screenX, screenY) {
   }
 
   if (units.length) {
-    clearWorkerJobs(units);
-    applyMoveOrder(units, point.x, point.y, currentFormation);
-    world.flags.push({ x: point.x, y: point.y, life: 1.2, max: 1.2 });
+    moveUnitsTo(world, units, point.x, point.y, currentFormation);
   }
+}
+
+function moveUnitsTo(world, units, x, y, formation) {
+  if (!units.length) return false;
+  let fromX = 0;
+  let fromY = 0;
+  for (const unit of units) {
+    fromX += unit.x;
+    fromY += unit.y;
+  }
+  fromX /= units.length;
+  fromY /= units.length;
+  clearWorkerJobs(units);
+  applyMoveOrder(units, x, y, formation);
+  world.flags.push({
+    kind: 'move', route: true,
+    x, y, fromX, fromY,
+    life: MOVE_FEEDBACK_LIFE, max: MOVE_FEEDBACK_LIFE,
+  });
+  return true;
+}
+
+export function isOpenGroundMoveTarget(world, x, y) {
+  return Boolean(world)
+    && x >= 0 && x <= WORLD.w && y >= 0 && y <= WORLD.h
+    && !findEntityAt(world, x, y)
+    && !findResourceAt(world, x, y);
+}
+
+export function issueVillagerGroundMove(world, selected, x, y, formation = 'line') {
+  const units = selected.filter(entity => entity.alive && entity.side === 0
+    && entity.entityKind !== 'building');
+  if (!units.some(unit => unit.type === 'villager') || !isOpenGroundMoveTarget(world, x, y)) return false;
+  return moveUnitsTo(world, units, x, y, formation);
 }
 
 function hoverableResourceAt(screenX, screenY) {
@@ -244,7 +285,12 @@ function hoverableResourceAt(screenX, screenY) {
 function updateResourceHover(screenX, screenY) {
   const target = hoverableResourceAt(screenX, screenY);
   resourceHover = target;
+  const selected = getSelection();
+  const point = !target && selected.some(entity => entity.type === 'villager')
+    ? screenToWorld(screenX, screenY) : null;
+  movePreview = point && isOpenGroundMoveTarget(getWorld(), point.x, point.y) ? point : null;
   inputCanvas?.classList.toggle('cursor-gather', Boolean(target));
+  inputCanvas?.classList.toggle('cursor-move', Boolean(movePreview));
   callbacks.onResourceHover?.({
     target,
     workers: getSelection().filter(entity => entity.type === 'villager'),
@@ -254,9 +300,13 @@ function updateResourceHover(screenX, screenY) {
 }
 
 function clearResourceHover() {
-  if (!resourceHover && !inputCanvas?.classList.contains('cursor-gather')) return;
+  if (!resourceHover && !movePreview
+      && !inputCanvas?.classList.contains('cursor-gather')
+      && !inputCanvas?.classList.contains('cursor-move')) return;
   resourceHover = null;
+  movePreview = null;
   inputCanvas?.classList.remove('cursor-gather');
+  inputCanvas?.classList.remove('cursor-move');
   callbacks.onResourceHover?.({ target: null, workers: [], screenX: mouseX, screenY: mouseY });
 }
 
@@ -334,6 +384,7 @@ function placeAt(screenX, screenY, keepPlacing) {
 
 export function getPlacementPreview() { return placement; }
 export function getResourceHoverTarget() { return resourceHover; }
+export function getMovePreview() { return movePreview; }
 
 export function getDragRect() {
   if (!drag) return null;

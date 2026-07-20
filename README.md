@@ -49,6 +49,7 @@ then sends progressively larger, staged formations into battle.
 ## Controls
 
 - **Left-click / drag** — select a building, villager, or regiment
+- **Select villagers, then left-click open ground** — move them to a flagged destination
 - **Select villagers, then hover and left-click a deposit** — gather resources
 - **Right-click** — move, construct, attack, or set a production rally point
 - **Build card, then click terrain** — place a foundation; Shift-click places another

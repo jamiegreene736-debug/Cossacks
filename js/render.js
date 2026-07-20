@@ -264,7 +264,39 @@ function drawResourceHover(target, zoom) {
   ctx.restore();
 }
 
-export function draw(world, alpha, dragRect, placementPreview = null, resourceHover = null) {
+function drawMovePreview(preview, zoom, time) {
+  if (!preview) return;
+  const s = 1 / Math.max(0.62, Math.min(1.45, zoom));
+  const pulse = 0.5 + Math.sin(time * 5.5) * 0.5;
+  ctx.save();
+  ctx.translate(preview.x, preview.y);
+  ctx.scale(s, s);
+  ctx.globalAlpha = 0.58 + pulse * 0.18;
+  ctx.strokeStyle = '#f0e9cf';
+  ctx.lineWidth = 1.4;
+  ctx.setLineDash([4, 4]);
+  ctx.lineDashOffset = -time * 11;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 17 + pulse * 2, 7.5 + pulse, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.strokeStyle = '#d4b860';
+  ctx.lineWidth = 1.8;
+  for (let i = -1; i <= 1; i++) {
+    const x = i * 7;
+    ctx.beginPath();
+    ctx.moveTo(x - 3.5, 1.5);
+    ctx.lineTo(x, -2);
+    ctx.lineTo(x + 3.5, 1.5);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+export function draw(
+  world, alpha, dragRect, placementPreview = null, resourceHover = null, movePreview = null,
+) {
   // margins outside the world
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#1a2112';
@@ -321,6 +353,7 @@ export function draw(world, alpha, dragRect, placementPreview = null, resourceHo
     }
   }
 
+  drawMovePreview(movePreview, z, world.time);
   drawOrderFlags(ctx, world);
 
   // visible-unit list, sorted by y for correct overlap
