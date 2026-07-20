@@ -506,6 +506,12 @@ function updateUnit(world, u, dt) {
   }
 
   const isRanged = u.range > 0;
+  // A normal march is an attack-move for trained troops: nearby hostiles
+  // temporarily take priority, but orderX/orderY stay intact so the formation
+  // resumes its original destination after the skirmish. Villagers keep their
+  // explicit-only militia behavior because their acquire radius is zero.
+  const automaticEngagement = u.acquire > 0 && (isRanged || d <= u.chase);
+  const shouldEngageTarget = Boolean(t && (u.orderTarget === t || automaticEngagement));
   let destX = NaN, destY = NaN, stopAt = 5;
 
   if (t && isRanged && d <= u.range && d >= u.minRange) {
@@ -543,9 +549,14 @@ function updateUnit(world, u, dt) {
   if (u.wallMount) return;
 
   // -- Choose a destination --
-  if (t && !isRanged && (u.orderTarget === t || d <= u.chase)) {
+  if (t && isRanged && shouldEngageTarget && u.minRange > 0 && d < u.minRange) {
+    // Cannon crew under pressure: create enough space to unlimber and fire.
+    const safeDistance = Math.max(1, d);
+    destX = u.x + (u.x - t.x) / safeDistance * 40;
+    destY = u.y + (u.y - t.y) / safeDistance * 40;
+  } else if (t && !isRanged && shouldEngageTarget) {
     destX = t.x; destY = t.y; stopAt = meleeReach - 1;
-  } else if (t && isRanged && u.orderTarget === t) {
+  } else if (t && isRanged && shouldEngageTarget) {
     destX = t.x; destY = t.y; stopAt = Math.max(u.range * 0.85, u.minRange + 20);
   } else if (!Number.isNaN(u.orderX)) {
     if (u.type === 'villager' && u.navigationPath?.length) {
@@ -568,14 +579,6 @@ function updateUnit(world, u, dt) {
     } else {
       destX = u.orderX; destY = u.orderY;
     }
-  } else if (t && isRanged && u.type !== 'gun' && d > u.range) {
-    // No standing order and a foe just out of range: step up and engage,
-    // otherwise lines deadlock staring at each other from 200 paces.
-    destX = t.x; destY = t.y; stopAt = u.range * 0.9;
-  } else if (t && isRanged && u.minRange > 0 && d < u.minRange) {
-    // Cannon too close: crew nudges back.
-    destX = u.x + (u.x - t.x) / d * 40;
-    destY = u.y + (u.y - t.y) / d * 40;
   }
 
   if (!Number.isNaN(destX)) {

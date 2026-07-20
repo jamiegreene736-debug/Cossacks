@@ -36,6 +36,9 @@ npm start
   batches of 5 and 20.
 - Expand population capacity to 1,200 and retain the optimized formation,
   morale, volley, cavalry-charge, artillery, and spatial-grid combat systems.
+- Marching trained soldiers automatically engage nearby enemies, reposition for
+  their weapon, and resume their original route after the skirmish. Villager
+  muskets remain explicit-order only.
 - Destroy the enemy Town Center while protecting your own.
 
 The Ottoman or English opponent uses the same resource costs, construction,

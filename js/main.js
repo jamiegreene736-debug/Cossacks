@@ -20,6 +20,7 @@ import {
   deleteCampaign, getCampaignSummary, loadCampaign, restoreGameSnapshot, saveCampaign,
 } from './savegame.js';
 import { toggleGate } from './fortifications.js';
+import { applyMoveOrder } from './formations.js';
 
 let world = null;
 let commander = null;
@@ -122,6 +123,7 @@ async function startBattle(opts) {
   resetForBattle();
   startBattleRender(world);
   setupLocalBuildingFirePreview(world);
+  setupLocalAutoEngagePreview(world);
   ui.showBattleHud(world);
   ui.setPauseLabel(false);
   ui.setSpeedLabel(1);
@@ -160,6 +162,34 @@ function setupLocalBuildingFirePreview(activeWorld) {
   camera.x = target.x;
   camera.y = target.y;
   camera.zoom = 1.65;
+  clampCamera();
+}
+
+function setupLocalAutoEngagePreview(activeWorld) {
+  const debugName = new URLSearchParams(window.location.search).get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'auto-engage') return;
+
+  const lanes = [
+    { type: 'musk', y: 1380, distance: 240 },
+    { type: 'pike', y: 1460, distance: 150 },
+    { type: 'cav', y: 1540, distance: 250 },
+    { type: 'gun', y: 1650, distance: 700 },
+  ];
+  for (const lane of lanes) {
+    const attacker = spawnUnit(activeWorld, 0, lane.type, 2400, lane.y);
+    const defender = spawnUnit(activeWorld, 1, 'musk', 2400 + lane.distance, lane.y);
+    defender.acquire = 0;
+    defender.reload = 999;
+    defender.speed = 0;
+    attacker.acquireT = 0;
+    attacker.reload = 0;
+    applyMoveOrder([attacker], 2000, lane.y, 'line');
+  }
+  camera.x = 2750;
+  camera.y = 1515;
+  camera.zoom = 1.15;
   clampCamera();
 }
 
@@ -440,6 +470,9 @@ window.__state = () => {
     units: world.sides.map(side => side.alive),
     population: world.sides.map(side => side.population),
     buildings: world.sides.map((_, side) => world.buildings.filter(b => b.alive && b.side === side).length),
+    automaticEngagements: world.units.filter(unit => (
+      unit.alive && unit.type !== 'villager' && unit.target?.alive && !unit.orderTarget
+    )).length,
     resources: world.sides.map(side => Object.fromEntries(Object.entries(side.resources).map(([key, value]) => [key, Math.floor(value)]))),
     incomePerHour: world.sides.map(side => Object.fromEntries(Object.entries(side.incomePerHour).map(([key, value]) => [key, Math.round(value)]))),
   };
