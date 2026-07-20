@@ -10,6 +10,7 @@ import {
   fortificationAxis, fortificationCorners, fortificationFrame,
   fortificationsOverlap, fortificationsShareEndpoint,
   isFortificationType, normalizeFortificationOrientation,
+  nearestFriendlyFortificationEndpoint,
   pointDistanceToFortification, pointInsideFortification,
   resolveWallStairAttachment, snapFortificationPlacement,
 } from './fortifications.js';
@@ -292,9 +293,10 @@ export function validatePlacement(world, side, type, x, y, options = {}) {
   const wallAttachment = Boolean(def.wallAttachment);
   const fieldAttachment = type === 'farm' ? resolveFieldAttachment(world, side, x, y) : null;
   const stairAttachment = wallAttachment ? resolveWallStairAttachment(world, side, x, y) : null;
-  const snapped = fieldAttachment || stairAttachment || (fortification
+  const snapped = fieldAttachment || stairAttachment || (fortification && options.snap !== false
     ? snapFortificationPlacement(world, side, type, x, y, options.orientation)
-    : { x, y, orientation: null, snappedToId: null });
+    : { x, y, orientation: fortification ? normalizeFortificationOrientation(options.orientation) : null,
+      snappedToId: null });
   const candidate = {
     type, x: snapped.x, y: snapped.y, orientation: snapped.orientation,
     wallId: snapped.wallId ?? null,
@@ -375,13 +377,155 @@ function affordableCount(side, cost) {
   return Number.isFinite(count) ? Math.max(0, count) : 0;
 }
 
-export function planWallRun(world, sideIndex, startX, startY, endX, endY, orientation = 'horizontal') {
+function wallPath(points, startX, startY, endX, endY) {
+  const path = [{ x: startX, y: startY }];
+  for (const point of points || []) {
+    if (!Number.isFinite(point?.x) || !Number.isFinite(point?.y)) continue;
+    const previous = path.at(-1);
+    if (Math.hypot(point.x - previous.x, point.y - previous.y) >= 2) path.push({ x: point.x, y: point.y });
+  }
+  const last = path.at(-1);
+  if (Math.hypot(endX - last.x, endY - last.y) >= 2) path.push({ x: endX, y: endY });
+  return path;
+}
+
+function wallPathMetrics(path) {
+  const lengths = [0];
+  for (let index = 1; index < path.length; index++) {
+    lengths.push(lengths.at(-1) + Math.hypot(
+      path[index].x - path[index - 1].x,
+      path[index].y - path[index - 1].y,
+    ));
+  }
+  return { lengths, total: lengths.at(-1) };
+}
+
+function pointAlongWallPath(path, metrics, distance) {
+  if (path.length === 1 || metrics.total < 0.001) return { ...path[0] };
+  const target = Math.max(0, Math.min(metrics.total, distance));
+  let index = 1;
+  while (index < metrics.lengths.length - 1 && metrics.lengths[index] < target) index++;
+  const segmentStart = metrics.lengths[index - 1];
+  const segmentLength = Math.max(0.001, metrics.lengths[index] - segmentStart);
+  const mix = (target - segmentStart) / segmentLength;
+  return {
+    x: path[index - 1].x + (path[index].x - path[index - 1].x) * mix,
+    y: path[index - 1].y + (path[index].y - path[index - 1].y) * mix,
+  };
+}
+
+function shortestAngleDifference(from, to) {
+  let difference = (to - from) % (Math.PI * 2);
+  if (difference <= -Math.PI) difference += Math.PI * 2;
+  if (difference > Math.PI) difference -= Math.PI * 2;
+  return difference;
+}
+
+function initialWallPathAngle(path, fallbackOrientation) {
+  for (let index = 1; index < path.length; index++) {
+    const dx = path[index].x - path[0].x;
+    const dy = path[index].y - path[0].y;
+    if (Math.hypot(dx, dy) >= 2) return Math.atan2(dy, dx);
+  }
+  const axis = fortificationAxis(fallbackOrientation);
+  return Math.atan2(axis.y, axis.x);
+}
+
+function planCurvedWallRun(world, sideIndex, startX, startY, endX, endY,
+  orientation, pathPoints, maxAffordable) {
+  const def = BUILDING_TYPES.wall;
+  const path = wallPath(pathPoints, startX, startY, endX, endY);
+  const metrics = wallPathMetrics(path);
+  const requestedCount = Math.max(1, Math.min(256, Math.floor(metrics.total / def.w) + 1));
+  const limit = Math.min(requestedCount, maxAffordable);
+  const firstAngle = initialWallPathAngle(path, orientation);
+  const firstAxis = { x: Math.cos(firstAngle), y: Math.sin(firstAngle) };
+  const connection = nearestFriendlyFortificationEndpoint(world, sideIndex, startX, startY);
+  const offsetX = connection ? connection.x - startX : 0;
+  const offsetY = connection ? connection.y - startY : 0;
+  let endpoint = connection
+    ? { x: connection.x, y: connection.y }
+    : { x: startX - firstAxis.x * def.w * 0.5, y: startY - firstAxis.y * def.w * 0.5 };
+  let previousAngle = firstAngle;
+  const maxTurn = Math.PI / 8;
+  const previewWorld = { ...world, buildings: world.buildings.slice() };
+  const segments = [];
+  let blockedMessage = '';
+
+  for (let index = 0; index < limit; index++) {
+    const target = pointAlongWallPath(path, metrics, Math.min(metrics.total, (index + 0.5) * def.w));
+    target.x += offsetX;
+    target.y += offsetY;
+    const dx = target.x - endpoint.x;
+    const dy = target.y - endpoint.y;
+    const desiredAngle = Math.hypot(dx, dy) > 2 ? Math.atan2(dy, dx) : previousAngle;
+    const turn = Math.max(-maxTurn, Math.min(maxTurn,
+      shortestAngleDifference(previousAngle, desiredAngle)));
+    const angle = normalizeFortificationOrientation(previousAngle + turn);
+    const axis = fortificationAxis(angle);
+    const x = endpoint.x + axis.x * def.w * 0.5;
+    const y = endpoint.y + axis.y * def.w * 0.5;
+    const validation = validatePlacement(previewWorld, sideIndex, 'wall', x, y, {
+      orientation: angle,
+      snap: false,
+    });
+    if (!validation.ok) {
+      blockedMessage = validation.message;
+      break;
+    }
+    const segment = {
+      type: 'wall', x, y, orientation: angle, valid: true,
+      connectedToId: index === 0 ? connection?.buildingId ?? null : -(index),
+    };
+    segments.push(segment);
+    previewWorld.buildings.push({
+      id: -(index + 1), entityKind: 'building', side: sideIndex,
+      alive: true, complete: false, progress: 0.02, radius: def.radius,
+      ...segment,
+    });
+    endpoint = { x: endpoint.x + axis.x * def.w, y: endpoint.y + axis.y * def.w };
+    previousAngle = angle;
+  }
+
+  if (!segments.length) {
+    return { ok: false, segments, requestedCount, message: blockedMessage || 'No wall section fits there.' };
+  }
+  const cost = { stone: segments.length * def.cost.stone };
+  const limitedByResources = requestedCount > maxAffordable;
+  const limitedByObstacle = segments.length < limit;
+  const suffix = limitedByResources
+    ? ' · run shortened to available stone'
+    : limitedByObstacle ? ` · stopped: ${blockedMessage}` : '';
+  const connectionMessage = connection ? ' · connected to existing wall' : '';
+  return {
+    ok: true,
+    type: 'wall',
+    orientation: segments[0].orientation,
+    segments,
+    requestedCount,
+    cost,
+    limitedByResources,
+    limitedByObstacle,
+    curved: segments.some((segment, index) => index > 0
+      && Math.abs(shortestAngleDifference(segments[index - 1].orientation, segment.orientation)) > 0.01),
+    message: `${segments.length} wall section${segments.length === 1 ? '' : 's'} · ${cost.stone} stone${connectionMessage}${suffix}`,
+  };
+}
+
+export function planWallRun(
+  world, sideIndex, startX, startY, endX, endY, orientation = 'horizontal', pathPoints = null,
+) {
   const def = BUILDING_TYPES.wall;
   const side = world?.sides?.[sideIndex];
   if (!side) return { ok: false, segments: [], message: 'The settlement is unavailable.' };
   const maxAffordable = affordableCount(side, def.cost);
   if (maxAffordable < 1) {
     return { ok: false, segments: [], message: `Need ${formatCost(def.cost)} for a wall section.` };
+  }
+  if (pathPoints) {
+    return planCurvedWallRun(
+      world, sideIndex, startX, startY, endX, endY, orientation, pathPoints, maxAffordable,
+    );
   }
 
   const first = validatePlacement(world, sideIndex, 'wall', startX, startY, { orientation });
@@ -453,11 +597,11 @@ function assignBuildersToRun(builders, buildings) {
 }
 
 export function placeWallRun(
-  world, sideIndex, startX, startY, endX, endY, builders, orientation = 'horizontal',
+  world, sideIndex, startX, startY, endX, endY, builders, orientation = 'horizontal', pathPoints = null,
 ) {
   const validBuilders = builders.filter(unit => unit.alive && unit.side === sideIndex && unit.type === 'villager');
   if (!validBuilders.length) return { ok: false, message: 'Select at least one villager.' };
-  const plan = planWallRun(world, sideIndex, startX, startY, endX, endY, orientation);
+  const plan = planWallRun(world, sideIndex, startX, startY, endX, endY, orientation, pathPoints);
   if (!plan.ok) return plan;
   if (!spendResources(world.sides[sideIndex], plan.cost)) {
     return { ok: false, message: `Need ${formatCost(plan.cost)}.` };

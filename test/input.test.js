@@ -112,7 +112,8 @@ test('building placement supports one-action click-away, secondary-click, and Es
     assert.equal(input.getPlacementPreview()?.segments.length, 3);
     fakeWindow.dispatchEvent(mouseEvent('mouseup', 0, { clientX: 480, clientY: 300 }));
     assert.ok(wallPlanCalls >= 2);
-    assert.equal(placedWallRun?.at(-1), 'diagonal');
+    assert.equal(placedWallRun?.at(-2), 'diagonal');
+    assert.ok(placedWallRun?.at(-1).length >= 2, 'the drag forwards its sampled curve path');
     assert.equal(input.getPlacementPreview(), null);
     input.cancelPlacement();
     assert.equal(placements.filter(placement => placement === null).length, 4);

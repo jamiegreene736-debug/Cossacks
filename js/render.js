@@ -569,7 +569,15 @@ export function draw(
     ctx.restore();
   }
 
-  for (const building of buildingSortBuf) drawBuilding(building, world);
+  // Inner-wall stairs must remain legible even when their ground anchor is
+  // behind the host wall in y-sort order. Paint fortifications first, then the
+  // attached stair volume so the individual treads and landing stay visible.
+  for (const building of buildingSortBuf) {
+    if (building.type !== 'wall_stairs') drawBuilding(building, world);
+  }
+  for (const building of buildingSortBuf) {
+    if (building.type === 'wall_stairs') drawBuilding(building, world);
+  }
 
   drawResourceHover(resourceHover, z);
 

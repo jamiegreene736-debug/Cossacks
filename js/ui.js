@@ -457,10 +457,10 @@ export function setPlacement(active, label = '', type = '', orientation = '') {
     $('placement-message').textContent = type === 'farm'
       ? 'Field: move beside a completed Mill · snaps to an open attached plot · HUD or Esc cancels'
       : BUILDING_TYPES[type]?.wallAttachment
-      ? `${label}: move beside a completed Stone Wall · snaps to the wall face · HUD or Esc cancels`
+      ? `${label}: move beside a completed Stone Wall · snaps only to the settlement-facing inner side · HUD or Esc cancels`
       : BUILDING_TYPES[type]?.fortification
       ? type === 'wall'
-        ? `${label}: press and drag for a continuous affordable run · R turns ${orientation === 'diagonal' ? 'diagonal' : 'straight'} · HUD or Esc cancels`
+        ? `${label}: drag from open ground or an existing wall end · bend while dragging to curve · HUD or Esc cancels`
         : `${label}: click terrain · R turns ${orientation === 'diagonal' ? 'diagonal' : 'straight'} · HUD or Esc cancels`
       : `${label}: click terrain to build · Click any HUD panel to cancel`;
   }

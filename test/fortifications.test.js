@@ -92,6 +92,43 @@ test('dragged wall runs place the longest affordable contiguous prefix', () => {
   assert.deepEqual(worker.job.queue, placed.buildings.slice(1).map(building => building.id));
 });
 
+test('a freehand wall run starts on an existing endpoint and keeps every section connected', () => {
+  const world = makeWorld();
+  world.resources = [];
+  world.sides[0].resources.stone = 1000;
+  const existing = createBuilding(0, 'wall', 900, 1600, true, { orientation: 'horizontal' });
+  world.buildings.push(existing);
+  const existingEnd = fortificationEndpoints(existing)[1];
+  const path = [
+    { x: existingEnd.x + 3, y: existingEnd.y + 2 },
+    { x: 1080, y: 1605 },
+    { x: 1190, y: 1650 },
+    { x: 1290, y: 1740 },
+  ];
+
+  const plan = planWallRun(
+    world, 0, path[0].x, path[0].y, path.at(-1).x, path.at(-1).y, 'horizontal', path,
+  );
+
+  assert.equal(plan.ok, true);
+  assert.ok(plan.segments.length >= 4);
+  const first = { ...plan.segments[0], w: 88, h: 28 };
+  assert.ok(fortificationEndpoints(first).some(endpoint => (
+    Math.hypot(endpoint.x - existingEnd.x, endpoint.y - existingEnd.y) < 0.001
+  )));
+  for (let index = 1; index < plan.segments.length; index++) {
+    const previous = { ...plan.segments[index - 1], w: 88, h: 28 };
+    const current = { ...plan.segments[index], w: 88, h: 28 };
+    const previousEnds = fortificationEndpoints(previous);
+    const currentEnds = fortificationEndpoints(current);
+    assert.ok(previousEnds.some(left => currentEnds.some(right => (
+      Math.hypot(left.x - right.x, left.y - right.y) < 0.001
+    ))), `sections ${index} and ${index + 1} share an exact endpoint`);
+  }
+  assert.equal(plan.curved, true);
+  assert.ok(new Set(plan.segments.map(segment => segment.orientation.toFixed(3))).size > 2);
+});
+
 test('a dragged wall stops before the first obstructed section', () => {
   const world = makeWorld();
   world.sides[0].resources.stone = 500;
@@ -165,6 +202,28 @@ test('stone staircases snap to a completed wall and preserve their attachment', 
   assert.equal(stairs.building.stairSide, 1);
   assert.equal(world.sides[0].resources.stone, 945);
   assert.equal(world.sides[0].resources.wood, 985);
+});
+
+test('wall staircases always snap to the settlement-facing inside face', () => {
+  const world = makeWorld();
+  world.buildings = [];
+  world.resources = [];
+  world.sides[0].resources = { food: 1000, wood: 1000, gold: 1000, stone: 1000 };
+  const townCenter = createBuilding(0, 'town_center', 900, 1780, true);
+  world.sides[0].townCenterId = townCenter.id;
+  const wall = createBuilding(0, 'wall', 900, 1600, true, { orientation: 'horizontal' });
+  world.buildings.push(townCenter, wall);
+
+  const clickedInside = validatePlacement(world, 0, 'wall_stairs', 900, 1635);
+  const clickedAcrossWall = validatePlacement(world, 0, 'wall_stairs', 900, 1585);
+
+  assert.equal(clickedInside.ok, true);
+  assert.equal(clickedAcrossWall.ok, true);
+  assert.equal(clickedInside.stairSide, 1);
+  assert.equal(clickedAcrossWall.stairSide, 1);
+  assert.equal(clickedInside.x, clickedAcrossWall.x);
+  assert.equal(clickedInside.y, clickedAcrossWall.y);
+  assert.ok(clickedInside.y > wall.y, 'the stairs occupy the wall face toward the Town Center');
 });
 
 test('a staircase builder uses an accessible work face instead of stalling against the wall', () => {
