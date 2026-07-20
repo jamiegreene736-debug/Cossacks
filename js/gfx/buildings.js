@@ -3683,19 +3683,196 @@ function bdResourceSprite(res) {
    ------------------------------------------------------------------------ */
 
 /**
- * FOUNDATIONS stay IMMEDIATE-MODE, deliberately, and this is the one place the
- * bake argument does not apply. Progress is continuous, foundations are few
- * (typically 0-6 alive at once) and short-lived (7-20 s), and the entire point
- * of the art is a value that changes every frame. Baking would mean quantising
- * progress into steps and holding ~120 extra canvases for objects that are
- * gone before the player looks twice.
- *
- * PROGRESS IS READ THREE WAYS, so it is legible at any zoom:
- *   1. how far the stone footing has been laid around the perimeter
- *   2. how tall the wall studs have risen
- *   3. whether the roof truss is up (the last quarter)
+ * Construction stays immediate-mode around one cached building blit. The
+ * finished sprite is revealed from the footing upward, so every site inherits
+ * the real building's silhouette, masonry, glazing and nation-specific depth
+ * instead of temporarily becoming the same generic timber hut. Scaffolding,
+ * survey work and material piles remain live because their height and volume
+ * communicate continuous progress without creating a cache per percentage.
  */
-function drawFoundation(building) {
+function bdConstructionSprite(building, nation, worldTime) {
+  const def = BUILDING_TYPES[building.type];
+  if (!def) return null;
+  if (building.type === 'farm') {
+    const stage = building.progress > 0.88 ? 2 : building.progress > 0.58 ? 1 : 0;
+    return bdFarmSprite(def, building.side, stage);
+  }
+
+  const nat = NATIONS[nation] || NATIONS.england;
+  const variants = BD_VARIANTS[building.type] || 1;
+  const variant = ((building.id % variants) + variants) % variants;
+  const animFrame = building.type === 'mill'
+    ? Math.floor(((worldTime || 0) * 0.18 + building.id * 0.17) * BD_MILL_FRAMES) % BD_MILL_FRAMES
+    : 0;
+  return bdBuildingSprite(
+    building.type, def, building.side, nation, nat.roof, variant, 0, animFrame,
+  );
+}
+
+function bdDrawConstructionReveal(g, building, sprite, structureTop, structureBottom) {
+  if (!sprite) return;
+  const p = bdClamp(building.progress, 0, 1);
+  const shellProgress = bdClamp((p - 0.08) / 0.86, 0, 1);
+  if (shellProgress <= 0) return;
+
+  const eased = Math.pow(shellProgress, 0.82);
+  const revealTop = structureBottom - (structureBottom - structureTop) * eased;
+  g.save();
+  g.beginPath();
+  g.rect(sprite.x, revealTop, sprite.w, structureBottom - revealTop + 2.5);
+  g.clip();
+  g.globalAlpha = 0.82 + shellProgress * 0.18;
+  g.drawImage(sprite.c, sprite.x, sprite.y, sprite.w, sprite.h);
+  g.restore();
+
+  // The active lift line hides the hard reveal edge and reads as a wall plate
+  // or masonry working course rather than a sprite wipe.
+  if (shellProgress < 0.985) {
+    const course = bdRamp(
+      building.type === 'tower' || building.type === 'mine' || building.type === 'foundry'
+        ? BMAT.STONE_ROUGH
+        : BMAT.TIMBER,
+    );
+    const half = building.w * (0.28 + shellProgress * 0.13);
+    bdBeam(g, course, -half, revealTop + 0.8, half, revealTop + 0.8, 2.1, { cap: 'butt' });
+  }
+}
+
+function bdDrawConstructionScaffold(g, building, structureTop, structureBottom) {
+  const p = bdClamp(building.progress, 0, 1);
+  const w = building.w;
+  const targetH = Math.max(24, structureBottom - structureTop);
+  const scaffoldFraction = bdClamp(0.20 + p * 1.08, 0.20, 1);
+  const top = structureBottom - targetH * scaffoldFraction;
+  const frontL = -w * 0.46 - 6;
+  const frontR = w * 0.46 + 6;
+  const depth = Math.max(8, w * 0.13);
+  const rise = depth * 0.46;
+  const rearR = frontR + depth;
+  const rearBase = structureBottom - rise;
+  const rearTop = top - rise;
+  const S = bdRamp(bdMix(BT.TRUNK, BMAT.TIMBER, 0.38));
+  const Pl = bdRamp(BMAT.SHINGLE);
+
+  // The receding right-hand scaffold plane gives the site the same oblique
+  // volume as the finished architecture instead of a flat ladder silhouette.
+  bdBeam(g, S, rearR, rearBase + 4, rearR, rearTop, 2.35, { cap: 'butt' });
+  bdBeam(g, S, frontR, structureBottom + 4, rearR, rearBase + 4, 2.0, { cap: 'butt' });
+  bdBeam(g, S, frontR, top, rearR, rearTop, 2.0, { cap: 'butt' });
+  bdBeam(g, S, frontR, structureBottom, rearR, rearTop, 1.65, { cap: 'butt' });
+
+  for (const x of [frontL, frontR]) {
+    bdBeam(g, S, x, structureBottom + 5, x, top, 2.65, { cap: 'butt' });
+  }
+
+  const levels = targetH > 155 ? 4 : targetH > 92 ? 3 : 2;
+  for (let i = 1; i <= levels; i++) {
+    const t = i / (levels + 0.35);
+    const y = structureBottom - (structureBottom - top) * t;
+    const sy = y - rise * t;
+    bdBeam(g, S, frontL - 1, y, frontR + 1, y, 2.05, { cap: 'butt' });
+    bdBeam(g, S, frontR, y, rearR, sy, 1.8, { cap: 'butt' });
+
+    // Planks have a visible upper plane and a dark outer edge. Alternating
+    // widths prevent the repeated horizontal bars from reading as an icon.
+    if (i > 1 || levels === 2) {
+      const inset = i % 2 ? 7 : 13;
+      bdPoly(g, [frontL + inset, y - 2.7, frontR - 2, y - 2.7,
+        rearR - 3, sy - 2.7, frontL + inset + depth * 0.35, y - 2.7 - rise * 0.35],
+      Pl, { litW: 0.65, edge: true, edgeW: 0.38, shadeY: 0.58 });
+      g.fillStyle = Pl.shade;
+      g.fillRect(frontL + inset, y - 0.8, frontR - frontL - inset - 2, 1.35);
+    }
+  }
+
+  // Crossing braces and a working ladder break the boxy grid and provide a
+  // human scale beside tall civic and defensive construction.
+  bdBeam(g, S, frontL, structureBottom - 1, frontR, top + (structureBottom - top) * 0.15,
+    1.75, { cap: 'butt' });
+  if (targetH > 76) {
+    const ladderL = frontL + 8;
+    const ladderR = ladderL + 7;
+    const ladderTop = Math.max(top + 5, structureBottom - Math.min(targetH * 0.72, 82));
+    bdBeam(g, S, ladderL, structureBottom + 2, ladderL + 4, ladderTop, 1.25, { cap: 'butt' });
+    bdBeam(g, S, ladderR, structureBottom + 2, ladderR + 4, ladderTop, 1.25, { cap: 'butt' });
+    const rungs = Math.max(3, Math.floor((structureBottom - ladderTop) / 7));
+    for (let i = 1; i < rungs; i++) {
+      const t = i / rungs;
+      const y = structureBottom + 2 + (ladderTop - structureBottom - 2) * t;
+      bdBeam(g, S, ladderL + 4 * t, y, ladderR + 4 * t, y, 0.9, { cap: 'butt' });
+    }
+  }
+
+  // Rope lashings make the joins read as assembled timber, not clean vector
+  // intersections. They use the canvas stroke rather than more filled boxes.
+  g.save();
+  g.strokeStyle = bdRgba(BT.STRAW_LIGHT, 0.72);
+  g.lineWidth = 0.72;
+  for (const x of [frontL, frontR]) {
+    for (let i = 1; i <= levels; i++) {
+      const t = i / (levels + 0.35);
+      const y = structureBottom - (structureBottom - top) * t;
+      g.beginPath();
+      g.ellipse(x, y, 2.15, 1.05, -0.28, 0, BD_TAU);
+      g.stroke();
+    }
+  }
+  g.restore();
+}
+
+function bdDrawFarmFoundation(g, building, sprite) {
+  const p = bdClamp(building.progress, 0, 1);
+  const w = building.w, h = building.h;
+  const hw = w * 0.5, hh = h * 0.5;
+  const worked = bdClamp((p - 0.04) / 0.90, 0, 1);
+
+  if (sprite && worked > 0) {
+    const left = -hw - 12;
+    const right = hw + 12;
+    g.save();
+    g.beginPath();
+    g.rect(left, sprite.y, (right - left) * worked, sprite.h);
+    g.clip();
+    g.globalAlpha = 0.88 + worked * 0.12;
+    g.drawImage(sprite.c, sprite.x, sprite.y, sprite.w, sprite.h);
+    g.restore();
+  }
+
+  // Survey stakes, taut cord, a staged rail stack and a plough trace describe
+  // field construction without erecting the house-like scaffold farms used to
+  // inherit from every other building.
+  const T = bdRamp(BMAT.TIMBER);
+  const cord = bdRgba(BT.STRAW_LIGHT, 0.72);
+  const stakes = [
+    [-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh],
+  ];
+  for (const [x, y] of stakes) bdBeam(g, T, x, y + 3, x, y - 6, 1.45, { cap: 'butt' });
+  g.save();
+  g.strokeStyle = cord;
+  g.lineWidth = 0.65;
+  g.setLineDash([3, 2]);
+  g.strokeRect(-hw, -hh - 4, w, h + 4);
+  g.restore();
+
+  const railY = hh + 8;
+  const rails = Math.max(1, Math.round((1 - p) * 5));
+  for (let i = 0; i < rails; i++) {
+    bdBeam(g, T, hw * 0.15 - i * 1.2, railY - i * 2.5,
+      hw * 0.80 - i * 0.8, railY - i * 3.0, 2.0, { cap: 'butt' });
+  }
+  if (worked > 0.08 && worked < 0.98) {
+    const x = -hw + w * worked;
+    const I = bdRamp(BMAT.IRON);
+    bdBeam(g, T, x - 7, hh * 0.48, x + 3, hh * 0.28, 1.6, { cap: 'butt' });
+    bdPoly(g, [x + 1, hh * 0.23, x + 9, hh * 0.28, x + 7, hh * 0.35, x - 1, hh * 0.30],
+      I, { litW: 0.5, edge: true });
+  }
+
+  bdBanner(g, -hw + 5, -hh + 6, 20, building.side,
+    { w: 12, h: 9, dir: building.side === 0 ? 1 : -1 });
+}
+
+function drawFoundation(building, nation, worldTime) {
   const w = building.w, h = building.h;
   const p = Math.max(0, Math.min(1, building.progress));
   const hw = w * 0.44, hh = h * 0.40;
@@ -3709,28 +3886,58 @@ function drawFoundation(building) {
   // thresholds. Independent streams keyed off the building id are stable for
   // the object's whole life.
   const base = (building.id * 2654435761) | 0;
-  const rr = bdRnd(base);                    // the earth pad only
+  const rr = bdRnd(base);                    // the earth pad and spoil only
   const rrFoot = bdRnd(base ^ 0x5bf03635);   // footing stones
-  const rrStud = bdRnd(base ^ 0x27d4eb2f);   // wall studs
   const rrPile = bdRnd(base ^ 0x165667b1);   // material pile
   const g = ctx;
+  const sprite = bdConstructionSprite(building, nation, worldTime);
 
-  // --- levelled and pegged-out ground: a scraped earth pad, irregular
-  g.fillStyle = bdRgba(bdLawful(BT.EARTH), 0.85);
-  g.beginPath();
+  if (building.type === 'farm') {
+    bdDrawFarmFoundation(g, building, sprite);
+    return;
+  }
+
+  const structureBottom = yG + 3;
+  const fallbackTop = -(h * 0.5 + (BD_TOP_EXTRA[building.type] || h * 0.75)) + 18;
+  const structureTop = sprite ? Math.min(structureBottom - h * 0.72, sprite.y + 18) : fallbackTop;
+
+  // The shadow and excavation belong below every other form. Drawing the old
+  // contact bed last washed a translucent violet haze over the scaffold and
+  // made the whole site look like a flat cartoon decal.
+  bdContactShadow(g, 0, yG + 3, hw * 1.24, h * 0.34, 0.92);
+
+  // --- levelled and pegged-out ground: a shallow, lit excavation rather than
+  // a single brown fill. The same irregular path is reused for fill and edge.
+  const padPts = [];
   for (let i = 0; i <= 14; i++) {
     const t = i / 14 * BD_TAU;
     const ex = Math.cos(t), ey = Math.sin(t);
     const m = Math.max(Math.abs(ex), Math.abs(ey)) || 1;
     const k = 1 + rr(-0.07, 0.07);
     const px = ex / m * hw * 1.10 * k, py = ey / m * hh * 1.10 * k + yG * 0.18;
-    if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+    padPts.push([px, py]);
   }
-  g.closePath();
-  g.fill();
-  g.strokeStyle = bdRgba(BT.EARTH_DARK, 0.55);
-  g.lineWidth = 1.6;
-  g.stroke();
+  const padPath = function (c) {
+    c.moveTo(padPts[0][0], padPts[0][1]);
+    for (let i = 1; i < padPts.length; i++) c.lineTo(padPts[i][0], padPts[i][1]);
+    c.closePath();
+  };
+  bdLitPath(g, padPath, bdRamp(bdLawful(BT.EARTH)), {
+    bbox: [-hw * 1.14, -hh + yG * 0.18, hw * 2.28, hh * 2.18],
+    fill: bdLawful(BT.EARTH), lineW: 1.55, litW: 1.1, shadeX: 0.72, shadeY: 0.72,
+  });
+  for (let i = 0; i < 22; i++) {
+    const x = rr(-hw * 1.02, hw * 1.02);
+    const y = rr(yG - hh * 0.72, yG + hh * 0.88);
+    const r = rr(0.65, 1.85);
+    g.fillStyle = bdRgba(i % 3 ? BT.EARTH_DARK : BT.ROCK_LIGHT, rr(0.28, 0.52));
+    g.beginPath();
+    g.ellipse(x, y, r, r * rr(0.42, 0.72), rr(-0.35, 0.35), 0, BD_TAU);
+    g.fill();
+  }
+
+  // The detailed real structure rises behind the working course and scaffold.
+  bdDrawConstructionReveal(g, building, sprite, structureTop, structureBottom);
 
   // --- 1. STONE FOOTING, laid progressively clockwise from the up-left corner
   const F = bdRamp(BMAT.STONE_ROUGH);
@@ -3752,59 +3959,12 @@ function drawFoundation(building) {
     const q = perim[i];
     const sw = rrFoot(5, 8), sh = rrFoot(3.4, 5);
     const tone = rrFoot(0, 1);
-    g.fillStyle = tone > 0.6 ? F.lit : tone > 0.3 ? F.base : F.shade;
-    g.fillRect(q[0] - sw / 2, q[1] - sh / 2, sw, sh);
-    g.fillStyle = bdRgba(F.line, 0.6);
-    g.fillRect(q[0] - sw / 2, q[1] + sh / 2 - 1, sw, 1.2);
-    g.fillStyle = bdRgba(F.edge, 0.4);
-    g.fillRect(q[0] - sw / 2, q[1] - sh / 2, sw, 0.9);
+    const stone = tone > 0.6 ? bdRamp(F.lit) : tone > 0.3 ? F : bdRamp(F.shade);
+    bdRect(g, q[0] - sw / 2, q[1] - sh / 2, sw, sh, stone,
+      { litW: 0.55, edge: true, edgeW: 0.32, lineW: 0.55, shadeX: 0.68 });
   }
 
-  // --- 2. WALL STUDS rising out of the footing
-  const T = bdRamp(BMAT.TIMBER);
-  const studH = h * 0.46 * Math.max(0, (p - 0.15) / 0.85);
-  if (studH > 1) {
-    for (let i = -3; i <= 3; i++) {
-      const sx = i * hw * 0.31;
-      bdBeam(g, T, sx, yG, sx, yG - studH * rrStud(0.9, 1.05), 3.0, { cap: 'butt' });
-    }
-    // a sole plate along the base and a rail once they are tall enough
-    g.fillStyle = T.base; g.fillRect(-hw, yG - 2.4, hw * 2, 2.6);
-    g.fillStyle = T.lit;  g.fillRect(-hw, yG - 2.4, hw * 2, 0.9);
-    if (studH > h * 0.20) {
-      g.fillStyle = T.base; g.fillRect(-hw, yG - studH * 0.62, hw * 2, 2.4);
-      g.fillStyle = T.lit;  g.fillRect(-hw, yG - studH * 0.62, hw * 2, 0.8);
-    }
-  }
-
-  // --- 3. ROOF TRUSS, the last quarter. Its appearance is the clearest
-  // possible "nearly done" signal.
-  if (p > 0.72) {
-    const ty = yG - studH;
-    const k = (p - 0.72) / 0.28;
-    bdBeam(g, T, -hw, ty, 0, ty - h * 0.30 * k, 2.8, { cap: 'butt' });
-    bdBeam(g, T, hw, ty, 0, ty - h * 0.30 * k, 2.8, { cap: 'butt' });
-    if (k > 0.5) bdBeam(g, T, -hw * 0.5, ty - h * 0.15 * k, hw * 0.5, ty - h * 0.15 * k, 2.2, { cap: 'butt' });
-  }
-
-  // --- SCAFFOLD: four poles, two ledgers and a diagonal brace. Lashed poles
-  // read as construction at any zoom, and the diagonal is what stops the
-  // structure looking like a finished frame.
-  const S = bdRamp(BT.TRUNK);
-  const poleH = h * 0.62;
-  for (const sx of [-hw - 6, hw + 6]) {
-    bdBeam(g, S, sx, yG + 4, sx, yG - poleH, 2.6, { cap: 'butt' });
-  }
-  for (let i = 0; i < 2; i++) {
-    const ly = yG - poleH * (0.42 + i * 0.40);
-    g.fillStyle = S.base; g.fillRect(-hw - 7, ly, hw * 2 + 14, 2.2);
-    g.fillStyle = S.lit;  g.fillRect(-hw - 7, ly, hw * 2 + 14, 0.8);
-  }
-  bdBeam(g, S, -hw - 6, yG - 2, hw + 6, yG - poleH * 0.82, 2.0, { cap: 'butt' });
-  // a plank walkway on the upper ledger
-  const Pl = bdRamp(BMAT.SHINGLE);
-  g.fillStyle = Pl.base; g.fillRect(-hw * 0.7, yG - poleH * 0.82 - 2.4, hw * 1.4, 2.6);
-  g.fillStyle = Pl.lit;  g.fillRect(-hw * 0.7, yG - poleH * 0.82 - 2.4, hw * 1.4, 0.9);
+  bdDrawConstructionScaffold(g, building, structureTop, structureBottom);
 
   // --- MATERIAL PILE beside the site, shrinking as the work is consumed
   const remain = 1 - p;
@@ -3812,19 +3972,27 @@ function drawFoundation(building) {
     const px = -hw - 20, py = yG + 6;
     const rows = Math.max(1, Math.round(remain * 3));
     bdLogPile(g, px, py, 16 * (0.5 + remain * 0.5), rows, building.id * 13);
-    for (let i = 0; i < Math.round(remain * 5); i++) {
-      g.fillStyle = i % 2 ? F.base : F.lit;
-      g.fillRect(px + 12 + rrPile(-3, 3), py - 3 - i * 3.4, 12, 3.2);
+    const masonry = building.type === 'tower' || building.type === 'mine'
+      || building.type === 'foundry' || building.type === 'town_center';
+    const pieces = Math.max(1, Math.round(remain * (masonry ? 9 : 5)));
+    for (let i = 0; i < pieces; i++) {
+      const x = px + 13 + (i % 3) * 5.2 + rrPile(-1.2, 1.2);
+      const y = py - 2 - Math.floor(i / 3) * 4.0 + rrPile(-0.5, 0.5);
+      if (masonry) {
+        bdRect(g, x, y, rrPile(5.2, 7.2), rrPile(3.1, 4.4), F,
+          { litW: 0.45, edge: true, edgeW: 0.3, lineW: 0.5 });
+      } else {
+        bdBeam(g, bdRamp(BMAT.SHINGLE), x, y, x + rrPile(9, 14), y - rrPile(0, 1.5),
+          2.4, { cap: 'butt' });
+      }
     }
   }
 
   // --- SIDE-COLOUR RIBBON on the up-left scaffold pole. A site under
   // construction is at its most vulnerable, so whose it is must be unmissable.
-  bdBanner(g, -hw - 6, yG - poleH, h * 0.16, building.side,
+  const bannerTop = Math.max(structureTop, structureBottom - (structureBottom - structureTop) * bdClamp(0.20 + p * 1.08, 0.20, 1));
+  bdBanner(g, -w * 0.46 - 6, bannerTop, h * 0.16, building.side,
     { w: 11, h: 8, dir: building.side === 0 ? -1 : 1 });
-
-  // --- soft bed so the site does not float
-  bdContactShadow(g, 0, yG + 2, hw * 1.15, h * 0.30, 0.9);
 }
 
 /** FARMS — one blit of the parcel at its current crop stage. */
@@ -4029,6 +4197,7 @@ function bdBarColour(table, frac) {
 function drawBuilding(building, world) {
   ctx.save();
   ctx.translate(building.x, building.y);
+  const nation = world.sides[building.side].nation;
 
   if (building.selected) {
     ctx.strokeStyle = '#E8DCA8';
@@ -4038,8 +4207,8 @@ function drawBuilding(building, world) {
     ctx.stroke();
   }
 
-  if (building.complete) drawCompleteBuilding(building, world.sides[building.side].nation, world.time);
-  else drawFoundation(building);
+  if (building.complete) drawCompleteBuilding(building, nation, world.time);
+  else drawFoundation(building, nation, world.time);
 
   if (building.selected || building.hp < building.maxHp || !building.complete) {
     const width = Math.min(90, building.w * 0.75);
