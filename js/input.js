@@ -15,6 +15,10 @@ import {
   isFortificationType, rotateFortificationOrientation,
 } from './fortifications.js';
 import { assignVillagerPath, clearVillagerPath } from './navigation.js';
+import {
+  beginThreeFingerViewGesture, createViewGestureState, endThreeFingerViewGesture,
+  readThreeFingerViewGesture, readTrackpadViewGesture,
+} from './view-gesture.js';
 
 let getWorld = () => null;
 let callbacks = {};
@@ -47,6 +51,7 @@ export function initInput(canvas, minimap, worldGetter, cbs) {
   getWorld = worldGetter;
   callbacks = cbs || {};
   inputCanvas = canvas;
+  const viewGesture = createViewGestureState();
   canvas.addEventListener('contextmenu', event => event.preventDefault());
 
   canvas.addEventListener('mousedown', event => {
@@ -131,6 +136,16 @@ export function initInput(canvas, minimap, worldGetter, cbs) {
   canvas.addEventListener('wheel', event => {
     event.preventDefault();
     if (!getWorld()) return;
+    const swipe = readTrackpadViewGesture(
+      viewGesture,
+      event,
+      event.timeStamp,
+      window.innerWidth,
+    );
+    if (swipe.handled) {
+      if (swipe.direction) callbacks.onView?.(swipe.direction);
+      return;
+    }
     const before = screenToWorld(event.clientX, event.clientY);
     camera.zoom = Math.max(0.42, Math.min(2.5, camera.zoom * Math.exp(-event.deltaY * 0.0013)));
     const after = screenToWorld(event.clientX, event.clientY);
@@ -138,6 +153,22 @@ export function initInput(canvas, minimap, worldGetter, cbs) {
     camera.y += before.y - after.y;
     clampCamera();
   }, { passive: false });
+
+  canvas.addEventListener('touchstart', event => {
+    if (!getWorld() || !beginThreeFingerViewGesture(viewGesture, event.touches)) return;
+    event.preventDefault();
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', event => {
+    const swipe = readThreeFingerViewGesture(viewGesture, event.touches);
+    if (!swipe.handled) return;
+    event.preventDefault();
+    if (swipe.direction) callbacks.onView?.(swipe.direction);
+  }, { passive: false });
+
+  const finishTouchGesture = () => endThreeFingerViewGesture(viewGesture);
+  canvas.addEventListener('touchend', finishTouchGesture);
+  canvas.addEventListener('touchcancel', finishTouchGesture);
 
   minimap.addEventListener('mousedown', event => {
     if (event.button === 0) { mmDown = true; minimapJump(event); }

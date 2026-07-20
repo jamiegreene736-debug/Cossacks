@@ -81,6 +81,7 @@ does not alter unit combat stats or give the CPU free resources.
 - **H** — halt; **P** — pause; **F** — select all military units
 - **Ctrl/Command+1–9** — set a control group; **1–9** — recall it
 - **WASD / arrows / screen edge** — pan; **wheel** — zoom; **minimap** — jump
+- **Three-finger / horizontal trackpad swipe over the battlefield** — turn to the opposing camera view; one swipe produces one turn and preserves Q/E and HUD-arrow alternatives
 
 ## Development
 

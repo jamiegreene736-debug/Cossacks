@@ -23,7 +23,7 @@ html, body {
 
 button, select { font: inherit; }
 #app { position: relative; width: 100vw; height: 100vh; }
-#game { position: absolute; inset: 0; display: block; cursor: crosshair; }
+#game { position: absolute; inset: 0; display: block; cursor: crosshair; touch-action: none; }
 #game.cursor-gather { cursor: pointer; }
 #game.cursor-build {
   cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M7 27L21 13' stroke='%23181310' stroke-width='7' stroke-linecap='round'/%3E%3Cpath d='M7 27L21 13' stroke='%23b8843f' stroke-width='3.5' stroke-linecap='round'/%3E%3Cpath d='M15 6l5-3 9 9-3 5-5-5-4 4-4-4 4-4z' fill='%23181310'/%3E%3Cpath d='M17 7l3-2 7 7-2 3-4-5-4 4-2-2 4-4z' fill='%23e4c66d'/%3E%3C/svg%3E") 7 27, crosshair;
