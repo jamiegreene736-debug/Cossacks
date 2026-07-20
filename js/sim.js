@@ -394,6 +394,37 @@ function impactTorch(world, projectile) {
   damage(world, target, projectile.dmg, attacker);
 }
 
+function impactTowerShot(world, projectile) {
+  flash(world, projectile.tx, projectile.ty - 2, true);
+  smokePuff(world, projectile.tx, projectile.ty - 4, false);
+  smokePuff(world, projectile.tx + 5, projectile.ty - 7, false);
+  for (let index = 0; index < 7; index++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 20 + Math.random() * 42;
+    spawnParticle(world, {
+      kind: 'debris', x: projectile.tx, y: projectile.ty - 2,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed * 0.48 - 18 - Math.random() * 22,
+      life: 0, max: 0.42 + Math.random() * 0.42,
+      size: 1.7 + Math.random() * 1.9, grow: 0, v: index, st: 0,
+    });
+  }
+  for (let index = 0; index < 2; index++) {
+    spawnParticle(world, {
+      kind: 'dust', x: projectile.tx + (index ? 5 : -4), y: projectile.ty,
+      vx: (index ? 1 : -1) * (8 + Math.random() * 8), vy: -5 - Math.random() * 7,
+      life: 0, max: 0.48 + Math.random() * 0.26,
+      size: 4.8 + Math.random() * 2.2, grow: 0.8, v: index, st: 0,
+    });
+  }
+  sfx.towerImpact(projectile.tx);
+
+  const target = projectile.target;
+  if (projectile.hit === false || !target?.alive || target.entityKind === 'building') return;
+  const attacker = world.buildings.find(building => building.id === projectile.attackerId) || null;
+  damage(world, target, projectile.dmg, attacker);
+}
+
 function fireCannon(world, u, t, d) {
   u.reload = u.reloadTime * (0.85 + Math.random() * 0.3);
   u.fireT = 0.25;
@@ -733,7 +764,7 @@ export function step(world, dt) {
     p.x = p.sx + (p.tx - p.sx) * k;
     p.y = p.sy + (p.ty - p.sy) * k - Math.sin(Math.PI * k) * p.arc;
     if (p.t >= p.dur) {
-      if (p.kind === 'tower') flash(world, p.tx, p.ty, false);
+      if (p.kind === 'tower') impactTowerShot(world, p);
       else if (p.kind === 'torch') impactTorch(world, p);
       else explodeShell(world, p);
       world.projectiles.splice(i, 1);

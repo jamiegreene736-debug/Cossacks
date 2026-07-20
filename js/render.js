@@ -34,7 +34,7 @@ import { setBuildingRefs, bdResetCaches, drawResourceNode, drawFarm,
          drawBuildingCollapse } from './gfx/buildings.js';
 import { setCompositeRefs, setCompositeView, setCompositeTrampleLayer,
          buildCompositeTextures, buildMinimapBase, drawLightingPass,
-         drawSelection, drawHealthBars, drawOrderFlags, drawDragRect,
+         drawTowerAttackRanges, drawSelection, drawHealthBars, drawOrderFlags, drawDragRect,
          drawMinimap } from './gfx/composite.js';
 
 const SCALE = 4; // sprite atlas oversampling — 4 keeps figures crisp at 2.4x zoom
@@ -707,6 +707,7 @@ export function draw(
   // effect-field decay and drift for the frame; cost is independent of unit
   // count.
   drawSmokeUnder(ctx, world, alpha);
+  drawTowerAttackRanges(ctx, world.buildings, world.time);
 
   for (const resource of world.resources) {
     if (resource.alive && resource.amount > 0

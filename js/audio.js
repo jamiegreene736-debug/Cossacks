@@ -554,8 +554,30 @@ export class Soundscape {
     const time = this.ctx.currentTime;
     const pan = this.spatialPan(x);
     const level = this.spatialLevel(x);
-    this.noiseBurst(time, 0.05, { filter: 2100, volume: 0.13 * level, pan, reverb: 0.2 });
-    this.tone(118, time, 0.12, { endFrequency: 55, volume: 0.05 * level, pan, reverb: 0.12 });
+    this.noiseBurst(time, 0.27, {
+      filterType: 'lowpass', filter: 920, q: 0.45,
+      volume: 0.31 * level, pan, reverb: 0.26,
+    });
+    this.tone(84, time, 0.44, {
+      endFrequency: 32, volume: 0.24 * level, pan, reverb: 0.29,
+    });
+    this.noiseBurst(time + 0.11, 0.36, {
+      filter: 320, q: 0.35, volume: 0.075 * level, pan, reverb: 0.48,
+    });
+  }
+
+  towerImpact(x) {
+    if (!this.ctx || this.muted) return;
+    const time = this.ctx.currentTime;
+    const pan = this.spatialPan(x);
+    const level = this.spatialLevel(x);
+    this.noiseBurst(time, 0.16, {
+      filterType: 'lowpass', filter: 1250,
+      volume: 0.23 * level, pan, reverb: 0.18,
+    });
+    this.tone(62, time, 0.28, {
+      endFrequency: 34, volume: 0.14 * level, pan, reverb: 0.20,
+    });
   }
 
   work(kind, x) {
