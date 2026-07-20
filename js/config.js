@@ -11,7 +11,7 @@ export const NATIONS = {
   england: {
     name: 'England', adjective: 'English',
     coat: '#b33a38', trim: '#f0e7d0', skin: '#e0ad82', roof: '#536274',
-    blurb: 'Disciplined redcoats and 15% more food from farms.',
+    blurb: 'Disciplined redcoats and 15% more food from cultivated fields.',
     mults: { reload: 0.9, farmRate: 1.15 },
   },
   ottoman: {
@@ -69,14 +69,14 @@ export const BUILDING_TYPES = {
     cost: { wood: 70 }, popCap: 40, hotkey: 'H',
   },
   farm: {
-    label: 'Farm', description: 'Renewable food for assigned villagers.',
-    w: 90, h: 72, radius: 48, hp: 420, buildTime: 7,
+    label: 'Field', description: 'A cultivated plot attached to a completed Mill. Villagers work within its crop rows.',
+    w: 108, h: 82, radius: 52, hp: 420, buildTime: 7,
     cost: { wood: 55 }, resource: 'food', amount: 5000, hotkey: 'F',
   },
   mill: {
-    label: 'Mill', description: 'Employs food workers and boosts nearby food gathering by 20%.',
+    label: 'Mill', description: 'Anchors up to eight attached fields and boosts their food gathering by 20%.',
     w: 70, h: 60, radius: 38, hp: 900, buildTime: 11,
-    cost: { wood: 120 }, boost: 'food', workResources: ['food'], hotkey: 'M',
+    cost: { wood: 120 }, boost: 'food', hotkey: 'M',
   },
   lumber_camp: {
     label: 'Lumber Camp', description: 'Employs woodcutters and boosts nearby wood gathering by 20%.',

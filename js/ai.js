@@ -5,7 +5,7 @@ import { WORLD, BUILDING_TYPES } from './config.js';
 import { applyMoveOrder, applyAttackOrder } from './formations.js';
 import {
   assignBuilders, assignGatherers, buildingsOf, findNearestResource, getTownCenter,
-  placeBuilding, queueUnit, setRallyPoint, unitsOf,
+  getMillFieldSlots, placeBuilding, queueUnit, setRallyPoint, unitsOf,
 } from './economy.js';
 
 const MILITARY_TYPES = new Set(['musk', 'pike', 'cav', 'gun']);
@@ -104,10 +104,22 @@ export class Commander {
     if (builders.length === 0) return false;
     const tc = getTownCenter(this.world, this.side);
     if (!tc) return false;
+    if (type === 'farm') {
+      const mills = buildingsOf(this.world, this.side, 'mill', true);
+      for (const mill of mills) {
+        for (const slot of getMillFieldSlots(mill)) {
+          const result = placeBuilding(
+            this.world, this.side, type, slot.x, slot.y, builders, { ai: true },
+          );
+          if (result.ok) return true;
+          if (result.message?.startsWith('Need ')) return false;
+        }
+      }
+      return false;
+    }
     const dir = this.side === 0 ? 1 : -1;
     const plans = {
       house: [[20, -185], [20, 185], [125, -205], [125, 205], [245, -260], [245, 275]],
-      farm: [[175, -150], [175, 150], [285, -170], [285, 170], [400, -95], [400, 95]],
       mill: [[145, -325]],
       lumber_camp: [[235, 75]],
       mine: [[245, 350]],

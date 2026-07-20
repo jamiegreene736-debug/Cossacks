@@ -4,7 +4,7 @@
 
 import { Commander } from './ai.js';
 import { NATIONS } from './config.js';
-import { reserveEntityIds } from './economy.js';
+import { repairFieldAttachments, reserveEntityIds } from './economy.js';
 import { createWorld, reserveUnitIds } from './sim.js';
 
 export const SAVE_KEY = 'empires1700.campaign.v1';
@@ -133,6 +133,7 @@ export function restoreGameSnapshot(snapshot) {
   world.projectiles = clone(data.projectiles || []);
   world.active = [];
   world.state = 'paused';
+  repairFieldAttachments(world);
 
   const entities = new Map();
   for (const entity of [...world.units, ...world.buildings, ...world.resources]) entities.set(entity.id, entity);

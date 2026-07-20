@@ -137,6 +137,12 @@ button, select { font: inherit; }
   border: 1px solid #5b5540; border-radius: 3px; cursor: pointer;
 }
 .command-card:hover { border-color: #a69357; background: linear-gradient(#4a462d, #343221); }
+.command-card:disabled {
+  opacity: .48; filter: saturate(.55); cursor: not-allowed;
+}
+.command-card:disabled:hover {
+  border-color: #5b5540; background: linear-gradient(#393827, #29291d);
+}
 .command-icon {
   flex: 0 0 30px; display: grid; place-items: center; height: 32px;
   color: #e6d28c; background: #1f2118; border: 1px solid #4b4937; border-radius: 2px; font-size: 20px;

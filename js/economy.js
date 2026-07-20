@@ -17,6 +17,24 @@ import { sfx } from './audio.js';
 
 let nextEntityId = 100000;
 
+export const MILL_FIELD_OFFSETS = Object.freeze([
+  Object.freeze({ x: 0, y: -122 }),
+  Object.freeze({ x: 126, y: -82 }),
+  Object.freeze({ x: 132, y: 48 }),
+  Object.freeze({ x: 76, y: 146 }),
+  Object.freeze({ x: -76, y: 146 }),
+  Object.freeze({ x: -132, y: 48 }),
+  Object.freeze({ x: -126, y: -82 }),
+  Object.freeze({ x: 0, y: 122 }),
+]);
+const MILL_FIELD_PICK_RADIUS = 340;
+
+const FIELD_WORK_POSITIONS = Object.freeze([
+  [-0.34, 0.05], [-0.10, 0.06], [0.14, 0.08], [0.36, 0.10],
+  [-0.36, 0.18], [-0.12, 0.17], [0.12, 0.19], [0.35, 0.20],
+  [-0.30, 0.30], [-0.08, 0.28], [0.16, 0.31], [0.34, 0.27],
+]);
+
 export function reserveEntityIds(maxId) {
   if (Number.isFinite(maxId)) nextEntityId = Math.max(nextEntityId, Math.floor(maxId) + 1);
 }
@@ -63,6 +81,10 @@ export function createBuilding(side, type, x, y, complete = false, options = {})
   };
   if (def.fortification) {
     building.orientation = normalizeFortificationOrientation(options.orientation);
+  }
+  if (type === 'farm') {
+    building.millId = Number.isFinite(options.millId) ? options.millId : null;
+    building.fieldSlot = Number.isInteger(options.fieldSlot) ? options.fieldSlot : null;
   }
   return building;
 }
@@ -143,21 +165,137 @@ export function getTownCenter(world, side) {
   return world.buildings.find(b => b.id === world.sides[side].townCenterId && b.alive) || null;
 }
 
+export function getMillFieldSlots(mill) {
+  if (!mill) return [];
+  return MILL_FIELD_OFFSETS.map((offset, fieldSlot) => ({
+    x: mill.x + offset.x,
+    y: mill.y + offset.y,
+    millId: mill.id,
+    fieldSlot,
+  }));
+}
+
+function completedMillForField(world, field) {
+  if (!Number.isFinite(field?.millId)) return null;
+  return world.buildings.find(building => building.id === field.millId
+    && building.alive && building.complete && building.side === field.side
+    && building.type === 'mill') || null;
+}
+
+export function isOperationalField(world, field) {
+  return Boolean(field?.alive && field.complete && field.type === 'farm'
+    && completedMillForField(world, field));
+}
+
+export function getFieldWorkPoint(field, workerId) {
+  const index = Math.abs(Number(workerId) || 0) % FIELD_WORK_POSITIONS.length;
+  const [nx, ny] = FIELD_WORK_POSITIONS[index];
+  const angle = (field?.fieldSlot || 0) % 2 ? 0.12 : -0.18;
+  const lx = nx * (field?.w || BUILDING_TYPES.farm.w);
+  const ly = ny * (field?.h || BUILDING_TYPES.farm.h);
+  return {
+    x: field.x + lx * Math.cos(angle) - ly * Math.sin(angle),
+    y: field.y + lx * Math.sin(angle) + ly * Math.cos(angle),
+  };
+}
+
+export function getFieldAttachmentStatus(world, side) {
+  const mills = world.buildings.filter(building => building.alive && building.complete
+    && building.side === side && building.type === 'mill');
+  if (!mills.length) return { ok: false, message: 'Build and complete a Mill first.' };
+  const occupied = new Set(world.buildings.filter(building => building.alive
+    && building.side === side && building.type === 'farm' && Number.isFinite(building.millId)
+    && Number.isInteger(building.fieldSlot))
+    .map(building => `${building.millId}:${building.fieldSlot}`));
+  const openSlots = mills.flatMap(mill => getMillFieldSlots(mill)
+    .filter(slot => !occupied.has(`${slot.millId}:${slot.fieldSlot}`)));
+  return openSlots.length
+    ? { ok: true, message: `${openSlots.length} field plot${openSlots.length === 1 ? '' : 's'} available.`, openSlots }
+    : { ok: false, message: 'Every Mill is full. Build another Mill for more fields.' };
+}
+
+/**
+ * Upgrade pre-link campaign saves to the mill-owned field model. Existing
+ * valid links are preserved; legacy fields are moved to the nearest free plot
+ * so resumed campaigns obey the same geometry as newly placed fields.
+ */
+export function repairFieldAttachments(world) {
+  const mills = new Map(world.buildings.filter(building => building.alive && building.complete
+    && building.type === 'mill').map(building => [building.id, building]));
+  const occupied = new Set();
+  const pending = [];
+  const fields = world.buildings.filter(building => building.alive && building.type === 'farm')
+    .sort((a, b) => a.id - b.id);
+
+  for (const field of fields) {
+    const mill = mills.get(field.millId);
+    const slotValid = Number.isInteger(field.fieldSlot)
+      && field.fieldSlot >= 0 && field.fieldSlot < MILL_FIELD_OFFSETS.length;
+    const key = `${field.millId}:${field.fieldSlot}`;
+    if (mill?.side === field.side && slotValid && !occupied.has(key)) occupied.add(key);
+    else pending.push(field);
+  }
+
+  let repaired = 0;
+  for (const field of pending) {
+    const candidates = [...mills.values()].filter(mill => mill.side === field.side)
+      .flatMap(mill => getMillFieldSlots(mill))
+      .filter(slot => !occupied.has(`${slot.millId}:${slot.fieldSlot}`))
+      .sort((a, b) => Math.hypot(field.x - a.x, field.y - a.y)
+        - Math.hypot(field.x - b.x, field.y - b.y));
+    const slot = candidates[0];
+    if (!slot) {
+      field.millId = null;
+      field.fieldSlot = null;
+      continue;
+    }
+    field.x = slot.x;
+    field.y = slot.y;
+    field.millId = slot.millId;
+    field.fieldSlot = slot.fieldSlot;
+    occupied.add(`${slot.millId}:${slot.fieldSlot}`);
+    repaired++;
+  }
+  return repaired;
+}
+
+function resolveFieldAttachment(world, side, x, y) {
+  const status = getFieldAttachmentStatus(world, side);
+  if (!status.ok) return { error: status.message, x, y, millId: null, fieldSlot: null };
+  const nearbyMills = world.buildings.filter(building => building.alive && building.complete
+    && building.side === side && building.type === 'mill'
+    && Math.hypot(x - building.x, y - building.y) <= MILL_FIELD_PICK_RADIUS);
+  if (!nearbyMills.length) {
+    return { error: 'Place the field beside a completed Mill.', x, y, millId: null, fieldSlot: null };
+  }
+  const nearbyIds = new Set(nearbyMills.map(mill => mill.id));
+  const slot = status.openSlots.filter(candidate => nearbyIds.has(candidate.millId))
+    .sort((a, b) => Math.hypot(x - a.x, y - a.y) - Math.hypot(x - b.x, y - b.y))[0];
+  if (!slot) {
+    return { error: 'This Mill is full. Build another Mill for more fields.', x, y, millId: null, fieldSlot: null };
+  }
+  return slot;
+}
+
 export function validatePlacement(world, side, type, x, y, options = {}) {
   const def = BUILDING_TYPES[type];
   if (!def || type === 'town_center') return { ok: false, message: 'That building cannot be placed.' };
   const fortification = isFortificationType(type);
-  const snapped = fortification
+  const fieldAttachment = type === 'farm' ? resolveFieldAttachment(world, side, x, y) : null;
+  const snapped = fieldAttachment || (fortification
     ? snapFortificationPlacement(world, side, type, x, y, options.orientation)
-    : { x, y, orientation: null, snappedToId: null };
+    : { x, y, orientation: null, snappedToId: null });
   const candidate = { type, x: snapped.x, y: snapped.y, orientation: snapped.orientation };
   const placement = {
     x: candidate.x,
     y: candidate.y,
     orientation: candidate.orientation,
     snappedToId: snapped.snappedToId,
+    millId: snapped.millId ?? null,
+    fieldSlot: snapped.fieldSlot ?? null,
   };
   const reject = message => ({ ok: false, message, ...placement });
+  if (fieldAttachment?.error) return reject(fieldAttachment.error);
   const outsideMap = fortification
     ? fortificationCorners(type, candidate.x, candidate.y, candidate.orientation, 35)
       .some(point => point.x < 0 || point.y < 0 || point.x > WORLD.w || point.y > WORLD.h)
@@ -219,11 +357,18 @@ export function placeBuilding(world, sideIndex, type, x, y, builders, options = 
     placement.x ?? x,
     placement.y ?? y,
     false,
-    { orientation: placement.orientation },
+    {
+      orientation: placement.orientation,
+      millId: placement.millId,
+      fieldSlot: placement.fieldSlot,
+    },
   );
   world.buildings.push(building);
   assignBuilders(world, validBuilders, building);
-  return { ok: true, building, message: `${def.label} foundation placed.` };
+  const message = type === 'farm'
+    ? `Field attached to Mill · plot ${building.fieldSlot + 1} of ${MILL_FIELD_OFFSETS.length}.`
+    : `${def.label} foundation placed.`;
+  return { ok: true, building, message };
 }
 
 export function assignBuilders(world, workers, building) {
@@ -241,8 +386,7 @@ export function assignBuilders(world, workers, building) {
 }
 
 export function assignGatherers(world, workers, target) {
-  const isFarm = target?.entityKind === 'building' && target.type === 'farm'
-    && target.complete && target.alive;
+  const isFarm = target?.entityKind === 'building' && isOperationalField(world, target);
   const isDeposit = target?.entityKind === 'resource' && target.alive && target.amount > 0;
   const workResources = target?.entityKind === 'building'
     ? BUILDING_TYPES[target.type]?.workResources || [] : [];
@@ -325,11 +469,24 @@ function findTarget(world, targetId) {
 }
 
 function nearestPoint(target, worker) {
+  if (target.type === 'farm' && target.complete && worker.job?.kind === 'gather') {
+    const point = getFieldWorkPoint(target, worker.id);
+    return {
+      ...point,
+      distance: Math.hypot(worker.x - point.x, worker.y - point.y),
+      arrivalDistance: 4.5,
+    };
+  }
   const dx = worker.x - target.x;
   const dy = worker.y - target.y;
   const d = Math.hypot(dx, dy) || 1;
   const reach = target.radius + 7;
-  return { x: target.x + dx / d * reach, y: target.y + dy / d * reach, distance: d };
+  return {
+    x: target.x + dx / d * reach,
+    y: target.y + dy / d * reach,
+    distance: d,
+    arrivalDistance: target.radius + 16,
+  };
 }
 
 function completeBuilding(world, building) {
@@ -402,6 +559,7 @@ function gatherProfile(world, worker) {
     );
   }
   if (target.amount <= 0) return null;
+  if (target.type === 'farm' && !isOperationalField(world, target)) return null;
   if (target.entityKind === 'building' && (!target.complete || target.side !== worker.side)) return null;
   return gatherProfileAt(world, worker, target, target.x, target.y);
 }
@@ -513,7 +671,7 @@ function updateWorkers(world, dt) {
     const point = nearestPoint(target, worker);
     // Movement stops within five pixels of its assigned slot, so the work
     // threshold includes that tolerance and avoids workers orbiting a site.
-    if (point.distance > target.radius + 16) {
+    if (point.distance > point.arrivalDistance) {
       worker.orderX = point.x;
       worker.orderY = point.y;
       worker.state = 'move';
@@ -524,7 +682,11 @@ function updateWorkers(world, dt) {
     worker.orderY = NaN;
     worker.state = 'work';
     worker.workAction = resolveWorkerAction(worker.job, target);
-    if (Math.abs(target.x - worker.x) > 0.5) worker.facing = target.x > worker.x ? 1 : -1;
+    if (target.type === 'farm' && worker.job.kind === 'gather') {
+      worker.facing = worker.id % 2 ? 1 : -1;
+    } else if (Math.abs(target.x - worker.x) > 0.5) {
+      worker.facing = target.x > worker.x ? 1 : -1;
+    }
     worker.animT += dt * 1.4;
 
     if (worker.job.kind === 'build') {
@@ -538,7 +700,8 @@ function updateWorkers(world, dt) {
 
     if (worker.job.kind === 'gather') {
       const resourceType = target.resourceType;
-      if (!resourceType || target.amount <= 0 || (target.entityKind === 'building' && !target.complete)) {
+      if (!resourceType || target.amount <= 0 || (target.entityKind === 'building' && !target.complete)
+        || (target.type === 'farm' && !isOperationalField(world, target))) {
         worker.job = null;
         worker.workAction = null;
         worker.state = 'idle';
@@ -672,8 +835,28 @@ export function onBuildingDestroyed(world, building) {
     refundResources(side, unit.cost, 0.5);
   }
   building.queue.length = 0;
+  const removedFieldIds = new Set();
+  if (building.type === 'mill') {
+    for (const field of world.buildings) {
+      if (!field.alive || field.type !== 'farm' || field.millId !== building.id) continue;
+      field.alive = false;
+      field.selected = false;
+      removedFieldIds.add(field.id);
+    }
+    if (removedFieldIds.size) {
+      world.events.push({
+        side: building.side,
+        text: `${removedFieldIds.size} attached field${removedFieldIds.size === 1 ? '' : 's'} lost with the Mill.`,
+        tone: 'danger',
+      });
+    }
+  }
   for (const worker of world.units) {
-    if (worker.job?.targetId === building.id) worker.job = null;
+    if (worker.job?.targetId === building.id || removedFieldIds.has(worker.job?.targetId)) {
+      worker.job = null;
+      worker.workAction = null;
+      if (worker.state === 'work') worker.state = 'idle';
+    }
   }
 }
 
@@ -683,6 +866,7 @@ export function findNearestResource(world, x, y, resourceType, side = null) {
   const candidates = world.resources.concat(world.buildings.filter(b => b.type === 'farm'));
   for (const target of candidates) {
     if (!target.alive || target.amount <= 0 || target.resourceType !== resourceType) continue;
+    if (target.type === 'farm' && !isOperationalField(world, target)) continue;
     if (target.entityKind === 'building' && (!target.complete || (side !== null && target.side !== side))) continue;
     const distance = Math.hypot(target.x - x, target.y - y);
     if (distance < bestDistance) { best = target; bestDistance = distance; }
@@ -725,6 +909,7 @@ export function findResourceAt(world, x, y) {
       && BUILDING_TYPES[target.type]?.workResources?.length;
     if (!target.alive || (target.entityKind === 'building' && !target.complete)
       || (!isWorkplace && target.amount <= 0)) continue;
+    if (target.type === 'farm' && !isOperationalField(world, target)) continue;
     const distance = Math.hypot(target.x - x, target.y - y);
     if (distance <= target.radius + 16 && distance < bestDistance) {
       best = target; bestDistance = distance;

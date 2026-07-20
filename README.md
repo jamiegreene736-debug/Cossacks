@@ -28,7 +28,7 @@ npm start
 - Begin with exactly one Town Center. A free first villager emerges so the
   opening cannot deadlock.
 - Gather food, wood, gold, and stone from deposits across a 5,200 × 3,200 map.
-- Build houses, renewable farms, mills, lumber and mining camps, barracks,
+- Build houses, mills with attached renewable fields, lumber and mining camps, barracks,
   stables, artillery foundries, and defensive towers.
 - Employ villagers directly at completed mills and economic camps, with exact
   assigned and live income-per-hour readouts for each resource.
@@ -46,7 +46,7 @@ then sends progressively larger, staged formations into battle.
 
 | Nation | Character |
 | --- | --- |
-| England | Disciplined redcoats reload 10% faster; farms produce 15% more food. |
+| England | Disciplined redcoats reload 10% faster; fields produce 15% more food. |
 | Ottoman Empire | Cavalry moves 15% faster; villagers train 10% faster. |
 
 ## Controls

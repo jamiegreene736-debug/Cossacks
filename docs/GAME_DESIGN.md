@@ -12,7 +12,7 @@ with light, historically flavored bonuses rather than opaque hard counters.
 1. The Town Center automatically prepares the first villager so a literal
    Town-Center-only start cannot deadlock.
 2. Villagers gather food, wood, gold, and stone from visible map deposits.
-3. Villagers place and construct houses, farms, economic camps, barracks,
+3. Villagers place and construct houses, mills with attached fields, economic camps, barracks,
    stables, artillery foundries, and towers.
 4. Buildings train individual units or batches of 5 and 20. Houses expand the
    population cap to a maximum of 1,200.
@@ -32,7 +32,7 @@ economy or entity interfaces introduced here.
 ## Acceptance checks
 
 - A new match visibly starts with one Town Center and no units.
-- The first villager emerges, can gather, place a farm, and construct military
+- The first villager emerges, can gather, establish a mill and fields, and construct military
   buildings.
 - Resource costs, population reservations, construction, and queues cannot go
   negative or exceed the cap.
