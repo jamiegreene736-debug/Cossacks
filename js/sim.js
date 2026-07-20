@@ -218,6 +218,7 @@ function kill(world, entity) {
   entity.selected = false;
   const s = world.sides[entity.side];
   if (entity.entityKind === 'building') {
+    sfx.buildingDestroyed(entity.type, entity.x);
     onBuildingDestroyed(world, entity);
     world.pendingDecals.push({ kind: 'ruin', x: entity.x, y: entity.y, type: entity.type });
     world.events.push({
@@ -228,6 +229,7 @@ function kill(world, entity) {
     return;
   }
   const u = entity;
+  sfx.unitDeath(u.type, u.x);
   s.alive--; s.losses++;
   onUnitKilled(world, u);
   world.sides[1 - u.side].kills++;
@@ -280,7 +282,7 @@ function fireMusket(world, u, t, d, accMul = 1) {
   const nx = (t.x - u.x) / d, ny = (t.y - u.y) / d;
   smokePuff(world, u.x + nx * 9, u.y + ny * 9 - 4, false);
   if (Math.random() < 0.5) flash(world, u.x + nx * 8, u.y + ny * 8 - 4, false);
-  sfx.musket();
+  sfx.musket(u.x);
   const hitChance = Math.min(0.95, Math.max(0.08, accMul * u.acc * (1.05 - 0.6 * d / u.range)));
   if (Math.random() < hitChance) {
     damage(world, t, u.dmg * (0.85 + Math.random() * 0.3), u);
@@ -306,7 +308,7 @@ function fireCannon(world, u, t, d) {
   });
   smokePuff(world, u.x + nx * 18, u.y + ny * 18 - 5, true);
   flash(world, u.x + nx * 14, u.y + ny * 14 - 4, true);
-  sfx.cannon();
+  sfx.cannonFire(u.x);
 }
 
 function explodeShell(world, p) {
@@ -314,7 +316,7 @@ function explodeShell(world, p) {
   smokePuff(world, p.tx, p.ty - 3, true);
   smokePuff(world, p.tx + 5, p.ty - 6, false);
   flash(world, p.tx, p.ty - 2, true);
-  sfx.cannon();
+  sfx.cannonImpact(p.tx);
   if (p.target?.alive && p.target.entityKind === 'building') {
     const d = Math.hypot(p.target.x - p.tx, p.target.y - p.ty);
     if (d <= p.target.radius + p.splash) damage(world, p.target, p.dmg, null);
@@ -480,7 +482,7 @@ function meleeStrike(world, u, t) {
     if (t.formation === 'square' && t.type !== 'cav') dmg *= SQUARE_VS_CAV;
     u.charge = Math.max(0, u.charge - 0.5);
   }
-  sfx.melee();
+  sfx.melee(u.x, u.type === 'cav' || t.type === 'cav');
   damage(world, t, dmg, u);
 }
 
@@ -576,8 +578,6 @@ export function step(world, dt) {
     world.flags[i].life -= dt;
     if (world.flags[i].life <= 0) world.flags.splice(i, 1);
   }
-
-  sfx.update(dt);
 
   // A settlement survives as long as its Town Center does. This keeps the
   // objective legible even with hundreds of units and many outlying farms.

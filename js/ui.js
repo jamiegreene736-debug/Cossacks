@@ -56,6 +56,8 @@ export function bindControls(cbs) {
   $('btn-save-exit').addEventListener('click', () => cbs.onSave?.(true));
   $('volume-master').addEventListener('input', event => cbs.onAudio?.({ master: Number(event.target.value) / 100 }));
   $('volume-effects').addEventListener('input', event => cbs.onAudio?.({ effects: Number(event.target.value) / 100 }));
+  $('volume-music').addEventListener('input', event => cbs.onAudio?.({ music: Number(event.target.value) / 100 }));
+  $('pause-music').addEventListener('change', event => cbs.onAudio?.({ pauseMusic: event.target.value }));
   $('btn-mute').addEventListener('click', () => cbs.onMute?.());
   $('btn-cancel-placement').addEventListener('click', () => cbs.onCancelPlacement?.());
   $('command-grid').addEventListener('click', event => {
@@ -108,12 +110,22 @@ export function setPauseSaveStatus(message, tone = 'good') {
 export function setAudioControls(settings) {
   const master = Math.round((settings?.master ?? 0.7) * 100);
   const effects = Math.round((settings?.effects ?? 0.72) * 100);
+  const music = Math.round((settings?.music ?? 0.42) * 100);
   $('volume-master').value = String(master);
   $('volume-effects').value = String(effects);
+  $('volume-music').value = String(music);
   $('volume-master-value').textContent = `${master}%`;
   $('volume-effects-value').textContent = `${effects}%`;
+  $('volume-music-value').textContent = `${music}%`;
+  $('pause-music').value = settings?.pauseMusic === 'mute' ? 'mute' : 'duck';
   $('btn-mute').textContent = settings?.muted ? 'Unmute' : 'Mute';
   $('btn-mute').setAttribute('aria-pressed', String(Boolean(settings?.muted)));
+}
+
+export function setMusicStatus(title, paused = false) {
+  const status = $('music-status');
+  const next = paused ? `${title} · paused` : title;
+  if (status.textContent !== next) status.textContent = next;
 }
 
 function formatCampaignTime(seconds) {
