@@ -14,6 +14,9 @@ import { drawWorker, VL_W, VL_H, VL_AX, VL_AY } from './gfx/villager.js';
 import { getProductionArt } from './gfx/art-assets.js';
 import { fortificationCorners, isFortificationType } from './fortifications.js';
 import { getWorkerFrame } from './worker-animation.js';
+import {
+  chooseRenderDpr, circleIntersectsBounds, getVisibleWorldBounds,
+} from './render-performance.js';
 import { setBuildingRefs, bdResetCaches, drawResourceNode, drawFarm,
          drawFoundation, drawCompleteBuilding, drawBuilding } from './gfx/buildings.js';
 import { setCompositeRefs, setCompositeView, setCompositeTrampleLayer,
@@ -41,12 +44,13 @@ let cw = 0, ch = 0, dpr = 1;
 let decalCanvas = null, decalCtx = null;
 let mmTerrain = null;
 let sprites = null; // sprites[side][type] = {frames: [dir][frame], w,h,ax,ay}
+const buildingSortBuf = [];
 
 // ---------- Setup ----------
 
 export function initRender(gameCanvas, minimapCanvas) {
   canvas = gameCanvas;
-  ctx = canvas.getContext('2d');
+  ctx = canvas.getContext('2d', { alpha: false });
   mmCanvas = minimapCanvas;
   mmCtx = mmCanvas.getContext('2d');
   setEffectsCamera(camera);
@@ -57,13 +61,14 @@ export function initRender(gameCanvas, minimapCanvas) {
 }
 
 function resize() {
-  dpr = window.devicePixelRatio || 1;
+  dpr = chooseRenderDpr(window.devicePixelRatio);
   cw = window.innerWidth;
   ch = window.innerHeight;
   canvas.width = Math.round(cw * dpr);
   canvas.height = Math.round(ch * dpr);
   canvas.style.width = cw + 'px';
   canvas.style.height = ch + 'px';
+  canvas.dataset.renderScale = String(dpr);
   setEffectsView(cw, ch);
   setCompositeView(cw, ch, dpr);
   buildCompositeTextures();   // grade/vignette gradients are viewport-sized
@@ -437,6 +442,8 @@ export function draw(
 
   drawTerrain(ctx, camera.x, camera.y, cw / z, ch / z);
 
+  const visibleWorld = getVisibleWorldBounds(camera, cw, ch, 0, WORLD.w, WORLD.h);
+
   // flush new decals, then blit
   if (world.pendingDecals.length) {
     if (!world.decals) world.decals = [];
@@ -448,7 +455,12 @@ export function draw(
     if (world.decals.length > 5000) world.decals.splice(0, world.decals.length - 5000);
     world.pendingDecals.length = 0;
   }
-  ctx.drawImage(decalCanvas, 0, 0);
+  const decalView = getVisibleWorldBounds(camera, cw, ch, 64, WORLD.w, WORLD.h);
+  const decalX = Math.floor(decalView.left);
+  const decalY = Math.floor(decalView.top);
+  const decalW = Math.max(1, Math.ceil(decalView.right) - decalX);
+  const decalH = Math.max(1, Math.ceil(decalView.bottom) - decalY);
+  ctx.drawImage(decalCanvas, decalX, decalY, decalW, decalH, decalX, decalY, decalW, decalH);
 
   // Ground-hugging powder bank, blood and debris litter, and projectile ground
   // shadows. These lie flat on the board, so they are drawn before anything
@@ -458,12 +470,18 @@ export function draw(
   drawSmokeUnder(ctx, world, alpha);
 
   for (const resource of world.resources) {
-    if (resource.alive && resource.amount > 0) drawResourceNode(resource);
+    if (resource.alive && resource.amount > 0
+      && circleIntersectsBounds(resource, visibleWorld, 140)) drawResourceNode(resource);
   }
 
-  const visibleBuildings = world.buildings.filter(building => building.alive)
-    .sort((a, b) => a.y - b.y);
-  for (const building of visibleBuildings) drawBuilding(building, world);
+  buildingSortBuf.length = 0;
+  for (const building of world.buildings) {
+    if (building.alive && circleIntersectsBounds(building, visibleWorld, 190)) {
+      buildingSortBuf.push(building);
+    }
+  }
+  buildingSortBuf.sort((a, b) => a.y - b.y);
+  for (const building of buildingSortBuf) drawBuilding(building, world);
 
   drawResourceHover(resourceHover, z);
 
@@ -524,11 +542,10 @@ export function draw(
   drawOrderFlags(ctx, world);
 
   // visible-unit list, sorted by y for correct overlap
-  const viewHalfW = cw / 2 / z + 40, viewHalfH = ch / 2 / z + 40;
   sortBuf.length = 0;
   for (const u of world.units) {
     if (!u.alive) continue;
-    if (Math.abs(u.x - camera.x) > viewHalfW || Math.abs(u.y - camera.y) > viewHalfH) continue;
+    if (!circleIntersectsBounds(u, visibleWorld, 40)) continue;
     sortBuf.push(u);
   }
   sortBuf.sort((a, b) => a.y - b.y);
@@ -571,5 +588,3 @@ export function draw(
 
   drawMinimap(world);
 }
-
-let mmT = 0;

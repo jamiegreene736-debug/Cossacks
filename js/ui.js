@@ -163,7 +163,11 @@ export function markFormation(formation) {
 }
 
 function countMilitary(world, side) {
-  return world.units.filter(unit => unit.alive && unit.side === side && unit.type !== 'villager').length;
+  let count = 0;
+  for (const unit of world.units) {
+    if (unit.alive && unit.side === side && unit.type !== 'villager') count++;
+  }
+  return count;
 }
 
 function formatHourly(value) {
@@ -176,7 +180,7 @@ function formatHourly(value) {
 let hudTime = 0;
 export function updateHud(world, selection) {
   const now = performance.now();
-  if (now - hudTime < 120) return;
+  if (now - hudTime < 200) return;
   hudTime = now;
   const player = world.sides[0];
   $('hud-player-count').textContent = countMilitary(world, 0).toLocaleString();
@@ -196,15 +200,23 @@ export function updateHud(world, selection) {
     if (event.side === 0) toast(event.text, event.tone);
   }
 
-  const key = selection.map(entity => `${entity.entityKind || 'unit'}:${entity.id}:${entity.queue?.length || 0}:${entity.complete ?? ''}`)
-    .join('|');
-  // Queue progress and construction percentages still refresh periodically.
   const hasLiveEconomy = selection.length === 0 || selection.some(entity => entity.type === 'villager'
     || (entity.entityKind === 'building' && (entity.resourceType || BUILDING_TYPES[entity.type].boost)));
-  if (key !== lastSelectionKey || hasLiveEconomy
-    || selection.some(entity => entity.queue?.length || entity.complete === false)) {
+  const key = selection.map(entity => {
+    const first = entity.queue?.[0];
+    const queueProgress = first ? Math.floor((1 - first.remaining / first.total) * 100) : '';
+    const buildProgress = entity.complete === false ? Math.floor(entity.progress * 100) : '';
+    const job = entity.job
+      ? `${entity.job.kind}:${entity.job.targetId || ''}:${entity.job.resourceType || ''}` : '';
+    return `${entity.entityKind || 'unit'}:${entity.id}:${entity.queue?.length || 0}:${queueProgress}`
+      + `:${entity.complete ?? ''}:${buildProgress}:${Math.ceil(entity.hp || 0)}:${job}`;
+  }).join('|');
+  // Economy telemetry changes every 0.75 seconds. Rebuilding its cards faster
+  // only creates DOM/layout work without showing the player newer information.
+  const renderKey = `${key}:${hasLiveEconomy ? Math.floor(world.time / 0.75) : ''}`;
+  if (renderKey !== lastSelectionKey) {
     renderSelection(world, selection);
-    lastSelectionKey = key;
+    lastSelectionKey = renderKey;
   }
   updateObjective(world);
 }
@@ -397,8 +409,10 @@ function updateObjective(world) {
     titleText = 'Break the rival empire';
     body = 'Build an army at massive scale and destroy the enemy Town Center.';
   }
-  $('objective-title').textContent = titleText;
-  $('objective-text').textContent = body;
+  const title = $('objective-title');
+  const text = $('objective-text');
+  if (title.textContent !== titleText) title.textContent = titleText;
+  if (text.textContent !== body) text.textContent = body;
 }
 
 export function setPlacement(active, label = '', type = '', orientation = '') {

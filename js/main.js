@@ -102,6 +102,7 @@ async function startBattle(opts) {
   sfx.startBattle(world);
   endShown = false;
   acc = 0;
+  resetFrameMetrics();
 }
 
 function handleCommand(command) {
@@ -185,6 +186,7 @@ async function resumeSavedCampaign() {
     sfx.ensure();
     endShown = false;
     acc = 0;
+    resetFrameMetrics();
     ui.toast('Saved campaign restored.', 'good');
   } catch (error) {
     refreshSavedCampaign();
@@ -207,11 +209,65 @@ function toggleSpeed() {
 let last = performance.now();
 let acc = 0;
 
+const frameMetrics = {
+  startedAt: last,
+  frames: 0,
+  samples: 0,
+  intervalTotal: 0,
+  longestInterval: 0,
+  stageTotals: { simulation: 0, audio: 0, input: 0, render: 0, hud: 0 },
+  stagePeaks: { simulation: 0, audio: 0, input: 0, render: 0, hud: 0 },
+};
+
+function resetFrameMetrics(now = performance.now()) {
+  last = now;
+  frameMetrics.startedAt = now;
+  frameMetrics.frames = 0;
+  frameMetrics.samples = 0;
+  frameMetrics.intervalTotal = 0;
+  frameMetrics.longestInterval = 0;
+  for (const stage of Object.keys(frameMetrics.stageTotals)) {
+    frameMetrics.stageTotals[stage] = 0;
+    frameMetrics.stagePeaks[stage] = 0;
+  }
+  delete canvas.dataset.frameMetrics;
+}
+
+function recordFrameMetrics(interval, stageTimes) {
+  frameMetrics.frames++;
+  frameMetrics.intervalTotal += interval;
+  frameMetrics.longestInterval = Math.max(frameMetrics.longestInterval, interval);
+  if (stageTimes) {
+    frameMetrics.samples++;
+    for (const stage of Object.keys(stageTimes)) {
+      frameMetrics.stageTotals[stage] += stageTimes[stage];
+      frameMetrics.stagePeaks[stage] = Math.max(frameMetrics.stagePeaks[stage], stageTimes[stage]);
+    }
+  }
+  if (frameMetrics.frames % 60 !== 0) return;
+  const averages = Object.fromEntries(Object.entries(frameMetrics.stageTotals)
+    .map(([stage, total]) => [stage, total / Math.max(1, frameMetrics.samples)]));
+  canvas.dataset.frameMetrics = JSON.stringify({
+    elapsed: performance.now() - frameMetrics.startedAt,
+    frames: frameMetrics.frames,
+    samples: frameMetrics.samples,
+    averageInterval: frameMetrics.intervalTotal / frameMetrics.frames,
+    longestInterval: frameMetrics.longestInterval,
+    averages,
+    peaks: frameMetrics.stagePeaks,
+  });
+}
+
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.1, (now - last) / 1000);
+  const interval = now - last;
+  const dt = Math.min(0.1, interval / 1000);
   last = now;
   if (!world) return;
+
+  const shouldSample = (frameMetrics.frames & 3) === 0;
+  let mark = shouldSample ? performance.now() : 0;
+  const stageTimes = shouldSample ? {} : null;
 
   if (world.state === 'running') {
     acc += dt * world.speed;
@@ -224,16 +280,38 @@ function frame(now) {
     }
     if (steps === 5) acc = 0; // can't keep up — drop time rather than spiral
   }
+  if (shouldSample) {
+    const next = performance.now();
+    stageTimes.simulation = next - mark;
+    mark = next;
+  }
 
   sfx.update(dt, world, camera.x);
   ui.setMusicStatus(sfx.getNowPlaying(), world.state === 'paused');
+  if (shouldSample) {
+    const next = performance.now();
+    stageTimes.audio = next - mark;
+    mark = next;
+  }
 
   updateInput(dt);
+  if (shouldSample) {
+    const next = performance.now();
+    stageTimes.input = next - mark;
+    mark = next;
+  }
   draw(
     world, Math.min(1, acc / SIM_STEP), getDragRect(),
     getPlacementPreview(), getResourceHoverTarget(), getMovePreview(),
   );
+  if (shouldSample) {
+    const next = performance.now();
+    stageTimes.render = next - mark;
+    mark = next;
+  }
   ui.updateHud(world, getSelection());
+  if (shouldSample) stageTimes.hud = performance.now() - mark;
+  recordFrameMetrics(interval, stageTimes);
 
   if (world.state === 'ended' && !endShown) {
     endShown = true;
@@ -286,3 +364,4 @@ window.__state = () => {
 };
 
 window.__audioState = () => sfx.getDiagnostics();
+window.__frameMetrics = () => JSON.parse(canvas.dataset.frameMetrics || 'null');

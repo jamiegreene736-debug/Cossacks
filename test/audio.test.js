@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 
 import {
   campaignTrackOrder,
+  findNearestAudibleEntity,
+  findNearestAudibleMatch,
   normalizeAudioSettings,
   pausedMusicMultiplier,
   workerSoundKind,
@@ -37,4 +39,15 @@ test('worker activities select distinct economic sounds', () => {
   assert.equal(workerSoundKind({ job: { kind: 'build' } }, {}), 'build');
   assert.equal(workerSoundKind({ job: { kind: 'workplace', resourceType: 'wood' } }, {}), 'wood');
   assert.equal(workerSoundKind({ job: null }, {}), null);
+});
+
+test('ambient sound selection finds the closest matching entity without sorting the army', () => {
+  const entities = [
+    { id: 1, x: 900, moving: true },
+    { id: 2, x: 120, moving: false },
+    { id: 3, x: 260, moving: true },
+  ];
+  assert.equal(findNearestAudibleEntity(entities, 100, entity => entity.moving)?.id, 3);
+  assert.equal(findNearestAudibleEntity(entities, 100, entity => entity.id === 99), null);
+  assert.equal(findNearestAudibleMatch(entities, 100, entity => entity.moving).count, 2);
 });
