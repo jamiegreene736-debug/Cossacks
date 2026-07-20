@@ -4252,11 +4252,21 @@ function getBuildingPresentation(type, def = BUILDING_TYPES[type]) {
   const profile = BD_BUILDING_PRESENTATION[type] || {
     artWidthScale: 1.4, apronWidthScale: 0.76, apronDepthScale: 0.48,
   };
+  const visualScale = def.visualScale || 1;
+  const artWidth = def.w * profile.artWidthScale;
   return {
-    artWidth: def.w * profile.artWidthScale,
+    visualScale,
+    artWidth,
+    displayArtWidth: artWidth * visualScale,
     apronRx: def.w * profile.apronWidthScale,
     apronRy: def.h * profile.apronDepthScale,
   };
+}
+
+function bdVisualGroundY(building) {
+  if (building.type === 'gate') return building.h * 0.52 + 11;
+  if (building.type === 'wall') return building.h * 0.52 + 8;
+  return building.h * 0.48 + 8;
 }
 
 const BD_ARCHITECTURE_SHEET_COLUMNS = 2;
@@ -5549,16 +5559,32 @@ function drawBuilding(building, world) {
 
   if (building.type !== 'farm') ctx.rotate(-(camera.rotation || 0));
 
+  // Gameplay footprints stay compact enough for mass-army pathfinding, while
+  // the painted architecture is enlarged around its contact line. Scaling
+  // from the origin would push the whole building down the board; this pivot
+  // keeps foundations planted and sends the added mass upward into the roof,
+  // tower and rampart where it belongs.
+  const presentation = getBuildingPresentation(building.type);
+  const visualScale = presentation?.visualScale || 1;
+  const visualGroundY = bdVisualGroundY(building);
+  ctx.save();
+  if (visualScale !== 1) {
+    ctx.translate(0, visualGroundY);
+    ctx.scale(visualScale, visualScale);
+    ctx.translate(0, -visualGroundY);
+  }
   if (building.complete) drawCompleteBuilding(building, nation, world.time);
   else drawFoundation(building, nation, world.time);
   bdDrawFortificationJunctions(building, world);
+  ctx.restore();
 
   if (building.selected || building.hp < building.maxHp || !building.complete) {
-    const width = Math.min(90, building.w * 0.75);
-    const y = isFortificationType(building.type)
+    const width = Math.min(110, building.w * 0.75 * visualScale);
+    const unscaledY = isFortificationType(building.type)
       ? (building.type === 'gate' ? -76 : -57)
       : building.type === 'wall_stairs' ? -68
       : -building.h * 0.82 - 10;
+    const y = visualGroundY + (unscaledY - visualGroundY) * visualScale;
     const fraction = building.complete ? building.hp / building.maxHp : building.progress;
     ctx.fillStyle = 'rgba(26,23,15,0.72)';
     ctx.fillRect(-width / 2, y, width, 5);
@@ -5583,9 +5609,19 @@ function drawBuildingCollapse(destruction, worldTime) {
   const fade = progress < 0.58 ? 1 : 1 - (progress - 0.58) / 0.42;
 
   ctx.save();
-  ctx.translate(destruction.x + shake, destruction.y + fall * destruction.h * 0.12);
+  const presentation = getBuildingPresentation(destruction.type);
+  const visualScale = presentation?.visualScale || 1;
+  const visualGroundY = bdVisualGroundY(destruction);
+  ctx.translate(destruction.x + shake,
+    destruction.y + fall * destruction.h * 0.12 * visualScale);
   ctx.globalAlpha = Math.max(0, fade);
-  ctx.transform(1 + fall * 0.05, 0, -fall * 0.08, squash, 0, destruction.h * fall * 0.2);
+  ctx.transform(1 + fall * 0.05, 0, -fall * 0.08, squash, 0,
+    destruction.h * fall * 0.2 * visualScale);
+  if (visualScale !== 1) {
+    ctx.translate(0, visualGroundY);
+    ctx.scale(visualScale, visualScale);
+    ctx.translate(0, -visualGroundY);
+  }
   drawCompleteBuilding(destruction, destruction.nation, worldTime);
   ctx.restore();
 }

@@ -4,6 +4,7 @@ import { readFile, stat } from 'node:fs/promises';
 
 import { BUILDING_TYPES } from '../js/config.js';
 import { bdConstructionArtFrame, getBuildingPresentation } from '../js/gfx/buildings.js';
+import { MILITARY_ART_SPECS } from '../js/gfx/art-assets.js';
 
 const BUILT_STRUCTURE_TYPES = Object.keys(BUILDING_TYPES).filter(type => type !== 'farm');
 
@@ -20,7 +21,7 @@ test('every completed structure has footprint-derived art and paving metrics', (
 });
 
 test('building silhouettes preserve the settlement scale hierarchy', () => {
-  const width = type => getBuildingPresentation(type).artWidth;
+  const width = type => getBuildingPresentation(type).displayArtWidth;
 
   assert.ok(width('town_center') > width('stable'));
   assert.ok(width('stable') > width('barracks'));
@@ -29,6 +30,24 @@ test('building silhouettes preserve the settlement scale hierarchy', () => {
   assert.ok(width('stable') > width('lumber_camp') * 1.5);
   assert.ok(width('barracks') > width('house') * 1.7);
   assert.ok(width('tower') < width('house'));
+  assert.ok(width('gate') > width('wall'));
+});
+
+test('displayed architecture remains decisively larger than human-scale units', () => {
+  const infantryWidth = Math.max(MILITARY_ART_SPECS.musk.w, MILITARY_ART_SPECS.pike.w);
+  const architecturalTypes = BUILT_STRUCTURE_TYPES.filter(type => type !== 'wall_stairs');
+
+  for (const type of architecturalTypes) {
+    const presentation = getBuildingPresentation(type);
+    assert.ok(
+      presentation.displayArtWidth >= infantryWidth * 2,
+      `${type} should read at no less than twice an infantryman's width`,
+    );
+    assert.ok(presentation.visualScale >= 1.25, `${type} should use the architectural scale tier`);
+  }
+
+  assert.ok(BUILDING_TYPES.town_center.visualScale > BUILDING_TYPES.house.visualScale);
+  assert.ok(BUILDING_TYPES.wall.visualScale > BUILDING_TYPES.barracks.visualScale);
 });
 
 test('production construction art advances continuously through four authored stages', () => {

@@ -8,7 +8,11 @@ import { BUILDING_TYPES, WORLD } from './config.js';
 export const FORTIFICATION_ORIENTATIONS = Object.freeze(['horizontal', 'diagonal']);
 export const FORTIFICATION_SNAP_DISTANCE = 34;
 export const FORTIFICATION_ENDPOINT_PICK_DISTANCE = 64;
-export const WALL_WALK_ELEVATION = 30;
+// The firing walk follows the enlarged fortification presentation. This is a
+// visual elevation only: wall collision, placement and projectile blocking
+// continue to use the unchanged gameplay footprint.
+export const WALL_WALK_ELEVATION = 40;
+const GATE_WALK_ELEVATION = 57;
 export const WALL_STAIR_ATTACH_DISTANCE = 58;
 
 const AXES = Object.freeze({
@@ -185,7 +189,7 @@ function wallSlot(segment, slotIndex) {
     slotIndex,
     x: segment.x + frame.axis.x * frame.halfLength * fraction,
     y: segment.y + frame.axis.y * frame.halfLength * fraction,
-    elevation: segment.type === 'gate' ? 43 : WALL_WALK_ELEVATION,
+    elevation: segment.type === 'gate' ? GATE_WALK_ELEVATION : WALL_WALK_ELEVATION,
   };
 }
 

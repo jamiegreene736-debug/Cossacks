@@ -130,7 +130,7 @@ test('wall staircase links and mounted firing positions survive save and resume'
   assert.equal(restoredStairs.stairSide, 1);
   assert.equal(restoredDefender.wallMount.wallId, wall.id);
   assert.equal(restoredDefender.wallMount.stairId, stairs.id);
-  assert.equal(restoredDefender.wallElevation, 30);
+  assert.equal(restoredDefender.wallElevation, 40);
 });
 
 test('legacy standalone fields attach to the nearest completed mill on restore', () => {

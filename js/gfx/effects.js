@@ -1614,14 +1614,15 @@ function drawBuildingFireSprite(ctx, world, fire, building, intensity) {
   const level = Math.min(FIRE_LEVELS - 1, Math.floor(intensity * FIRE_LEVELS));
   const count = Math.max(2, Math.min(6, 2 + Math.floor(intensity * 5)));
   const seed = building.fireSeed || ((building.id || 1) * 2654435761) >>> 0;
+  const visualScale = BUILDING_TYPES[building.type]?.visualScale || 1;
   for (let index = 0; index < count; index++) {
     const horizontal = fireAnchor(seed, index * 3) - 0.5;
     const height = 0.22 + fireAnchor(seed, index * 3 + 1) * 0.92;
     const phase = fireAnchor(seed, index * 3 + 2) * FIRE_FRAMES;
     const frame = Math.floor(world.time * (8.2 + index * 0.37) + phase) % FIRE_FRAMES;
     const size = (21 + level * 6) * (0.78 + fireAnchor(seed ^ 0xa5a5a5a5, index) * 0.42);
-    const x = building.x + horizontal * building.w * 0.62;
-    const y = building.y - building.h * height;
+    const x = building.x + horizontal * building.w * 0.62 * visualScale;
+    const y = building.y - building.h * height * visualScale;
     ctx.drawImage(fire.tex, frame * fire.cell, level * fire.cell, fire.cell, fire.cell,
       x - size * 0.5, y - size * 0.78, size, size);
   }

@@ -57,6 +57,14 @@ only geometrically right when `ax === w/2`. Two real bugs came from ignoring
 this: idle pikemen had their pike tips clipped off, and cavalry frames were
 clipping the horse's head.
 
+**Architecture uses a separate visual scale from its gameplay footprint.**
+`BUILDING_TYPES.visualScale` enlarges the painted structure around its ground
+contact without changing placement, collision, pathfinding, or saved geometry.
+Ordinary buildings sit near 1.25x, stone fortifications near 1.32x, and the
+Town Center at 1.35x so a 50-world-pixel infantryman reads as an occupant of the
+settlement rather than as tall as its houses. Construction, wall-walk elevation,
+fires, collapse art, health bars, and click targeting must follow the same tier.
+
 ## The performance contract
 
 A battle can put thousands of units on the field, so:
