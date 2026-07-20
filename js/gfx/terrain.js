@@ -1189,7 +1189,11 @@ function buildRoadPath(stream) {
 }
 
 function roadWidthAt(t, seed) {
-  return 30 + 10 * n1(t * 6, seed);
+  // Full carriageway width. The former 20-40px ribbon could carry surface
+  // texture but had no readable cross-section at gameplay zoom. A broader,
+  // slowly varying agger leaves room for a raised crown, metalling, wheel
+  // ruts and independent drainage ditches.
+  return 48 + 10 * n1(t * 6, seed) + 4 * n1(t * 17, seed + 91);
 }
 
 function strokeVarying(g, pts, widthFn, style, offX, offY) {
@@ -1220,19 +1224,71 @@ function offsetPolyline(pts, dist, wobbleSeed, wobbleAmp) {
   return out;
 }
 
+function offsetVariablePolyline(pts, distanceFn, wobbleSeed, wobbleAmp) {
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+    let dx = b[0] - a[0], dy = b[1] - a[1];
+    const L = Math.hypot(dx, dy) || 1;
+    dx /= L; dy /= L;
+    const t = i / Math.max(1, pts.length - 1);
+    const base = distanceFn(t);
+    const wobble = wobbleAmp ? n1(i * 0.12, wobbleSeed) * wobbleAmp : 0;
+    out.push([pts[i][0] - dy * (base + wobble), pts[i][1] + dx * (base + wobble)]);
+  }
+  return out;
+}
+
+function drawTerrainPebble(g, x, y, r, angle, wet) {
+  const R = ramp(shiftHSL(wet ? mixHex(T.ROCK, T.WATER_DEEP, 0.18) : T.ROCK,
+    rnd(-0.02, 0.02), rnd(-0.025, 0.01), rnd(-0.08, 0.07)));
+  g.save();
+  g.translate(x, y); g.rotate(angle || 0);
+  g.fillStyle = 'rgba(' + SUN.shadowRGB + ',' + (wet ? 0.32 : 0.24) + ')';
+  g.beginPath(); g.ellipse(r * 0.26, r * 0.42, r * 1.16, r * 0.60, 0, 0, 6.2831853); g.fill();
+  g.fillStyle = R.shade;
+  g.beginPath(); g.ellipse(0, r * 0.08, r, r * 0.62, 0, 0, 6.2831853); g.fill();
+  g.fillStyle = R.base;
+  g.beginPath(); g.ellipse(-r * 0.08, -r * 0.10, r * 0.90, r * 0.54, 0, 0, 6.2831853); g.fill();
+  g.fillStyle = wet ? rgba(T.WATER_SPEC, 0.48) : R.lit;
+  g.beginPath(); g.ellipse(-r * 0.34, -r * 0.30, r * 0.42, r * 0.18, -0.18, 0, 6.2831853); g.fill();
+  g.restore();
+}
+
 function paintRoad(g, road, seed) {
   const wf = function (t) { return roadWidthAt(t, seed); };
 
   g.save();
   g.lineJoin = 'round';
 
-  // (a) Dust halo thrown out either side by traffic.
+  // (a) Shallow drainage ditches and raised agger slopes. Historic metalled
+  // roads read as engineered ground because the carriageway sits above two
+  // damp linear hollows, not because its texture is sharper.
+  for (const side of [-1, 1]) {
+    const ditch = offsetVariablePolyline(road,
+      function (t) { return side * (wf(t) * 0.5 + 8); }, seed + 140 + side, 1.8);
+    g.strokeStyle = 'rgba(' + SUN.shadowRGB + ',0.34)';
+    g.lineWidth = 8.5;
+    smoothOpenPath(g, ditch); g.stroke();
+    g.strokeStyle = rgba(T.MUD, 0.72);
+    g.lineWidth = 4.2;
+    smoothOpenPath(g, ditch); g.stroke();
+    g.strokeStyle = side < 0 ? rgba(T.STRAW_LIGHT, 0.34) : rgba(T.TURF_DEEP, 0.42);
+    g.lineWidth = 1.25;
+    g.save(); g.translate(SUN.x * 1.3, SUN.y * 1.3);
+    smoothOpenPath(g, ditch); g.stroke(); g.restore();
+  }
+
+  // Dust halo thrown out either side by traffic.
   strokeVarying(g, road, function (t) { return wf(t) + 20; }, rgba(T.ROAD_DUST, 0.11), 0, 0);
   strokeVarying(g, road, function (t) { return wf(t) + 11; }, rgba(T.ROAD_DUST, 0.13), 0, 0);
 
-  // (b) Verge shadow offset along the sun's shadow axis.
+  // (b) The down-sun agger face and sunward crest give the road measurable
+  // height above the pasture.
   strokeVarying(g, road, function (t) { return wf(t) + 7; }, rgba(T.TURF_DEEP, 0.50),
-    SUN.shadow.x * 2, SUN.shadow.y * 2);
+    SUN.shadow.x * 3.6, SUN.shadow.y * 3.6);
+  strokeVarying(g, road, function (t) { return wf(t) + 3; }, rgba(T.ROAD_DUST, 0.44),
+    SUN.x * 1.7, SUN.y * 1.7);
 
   // (c) The road bed itself — solid packed earth.
   strokeVarying(g, road, wf, T.ROAD_BED, 0, 0);
@@ -1259,7 +1315,9 @@ function paintRoad(g, road, seed) {
   const roadPattern = roadTexture ? g.createPattern(roadTexture, 'repeat') : null;
   if (roadPattern) {
     g.save();
-    g.globalAlpha = 0.84;
+    // The photographic gravel is a material layer, not the form itself. Keep
+    // it subordinate to the modeled crown, ruts and stone shoulders.
+    g.globalAlpha = 0.58;
     g.fillStyle = roadPattern;
     g.fillRect(0, 0, WORLD.w, WORLD.h);
     g.restore();
@@ -1276,9 +1334,11 @@ function paintRoad(g, road, seed) {
   }
   g.restore();
 
-  // (e) Crown highlight — the road's cambered centre catching the key light.
-  strokeVarying(g, road, function (t) { return wf(t) * 0.45; }, rgba(T.EARTH_LIGHT, 0.42),
+  // (e) Crown highlight — the compacted camber catching the key light.
+  strokeVarying(g, road, function (t) { return wf(t) * 0.52; }, rgba(T.EARTH_LIGHT, 0.36),
     SUN.x * 1.5, SUN.y * 1.5);
+  strokeVarying(g, road, function (t) { return wf(t) * 0.20; }, rgba(T.ROAD_DUST, 0.34),
+    SUN.x * 2.4, SUN.y * 2.4);
 
   // (f) Two wheel ruts, each wandering independently, with a lit lip on the
   //     sun side. This is what makes it a rutted road rather than a stripe.
@@ -1323,7 +1383,8 @@ function paintRoad(g, road, seed) {
   smoothOpenPath(g, centre);
   g.stroke();
 
-  // (g) Gravel and loose stone.
+  // (g) Fine aggregate plus larger shoulder cobbles. The larger stones have
+  // separate cast, body and lit planes, so the metalling survives close zoom.
   const stones = makeDotBatch();
   for (let i = 0; i < 900; i++) {
     const idx = (Math.random() * (road.length - 1)) | 0;
@@ -1340,6 +1401,18 @@ function paintRoad(g, road, seed) {
     batchDot(stones, Math.random() < 0.5 ? rgba(T.ROCK, 0.75) : rgba(T.ROCK_LIGHT, 0.7), x, y, r * 0.9);
   }
   flushDotBatch(g, stones);
+
+  for (let i = 0; i < 360; i++) {
+    const idx = (Math.random() * (road.length - 1)) | 0;
+    const t = idx / (road.length - 1), w = wf(t) * 0.5;
+    const a = road[idx], b = road[idx + 1];
+    let dx = b[0] - a[0], dy = b[1] - a[1];
+    const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const off = side * rnd(w * 0.62, w * 0.98);
+    drawTerrainPebble(g, a[0] - dy * off, a[1] + dx * off,
+      rnd(1.4, 3.6), rnd(-0.6, 0.6), false);
+  }
 
   // (h) Edge scuffing — earth spilling irregularly into the grass, and grass
   //     encroaching back. Kills the "one clean stroke" look at the boundary.
@@ -1439,7 +1512,7 @@ function paintPuddles(g, road, seed, near) {
 // ===========================================================================
 
 function buildStream() {
-  const pts = [];
+  const controls = [];
   // The upper clamp is 0.70h (2240 world px), not 0.60h. The contested centre
   // calm zone is centred at (2600, 1600) with r = 700, and calmness exceeds
   // the 0.30 build-legibility threshold out to roughly y = 2180. A stream is
@@ -1451,19 +1524,93 @@ function buildStream() {
   // preserving the full meander range below it.
   const pts_yMin = WORLD.h * 0.70;
   const pts_yMax = WORLD.h * 0.90;
-  const y0 = WORLD.h * rnd(0.74, 0.80);
-  let x = -40, y = y0;
-  while (x < WORLD.w + 60) {
-    pts.push([x, y]);
-    x += rnd(70, 130);
-    y += n1(x * 0.0018, 4242) * 46 + rnd(-16, 16);
-    y = clamp(y, pts_yMin, pts_yMax);
+  let x = -80, y = WORLD.h * rnd(0.75, 0.81);
+  controls.push([x, y]);
+  while (x < WORLD.w + 80) {
+    x += rnd(300, 470);
+    y += n1(x * 0.0011, 4242) * 118 + rnd(-74, 74);
+    y = clamp(y, pts_yMin + 28, pts_yMax - 28);
+    controls.push([x, y]);
   }
-  return pts;
+  // Broad survey-scale bends first, then a dense smooth polyline. Many tiny
+  // random steps averaged into an almost straight canal; a few coherent
+  // control bends preserve visible meanders at both command and close zoom.
+  return resamplePolyline(chaikin(controls, 3), 300);
+}
+
+function streamWidthAt(t, seed) {
+  // Alternating broader pools and narrower riffles give the channel a real
+  // plan form. The earlier 14-26px line could not expose banks, bars or bed.
+  const sequence = 0.5 + 0.5 * Math.sin(t * Math.PI * 12 + 0.7);
+  return 60 + 14 * n1(t * 5, seed) + 9 * n1(t * 27, seed + 211) + 10 * sequence;
+}
+
+function pathFrameAt(walk, t) {
+  const a = walk(Math.max(0, t - 0.004));
+  const b = walk(Math.min(1, t + 0.004));
+  const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+  const dx = (b.x - a.x) / L, dy = (b.y - a.y) / L;
+  return { x: (a.x + b.x) * 0.5, y: (a.y + b.y) * 0.5,
+    dx: dx, dy: dy, nx: -dy, ny: dx, angle: Math.atan2(dy, dx) };
+}
+
+function paintStreamPool(g, walk, t, width) {
+  const f = pathFrameAt(walk, t);
+  g.save(); g.translate(f.x, f.y); g.rotate(f.angle);
+  const grad = g.createRadialGradient(-width * 0.16, -width * 0.08, 0,
+    0, 0, width * 0.72);
+  grad.addColorStop(0, rgba(T.WATER_DEEP, 0.88));
+  grad.addColorStop(0.62, rgba(T.WATER_DEEP, 0.36));
+  grad.addColorStop(1, rgba(T.WATER, 0));
+  g.fillStyle = grad;
+  g.beginPath(); g.ellipse(0, 0, width * 0.86, width * 0.38, 0, 0, 6.2831853); g.fill();
+  // A broken reflected-sky shelf on the sunward quarter of the pool.
+  g.strokeStyle = rgba(T.WATER_SPEC, 0.48); g.lineWidth = 1.4;
+  for (let i = 0; i < 7; i++) {
+    const y = -width * 0.18 + i * width * 0.045;
+    g.beginPath(); g.moveTo(-width * (0.50 - i * 0.025), y);
+    g.lineTo(width * (0.18 + i * 0.04), y + rnd(-0.7, 0.7)); g.stroke();
+  }
+  g.restore();
+}
+
+function paintGravelBar(g, walk, t, width, side) {
+  const f = pathFrameAt(walk, t);
+  g.save();
+  g.translate(f.x + f.nx * side * width * 0.24, f.y + f.ny * side * width * 0.24);
+  g.rotate(f.angle);
+  const pts = blobPoints(0, 0, width * 0.76, width * 0.23, 13, 0.24, 0);
+  g.fillStyle = rgba(T.EARTH_DARK, 0.48); smoothClosedPath(g, pts); g.fill();
+  g.fillStyle = rgba(mixHex(T.ROAD_DUST, T.ROCK, 0.34), 0.92);
+  smoothClosedPath(g, blobPoints(-width * 0.04, -1, width * 0.68, width * 0.19, 13, 0.24, 0)); g.fill();
+  g.strokeStyle = rgba(T.ROCK_LIGHT, 0.42); g.lineWidth = 1.1;
+  smoothClosedPath(g, pts); g.stroke();
+  for (let i = 0; i < 30; i++) {
+    drawTerrainPebble(g, rnd(-width * 0.58, width * 0.52), rnd(-width * 0.12, width * 0.12),
+      rnd(0.8, 2.4), rnd(-0.7, 0.7), i < 10);
+  }
+  g.restore();
+}
+
+function paintRiffle(g, walk, t, width) {
+  const f = pathFrameAt(walk, t);
+  g.save(); g.translate(f.x, f.y); g.rotate(f.angle);
+  for (let i = 0; i < 16; i++) {
+    drawTerrainPebble(g, rnd(-width * 0.34, width * 0.34), rnd(-width * 0.34, width * 0.34),
+      rnd(1.5, 3.7), rnd(-0.8, 0.8), true);
+  }
+  // Short broken whitewater shelves run across, not along, the flow.
+  g.strokeStyle = rgba('#D7E2DF', 0.58); g.lineWidth = 1.05;
+  for (let i = 0; i < 9; i++) {
+    const x = rnd(-width * 0.30, width * 0.30);
+    const y = rnd(-width * 0.32, width * 0.22);
+    g.beginPath(); g.moveTo(x - rnd(1, 4), y); g.lineTo(x + rnd(5, 12), y + rnd(-1, 1)); g.stroke();
+  }
+  g.restore();
 }
 
 function paintStream(g, stream, seed) {
-  const wf = function (t) { return 20 + 6 * n1(t * 5, seed); };
+  const wf = function (t) { return streamWidthAt(t, seed); };
   const waterTexture = getProductionArt('countryWater');
   const waterPattern = waterTexture ? g.createPattern(waterTexture, 'repeat') : null;
   const productionAccents = getProductionArt('landscapeAccents');
@@ -1473,19 +1620,36 @@ function paintStream(g, stream, seed) {
   g.lineJoin = 'round';
 
   // Cut shadow: the channel is below the board surface.
-  strokeVarying(g, stream, function (t) { return wf(t) + 14; },
-    'rgba(' + SUN.shadowRGB + ',0.22)', SUN.shadow.x * 2.5, SUN.shadow.y * 2.5);
+  strokeVarying(g, stream, function (t) { return wf(t) + 34; },
+    'rgba(' + SUN.shadowRGB + ',0.28)', SUN.shadow.x * 5, SUN.shadow.y * 5);
 
-  // Damp earth banks.
-  strokeVarying(g, stream, function (t) { return wf(t) + 9; }, rgba(T.EARTH_DARK, 0.85), 0, 0);
-  strokeVarying(g, stream, function (t) { return wf(t) + 4.5; }, rgba(T.MUD, 0.9), 0, 0);
+  // Broad cut banks: dry soil above, damp toe below. The unequal bands and
+  // directional edge lighting make the water visibly inset into the board.
+  strokeVarying(g, stream, function (t) { return wf(t) + 28; }, rgba(T.EARTH_DARK, 0.82), 0, 0);
+  strokeVarying(g, stream, function (t) { return wf(t) + 17; }, rgba(T.MUD, 0.94), 0, 0);
+  strokeVarying(g, stream, function (t) { return wf(t) + 8; }, rgba(T.ROCK_DARK, 0.34), 0, 0);
 
   // Water body.
   strokeVarying(g, stream, wf, waterPattern || T.WATER, 0, 0);
-  strokeVarying(g, stream, function (t) { return wf(t) * 0.62; }, rgba(T.WATER_DEEP, 0.42), 0, 0);
+  strokeVarying(g, stream, function (t) { return wf(t) * 0.68; }, rgba(T.WATER_DEEP, 0.36), 0, 0);
 
-  // Specular streak on the sun side.
-  strokeVarying(g, stream, function (t) { return wf(t) * 0.20; }, rgba(T.WATER_SPEC, 0.75),
+  const walk = makeWalker(stream);
+  for (const t of [0.08, 0.25, 0.42, 0.59, 0.76, 0.93]) paintStreamPool(g, walk, t, wf(t));
+
+  // Separate sunward turf lip and down-sun undercut. These follow the actual
+  // variable bank rather than outlining the centre stroke.
+  for (const side of [-1, 1]) {
+    const bank = offsetVariablePolyline(stream,
+      function (t) { return side * wf(t) * 0.5; }, seed + 310 + side, 6.5);
+    g.strokeStyle = side < 0 ? rgba(T.STRAW_LIGHT, 0.38) : 'rgba(' + SUN.shadowRGB + ',0.42)';
+    g.lineWidth = side < 0 ? 1.35 : 2.7;
+    smoothOpenPath(g, bank); g.stroke();
+  }
+
+  // A restrained sun-side sheen. The former broad continuous highlight read
+  // as a pale concrete canal wall; broken pool shelves and ripple ticks carry
+  // most of the reflected light now.
+  strokeVarying(g, stream, function (t) { return wf(t) * 0.075; }, rgba(T.WATER_SPEC, 0.34),
     SUN.x * (wf(0.5) * 0.28), SUN.y * (wf(0.5) * 0.28));
 
   // Ripple ticks catching light.
@@ -1495,7 +1659,6 @@ function paintStream(g, stream, seed) {
   const rippleCols = [];
   for (let i = 0; i < 5; i++) rippleCols.push(rgba(T.WATER_SPEC, 0.16 + i * 0.065));
   const ripples = makeBatch();
-  const walk = makeWalker(stream);
   const L = walk(1).total;
   for (let i = 0; i < 1500; i++) {
     const t = Math.random();
@@ -1506,6 +1669,42 @@ function paintStream(g, stream, seed) {
       q.x + ox, q.y + oy, q.x + ox + rnd(2, 6), q.y + oy + rnd(-0.6, 0.6));
   }
   flushBatch(g, ripples);
+
+  // Alternating depositional bars and stony riffles break the uniform ribbon
+  // into the pool-riffle sequence visible in natural gravel-bed channels.
+  const incidents = [0.16, 0.33, 0.50, 0.67, 0.84];
+  for (let i = 0; i < incidents.length; i++) {
+    const t = incidents[i];
+    paintGravelBar(g, walk, t - 0.025, wf(t), i % 2 ? -1 : 1);
+    paintRiffle(g, walk, t + 0.026, wf(t) * 0.70);
+  }
+
+  // Bank failures, silt tongues and exposed roots interrupt the continuous
+  // outline. Without these local overlaps even a meandering channel retains
+  // the mechanically perfect edge of a canal.
+  for (let i = 0; i < 190; i++) {
+    const t = Math.random();
+    const f = pathFrameAt(walk, t);
+    const side = Math.random() < 0.5 ? -1 : 1;
+    g.save();
+    g.translate(f.x + f.nx * side * (wf(t) * 0.5 + rnd(-2, 6)),
+      f.y + f.ny * side * (wf(t) * 0.5 + rnd(-2, 6)));
+    g.rotate(f.angle);
+    const patch = blobPoints(0, 0, rnd(5, 18), rnd(2.5, 7.5), 9, 0.40, rnd(-0.3, 0.3));
+    const tone = Math.random();
+    g.fillStyle = tone < 0.38 ? rgba(T.MUD, rnd(0.52, 0.78))
+      : tone < 0.72 ? rgba(T.EARTH_DARK, rnd(0.38, 0.64))
+        : rgba(T.TURF_SHADE, rnd(0.36, 0.60));
+    smoothClosedPath(g, patch); g.fill();
+    if (i % 4 === 0) {
+      g.strokeStyle = rgba(T.TRUNK_DARK, 0.62); g.lineWidth = 0.75;
+      for (let root = 0; root < 3; root++) {
+        g.beginPath(); g.moveTo(rnd(-7, 7), side * rnd(-1, 2));
+        g.lineTo(rnd(-10, 10), -side * rnd(3, 9)); g.stroke();
+      }
+    }
+    g.restore();
+  }
 
   // Reed fringe: detailed production clumps carry the silhouette, with fine
   // procedural blades filling the gaps between them.
@@ -1594,7 +1793,9 @@ function paintBridge(g, ford, road, stream) {
   g.translate(ford.x, ford.y);
   g.rotate(ang);
 
-  const bw = 78, bh = 40;
+  // The widened channel needs a bridge that visibly reaches both bank crests.
+  // `bw` follows the road across the water; `bh` is the cart-width deck.
+  const bw = 146, bh = 58;
 
   // Cast shadow on the water and banks.
   g.save();
@@ -1607,12 +1808,12 @@ function paintBridge(g, ford, road, stream) {
   const wood = ramp(T.TRUNK_LIT);
   g.fillStyle = wood.shade;
   g.fillRect(-bw / 2, -bh / 2, bw, bh);
-  for (let x = -bw / 2; x < bw / 2; x += 6.5) {
+  for (let x = -bw / 2; x < bw / 2; x += 7.2) {
     const v = Math.random();
     g.fillStyle = v < 0.34 ? wood.base : v < 0.72 ? mixHex(wood.base, wood.lit, 0.45) : wood.shade;
-    g.fillRect(x, -bh / 2, 5.4, bh);
+    g.fillRect(x, -bh / 2, 6.1, bh);
     g.fillStyle = rgba(T.TRUNK_DARK, 0.5);
-    g.fillRect(x + 5.4, -bh / 2, 1.1, bh);
+    g.fillRect(x + 6.1, -bh / 2, 1.1, bh);
   }
   // Lit top-left plane of the deck.
   const dg = g.createLinearGradient(0, -bh / 2, 0, bh / 2);
@@ -1636,9 +1837,21 @@ function paintBridge(g, ford, road, stream) {
     g.moveTo(-bw / 2 + 2, s * (bh / 2 - 1) - 1);
     g.lineTo(bw / 2 - 2, s * (bh / 2 - 1) - 1);
     g.stroke();
-    for (let x = -bw / 2 + 6; x < bw / 2 - 4; x += 16) {
+    for (let x = -bw / 2 + 7; x < bw / 2 - 4; x += 18) {
       g.fillStyle = wood.line;
       g.fillRect(x, s * (bh / 2 - 3), 2.6, s * 4);
+    }
+  }
+
+  // Stone abutment noses ground the timber span into both banks.
+  for (const side of [-1, 1]) {
+    const ax = side * (bw * 0.5 - 8);
+    g.fillStyle = T.ROCK_DARK;
+    g.beginPath(); g.moveTo(ax - side * 13, -bh * 0.48); g.lineTo(ax + side * 9, -bh * 0.40);
+    g.lineTo(ax + side * 9, bh * 0.40); g.lineTo(ax - side * 13, bh * 0.48); g.closePath(); g.fill();
+    for (let row = -2; row <= 2; row++) {
+      drawTerrainPebble(g, ax - side * rnd(1, 8), row * 9 + rnd(-1.5, 1.5),
+        rnd(3.2, 5.2), rnd(-0.35, 0.35), false);
     }
   }
   g.restore();
@@ -2025,14 +2238,30 @@ function drawBush(g, x, y, r) {
 let rockPal = null;
 
 function drawRock(g, x, y, r) {
-  contactShadow(g, x, y, r * 1.05, r * 1.1, 1);
   const productionAccents = getProductionArt('landscapeAccents');
-  if (productionAccents) {
-    const frame = r >= 7.5 ? 0 : 1;
+
+  // Weathering apron and embedded foot. Loose rocks previously began with a
+  // shadow and then floated as isolated stamps; disturbed soil and scree make
+  // each formation emerge from the same ground plane as the buildings.
+  g.fillStyle = rgba(mixHex(T.EARTH_DARK, T.ROCK, 0.28), 0.28);
+  smoothClosedPath(g, blobPoints(x, y + r * 0.42, r * 1.75, r * 0.60, 10, 0.32, 0));
+  g.fill();
+  contactShadow(g, x, y + r * 0.15, r * 1.35, r * 1.45, 1);
+
+  // The large production outcrop is excellent at hero scale, but shrinking a
+  // whole multi-boulder cluster into a 10px loose stone created the soft,
+  // random-looking pebble seen in the screenshot. Reserve it for landmarks;
+  // smaller stones use explicit fractured planes below.
+  if (productionAccents && r >= 8.5) {
     drawCountryVegetation(
-      g, productionAccents, frame, x, y + r * 0.7,
-      r * (frame === 0 ? 4.4 : 4.0), ((x + y) | 0) % 2 === 0,
+      g, productionAccents, 0, x, y + r * 0.84,
+      r * 5.15, ((x + y) | 0) % 2 === 0,
     );
+    for (let i = 0; i < 10; i++) {
+      const a = rnd(0.12, Math.PI - 0.12);
+      drawTerrainPebble(g, x + Math.cos(a) * rnd(r * 0.75, r * 1.70),
+        y + r * 0.58 + Math.sin(a) * r * 0.24, rnd(0.8, 2.2), rnd(-0.7, 0.7), false);
+    }
     return;
   }
   if (!rockPal) {
@@ -2056,36 +2285,19 @@ function drawRock(g, x, y, r) {
   for (let i = 1; i < n; i++) g.lineTo(pts[i][0], pts[i][1] + 1);
   g.closePath();
   g.fill();
-  g.fillStyle = R.base;
-  g.beginPath();
-  g.moveTo(pts[0][0], pts[0][1]);
-  for (let i = 1; i < n; i++) g.lineTo(pts[i][0], pts[i][1]);
-  g.closePath();
-  g.fill();
-  // Lit facet: the up-left half of the form.
-  g.save();
-  g.beginPath();
-  g.moveTo(pts[0][0], pts[0][1]);
-  for (let i = 1; i < n; i++) g.lineTo(pts[i][0], pts[i][1]);
-  g.closePath();
-  g.clip();
-  g.fillStyle = R.lit;
-  g.beginPath();
-  g.moveTo(x - r * 1.4, y - r * 1.4);
-  g.lineTo(x + r * 1.4, y - r * 1.4);
-  g.lineTo(x + r * 1.4, y - r * 0.05);
-  g.lineTo(x - r * 1.4, y - r * 0.45);
-  g.closePath();
-  g.fill();
-  g.fillStyle = R.shade;
-  g.beginPath();
-  g.moveTo(x - r * 1.4, y + r * 0.35);
-  g.lineTo(x + r * 1.4, y + r * 0.15);
-  g.lineTo(x + r * 1.4, y + r * 1.4);
-  g.lineTo(x - r * 1.4, y + r * 1.4);
-  g.closePath();
-  g.fill();
-  g.restore();
+  // A raised crown fans into individually lit fracture planes. Hard shared
+  // seams provide much stronger depth than clipping one bright half and one
+  // dark half across the entire silhouette.
+  const peak = [x + SUN.x * r * 0.20, y + SUN.y * r * 0.16 - r * 0.12];
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], b = pts[(i + 1) % n];
+    const mx = (a[0] + b[0]) * 0.5, my = (a[1] + b[1]) * 0.5;
+    const rel = (mx - x) * SUN.x + (my - y) * SUN.y;
+    g.fillStyle = rel > r * 0.18 ? R.lit : rel < -r * 0.14 ? R.shade : R.base;
+    g.beginPath(); g.moveTo(peak[0], peak[1]); g.lineTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.closePath(); g.fill();
+    g.strokeStyle = rgba(R.line, 0.38); g.lineWidth = 0.45;
+    g.beginPath(); g.moveTo(peak[0], peak[1]); g.lineTo(a[0], a[1]); g.stroke();
+  }
   // Extreme edge highlight on the up-left boundary only.
   g.strokeStyle = R.edge;
   g.lineWidth = 0.9;
@@ -2100,13 +2312,30 @@ function drawRock(g, x, y, r) {
     }
   }
   g.stroke();
-  // Lichen.
-  if (Math.random() < 0.6) {
+  // Hairline fissures depart from the crown along different fracture planes.
+  g.strokeStyle = rgba(R.line, 0.62); g.lineWidth = 0.55;
+  for (let i = 0; i < 3; i++) {
+    const target = pts[(i * 2 + rndi(0, n - 1)) % n];
+    g.beginPath(); g.moveTo(peak[0] + rnd(-1, 1), peak[1] + rnd(-1, 1));
+    g.lineTo(lerp(peak[0], target[0], rnd(0.35, 0.60)), lerp(peak[1], target[1], rnd(0.35, 0.60)));
+    g.lineTo(target[0], target[1]); g.stroke();
+  }
+
+  // Lichen appears in several natural mineral hues instead of one green dot
+  // stamp, concentrating on the sunward upper faces.
+  if (Math.random() < 0.82) {
     const dots = makeDotBatch();
-    for (let i = 0; i < 6; i++) {
-      batchDot(dots, rgba(T.SCRUB_COOL, 0.5), x + rnd(-r * 0.7, r * 0.7), y + rnd(-r * 0.5, r * 0.4), rnd(0.7, 2));
+    const lichen = [T.SCRUB_COOL, '#8A7E42', '#9B7441', '#6E7546'];
+    for (let i = 0; i < 10; i++) {
+      batchDot(dots, rgba(pick(lichen), rnd(0.34, 0.62)),
+        x + rnd(-r * 0.65, r * 0.35), y + rnd(-r * 0.50, r * 0.12), rnd(0.45, 1.45));
     }
     flushDotBatch(g, dots);
+  }
+
+  for (let i = 0; i < 4; i++) {
+    drawTerrainPebble(g, x + rnd(-r * 1.25, r * 1.25), y + rnd(r * 0.42, r * 0.76),
+      rnd(0.6, 1.5), rnd(-0.8, 0.8), false);
   }
 }
 
@@ -2210,7 +2439,8 @@ function placeUndergrowth(g, road, stream, trees) {
   const productionAccents = getProductionArt('landscapeAccents');
   const ok = function (x, y) {
     return !(x < 12 || x > WORLD.w - 12 || y < 12 || y > WORLD.h - 12
-      || calmness(x, y) > 0.5 || distToPolyline(road, x, y) < 26);
+      || calmness(x, y) > 0.5 || distToPolyline(road, x, y) < 38
+      || distToPolyline(stream, x, y) < 48);
   };
 
   // Scrub crowding the margin of every wood.
