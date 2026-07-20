@@ -65,6 +65,12 @@ Town Center at 1.35x so a 50-world-pixel infantryman reads as an occupant of the
 settlement rather than as tall as its houses. Construction, wall-walk elevation,
 fires, collapse art, health bars, and click targeting must follow the same tier.
 
+**Buildings and paved courtyards share one footprint centre.**
+`getBuildingPresentation().pavingCenterY` uses the same projected centre as the
+selection footprint. Production art and procedural painters must both pass that
+anchor to the paving renderer; façade ground lines are contact points, not the
+centre of the building plot.
+
 ## The performance contract
 
 A battle can put thousands of units on the field, so:

@@ -4260,6 +4260,11 @@ function getBuildingPresentation(type, def = BUILDING_TYPES[type]) {
     displayArtWidth: artWidth * visualScale,
     apronRx: def.w * profile.apronWidthScale,
     apronRy: def.h * profile.apronDepthScale,
+    // The selection footprint is the shared visual centre of the structure
+    // and its courtyard. Keeping this in the presentation contract prevents
+    // production sprites and procedural painters from independently anchoring
+    // paving to their front wall, which leaves most bricks below the building.
+    pavingCenterY: def.h * 0.22,
   };
 }
 
@@ -4418,7 +4423,10 @@ function bdProductionBuildingSprite(type, def, image, side, damageStage, seed) {
   const top = bottom - imageH;
   const boxLeft = Math.min(left - 24, -presentation.apronRx * 1.18 - 4);
   const boxRight = Math.max(left + imageW + 24, presentation.apronRx * 1.18 + 4);
-  const boxBottom = Math.max(bottom + 60, bottom - 2 + presentation.apronRy * 1.20 + 8);
+  const boxBottom = Math.max(
+    bottom + 60,
+    presentation.pavingCenterY + presentation.apronRy * 1.20 + 8,
+  );
   const box = [boxLeft, top - 18, boxRight - boxLeft, boxBottom - (top - 18)];
 
   return bdBake(box, BD_SCALE, function (g) {
@@ -4467,7 +4475,8 @@ function bdProductionBuildingSprite(type, def, image, side, damageStage, seed) {
     bdContactShadow(g, 0, bottom - 8, def.w * 0.58, def.h * 0.54, 0.74);
     g.restore();
 
-    bdPassGroundApron(g, 0, bottom - 2, presentation.apronRx, BD_SIDE[side].rim, {
+    bdPassGroundApron(g, 0, presentation.pavingCenterY,
+      presentation.apronRx, BD_SIDE[side].rim, {
       ry: presentation.apronRy,
       seed,
     });
@@ -4522,7 +4531,8 @@ function bdBuildingSprite(type, def, side, nation, natRoof, variant, damageStage
     g.restore();
     // trodden apron + soft bed, beneath everything
     const presentation = getBuildingPresentation(type, def);
-    bdPassGroundApron(g, 0, G.yG + def.h * 0.06, presentation.apronRx, BD_SIDE[side].rim, {
+    bdPassGroundApron(g, 0, presentation.pavingCenterY,
+      presentation.apronRx, BD_SIDE[side].rim, {
       ry: presentation.apronRy,
       seed,
     });
