@@ -3,6 +3,10 @@
 // consumer still bakes them into its own one-blit runtime cache.
 
 const MILITARY_ART_ROWS = Object.freeze({ england: 0, ottoman: 1 });
+const VILLAGER_COMBAT_ART_SPEC = Object.freeze({
+  key: 'villagerMuskets', file: 'villager-muskets.webp', columns: 4, rows: 2,
+  sourceW: 384, sourceH: 512,
+});
 const MILITARY_ART_SPECS = Object.freeze({
   musk: Object.freeze({
     key: 'musketeers', file: 'musketeers.webp', columns: 4, rows: 2,
@@ -54,6 +58,7 @@ const ART_URLS = Object.freeze({
   countryStubble: new URL('../../assets/terrain/country-stubble.jpg', import.meta.url).href,
   englishVillager: new URL('../../assets/units/english-villager.webp', import.meta.url).href,
   ottomanVillager: new URL('../../assets/units/ottoman-villager.webp', import.meta.url).href,
+  villagerMuskets: new URL('../../assets/units/villager-muskets.webp', import.meta.url).href,
   musketeers: new URL('../../assets/units/musketeers.webp', import.meta.url).href,
   partisans: new URL('../../assets/units/partisans.webp', import.meta.url).href,
   cavalry: new URL('../../assets/units/cavalry.webp', import.meta.url).href,
@@ -99,6 +104,7 @@ function getProductionArt(key) {
 export {
   MILITARY_ART_ROWS,
   MILITARY_ART_SPECS,
+  VILLAGER_COMBAT_ART_SPEC,
   preloadProductionArt,
   getProductionArt,
 };

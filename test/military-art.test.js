@@ -3,7 +3,9 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { BUILDING_TYPES, NATIONS } from '../js/config.js';
-import { MILITARY_ART_ROWS, MILITARY_ART_SPECS } from '../js/gfx/art-assets.js';
+import {
+  MILITARY_ART_ROWS, MILITARY_ART_SPECS, VILLAGER_COMBAT_ART_SPEC,
+} from '../js/gfx/art-assets.js';
 
 const MILITARY_BUILDINGS = ['barracks', 'stable', 'foundry'];
 
@@ -60,4 +62,18 @@ test('military art assets are checked-in WebP files with substantial source deta
 test('procedural fallbacks retain nation-specific headgear', () => {
   assert.equal(NATIONS.england.headgear, 'tricorn');
   assert.equal(NATIONS.ottoman.headgear, 'turban');
+});
+
+test('civilian musket poses provide a detailed nation-specific production sheet', async () => {
+  const spec = VILLAGER_COMBAT_ART_SPEC;
+  assert.equal(spec.columns, 4, 'ready, advance, fire and reload poses are all required');
+  assert.equal(spec.rows, Object.keys(NATIONS).length);
+  const data = await readFile(new URL(`../assets/units/${spec.file}`, import.meta.url));
+  assert.equal(data.subarray(0, 4).toString(), 'RIFF');
+  assert.equal(data.subarray(8, 12).toString(), 'WEBP');
+  assert.ok(data.byteLength > 300_000, 'civilian musket art unexpectedly lost source detail');
+  assert.deepEqual(readLosslessWebpSize(data), {
+    width: spec.sourceW * spec.columns,
+    height: spec.sourceH * spec.rows,
+  });
 });

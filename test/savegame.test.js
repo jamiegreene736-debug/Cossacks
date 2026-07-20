@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { Commander } from '../js/ai.js';
 import { normalizeAudioSettings } from '../js/audio.js';
+import { UNIT_TYPES } from '../js/config.js';
 import { createBuilding, getMillFieldSlots, getRallyTarget, setRallyPoint } from '../js/economy.js';
 import {
   createGameSnapshot, decodeSnapshot, deleteCampaign, encodeSnapshot,
@@ -154,6 +155,22 @@ test('campaigns saved before navigation versioning still restore', () => {
   delete snapshot.world.navigationVersion;
 
   assert.equal(restoreGameSnapshot(snapshot).world.navigationVersion, 0);
+});
+
+test('legacy campaign villagers receive the current explicit-combat balance on restore', () => {
+  const world = createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
+  const villager = spawnUnit(world, 0, 'villager', 900, 1500);
+  Object.assign(villager, { range: 0, acquire: 0, reloadTime: 0, dmg: 0, acc: 0 });
+  const snapshot = createGameSnapshot(
+    world, new Commander(world, 1), { x: 900, y: 1500, zoom: 1 },
+  );
+
+  const restored = restoreGameSnapshot(snapshot).world.units.find(unit => unit.id === villager.id);
+  assert.equal(restored.range, UNIT_TYPES.villager.range);
+  assert.equal(restored.acquire, 0);
+  assert.equal(restored.reloadTime, UNIT_TYPES.villager.reload);
+  assert.equal(restored.dmg, UNIT_TYPES.villager.dmg);
+  assert.equal(restored.acc, UNIT_TYPES.villager.acc);
 });
 
 test('a maximum-scale army remains within a normal localStorage budget', () => {

@@ -29,7 +29,10 @@ export const NATIONS = {
 export const UNIT_TYPES = {
   villager: {
     label: 'Villager', short: 'Villager', hp: 38, speed: 54, radius: 5,
-    range: 0, acquire: 0, reload: 0, dmg: 0, acc: 0,
+    // Civilian militia only fire when explicitly ordered. Their shorter range,
+    // slower reload, lower accuracy and lower damage keep trained musketeers
+    // decisively superior in every sustained fight.
+    range: 160, acquire: 0, reload: 6, dmg: 5, acc: 0.27,
     meleeDmg: 2, meleeRate: 1.5, chase: 0,
     cost: { food: 50 }, trainTime: 6, pop: 1,
   },
