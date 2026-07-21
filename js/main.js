@@ -4,7 +4,7 @@ import { SIM_STEP, BUILDING_TYPES } from './config.js';
 import { createWorld, spawnUnit, step } from './sim.js';
 import { Commander } from './ai.js';
 import { initRender, startBattle as startBattleRender, draw,
-         camera, clampCamera, rotateView } from './render.js';
+         camera, clampCamera, rotateView, zoomView } from './render.js';
 import { viewDirectionLabel } from './camera.js';
 import { initInput, updateInput, getSelection, getDragRect,
          getPlacementPreview, getResourceHoverTarget, getResourceHoverKind, getMovePreview,
@@ -35,6 +35,7 @@ initRender(canvas, minimap);
 initInput(canvas, minimap, () => world, {
   onPause: togglePause,
   onView: turnBattleView,
+  onZoom: changeBattleZoom,
   onFormation: formation => {
     ui.markFormation(formation);
     sfx.command('move');
@@ -78,6 +79,7 @@ ui.initMenu({
 ui.bindControls({
   onPause: togglePause,
   onView: turnBattleView,
+  onZoom: changeBattleZoom,
   onSpeed: toggleSpeed,
   onHalt: () => {
     haltSelection();
@@ -501,6 +503,11 @@ function turnBattleView(direction) {
   const rotation = rotateView(direction);
   ui.setViewDirection(viewDirectionLabel(rotation));
   ui.toast(`View turned ${direction < 0 ? 'left' : 'right'} — facing ${viewDirectionLabel(rotation)}.`, 'good');
+}
+
+function changeBattleZoom(direction) {
+  if (!world) return;
+  zoomView(direction);
 }
 
 function togglePause() {

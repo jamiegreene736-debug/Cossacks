@@ -19,6 +19,7 @@ import {
   beginThreeFingerViewGesture, createViewGestureState, endThreeFingerViewGesture,
   readThreeFingerViewGesture, readTrackpadViewGesture,
 } from './view-gesture.js';
+import { clampCameraZoom } from './camera.js';
 
 let getWorld = () => null;
 let callbacks = {};
@@ -147,7 +148,7 @@ export function initInput(canvas, minimap, worldGetter, cbs) {
       return;
     }
     const before = screenToWorld(event.clientX, event.clientY);
-    camera.zoom = Math.max(0.42, Math.min(2.5, camera.zoom * Math.exp(-event.deltaY * 0.0013)));
+    camera.zoom = clampCameraZoom(camera.zoom * Math.exp(-event.deltaY * 0.0013));
     const after = screenToWorld(event.clientX, event.clientY);
     camera.x += before.x - after.x;
     camera.y += before.y - after.y;
@@ -194,6 +195,8 @@ export function initInput(canvas, minimap, worldGetter, cbs) {
     else if (key === 'p') callbacks.onPause?.();
     else if (key === 'q') callbacks.onView?.(-1);
     else if (key === 'e') callbacks.onView?.(1);
+    else if (key === '-' || key === '_') callbacks.onZoom?.(-1);
+    else if (key === '=' || key === '+') callbacks.onZoom?.(1);
     else if (key === 'f' && !getSelection().some(entity => entity.type === 'villager')) selectAll();
     else if (/^[1-9]$/.test(event.key)) {
       if (event.ctrlKey || event.metaKey) {
