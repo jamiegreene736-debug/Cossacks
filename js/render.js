@@ -21,7 +21,7 @@ import {
 } from './gfx/art-assets.js';
 import { fortificationCorners, isFortificationType } from './fortifications.js';
 import { getWorkerFrame } from './worker-animation.js';
-import { getMilitaryFrame } from './military-animation.js';
+import { getMilitaryFrame, getMilitaryVerticalOffset } from './military-animation.js';
 import {
   chooseRenderDpr, circleIntersectsBounds, getVisibleWorldBounds,
 } from './render-performance.js';
@@ -310,6 +310,7 @@ function paintProductionMilitaryBase(g, def, side) {
 function withProductionMilitaryArt(type, nationKey, fallback) {
   const spec = MILITARY_ART_SPECS[type];
   const image = spec ? getProductionArt(spec.key) : null;
+  const walkImage = spec?.walk ? getProductionArt(spec.walk.key) : null;
   const sourceRow = MILITARY_ART_ROWS[nationKey];
   if (!spec || !image || sourceRow === undefined) return fallback;
 
@@ -329,6 +330,12 @@ function withProductionMilitaryArt(type, nationKey, fallback) {
       sourceRow,
       frameXBounds: spec.frameXBounds?.[nationKey],
     },
+    walkProduction: walkImage ? {
+      image: walkImage,
+      sourceW: spec.walk.sourceW,
+      sourceH: spec.walk.sourceH,
+      sourceRow,
+    } : null,
   };
 }
 
@@ -443,17 +450,29 @@ function buildNationSprites(nationKey, side = 0) {
   const proceduralDefs = {
     villager: workerDef,
     musk: { w: INF_W, h: INF_H, ax: INF_AX, ay: INF_AY, frames: [
-      ['idle', 0], ['idle', 1], ['idle', 2], ['fire', 0],
+      ['idle', 0],
+      ['idle', 0, null, 0, 'walk'], ['idle', 1, null, 1, 'walk'],
+      ['idle', 2, null, 2, 'walk'], ['idle', 0, null, 3, 'walk'],
+      ['idle', 1, null, 4, 'walk'], ['idle', 2, null, 5, 'walk'],
+      ['fire', 0, null, 3],
     ], painter: (g, pose, leg) => drawSoldier(g, nat, pose, leg, 'musk') },
     pike: { w: INF_W, h: INF_H, ax: INF_AX, ay: INF_AY, frames: [
-      ['idle', 0], ['idle', 1], ['idle', 2], ['attack', 0],
+      ['idle', 0],
+      ['idle', 0, null, 0, 'walk'], ['idle', 1, null, 1, 'walk'],
+      ['idle', 2, null, 2, 'walk'], ['idle', 0, null, 3, 'walk'],
+      ['idle', 1, null, 4, 'walk'], ['idle', 2, null, 5, 'walk'],
+      ['attack', 0, null, 3],
     ], painter: (g, pose, leg) => drawSoldier(g, nat, pose, leg, 'pike') },
     // Boxes come from the mounted bounds audit: the painted geometry reaches
     // x=30.19 and x=39.54, so the old 23/27-wide boxes clipped the horse's
     // head and the gun's far crewman outright. Anchor is exactly w/2 so the
     // mirrored facing lines up.
     cav: { w: 33, h: 29, ax: 16.5, ay: 23.4, frames: [
-      ['idle', 0], ['idle', 1], ['idle', 2], ['attack', 0],
+      ['idle', 0],
+      ['idle', 0, null, 0, 'walk'], ['idle', 1, null, 1, 'walk'],
+      ['idle', 2, null, 2, 'walk'], ['idle', 0, null, 3, 'walk'],
+      ['idle', 1, null, 4, 'walk'], ['idle', 2, null, 5, 'walk'],
+      ['attack', 0, null, 3],
     ], painter: (g, pose, leg) => drawCavalry(g, nat, pose, leg, side) },
     gun: { w: 41, h: 29, ax: 20.5, ay: 23.4, frames: [
       ['idle', 0], ['fire', 0],
@@ -472,7 +491,9 @@ function buildNationSprites(nationKey, side = 0) {
     for (let frameIndex = 0; frameIndex < def.frames.length; frameIndex++) {
       const [pose, leg, action = null, sourceFrame = frameIndex, sourceKind = 'default'] = def.frames[frameIndex];
       const [c, g] = frameCanvas(def.w, def.h);
-      const production = sourceKind === 'combat' ? def.combatProduction : def.production;
+      const production = sourceKind === 'combat'
+        ? def.combatProduction
+        : sourceKind === 'walk' ? def.walkProduction : def.production;
       if (production) {
         if (def.military) paintProductionMilitaryBase(g, def, side);
         g.imageSmoothingEnabled = true;
@@ -880,7 +901,13 @@ export function draw(
     if (!circleIntersectsBounds(u, visibleWorld, 56)) continue;
     sortBuf.push(u);
   }
-  sortBuf.sort((a, b) => worldViewDepth(camera, a.x, a.y) - worldViewDepth(camera, b.x, b.y));
+  sortBuf.sort((a, b) => {
+    const depthA = Math.round(worldViewDepth(camera, a.x, a.y));
+    const depthB = Math.round(worldViewDepth(camera, b.x, b.y));
+    // Dense ranks can move by fractions of a pixel during separation. One-world-
+    // pixel depth layers give the sort a transitive, stable id tie-break.
+    return depthA - depthB || a.id - b.id;
+  });
 
   // Selection rings go under the sprites so they read as marks on the ground.
   drawSelection(ctx, sortBuf, alpha);
@@ -898,7 +925,8 @@ export function draw(
     const rearView = rotation >= Math.PI / 2;
     const dir = (u.facing >= 0) !== rearView ? 0 : 1;
     ctx.save();
-    ctx.translate(ix, iy);
+    const verticalOffset = u.type === 'villager' ? 0 : getMilitaryVerticalOffset(u);
+    ctx.translate(ix, iy + verticalOffset);
     ctx.rotate(-rotation);
     ctx.drawImage(sp.frames[dir][frame], -sp.ax, -sp.ay, sp.w, sp.h);
     drawThrowingTorch(u, 0, 0, dir === 0 ? 1 : -1);
