@@ -100,6 +100,9 @@ const T = {
   MUD:          '#634E33',
   ROAD_BED:     '#8A7350',
   ROAD_DUST:    '#B7A57E',
+  SAND:         '#A99A72',
+  SAND_LIGHT:   '#C9BA91',
+  SAND_DARK:    '#746448',
   SCRUB_COOL:   '#5E6E5C',
   ROCK:         '#8A8578',
   ROCK_LIGHT:   '#B5B0A0',
@@ -586,18 +589,86 @@ function paintMeadowTexture(g) {
   if (!pattern) return;
 
   g.save();
-  // Preserve the low-frequency material field while replacing its flat fill
-  // with real blade, clover and dead-grass structure from the seamless tile.
+  // The source is surface information, not the surface colour. A mostly
+  // opaque source-over pass made every material band converge on the same
+  // pale olive and erased the broad turf/dry-grass structure underneath it.
+  // A restrained source-over pass retains the photographed blade and clover
+  // structure while the procedural material field continues to own most of
+  // the hue and value.
+  g.filter = 'saturate(0.78) contrast(1.16)';
   g.globalCompositeOperation = 'source-over';
-  g.filter = 'saturate(0.86) contrast(1.06)';
-  g.globalAlpha = 0.62;
+  g.globalAlpha = 0.26;
   g.fillStyle = pattern;
   g.fillRect(0, 0, WORLD.w, WORLD.h);
-  g.filter = 'none';
+
   g.globalCompositeOperation = 'soft-light';
-  g.globalAlpha = 0.12;
+  g.globalAlpha = 0.24;
+  g.fillRect(0, 0, WORLD.w, WORLD.h);
+
+  // A restrained multiply pass restores dark blade roots without veiling the
+  // lit tips. It is deliberately much weaker than the former source-over mix.
+  g.filter = 'none';
+  g.globalCompositeOperation = 'multiply';
+  g.globalAlpha = 0.07;
   g.fillRect(0, 0, WORLD.w, WORLD.h);
   g.restore();
+}
+
+// A seamless directional micro-height field. The meadow photograph supplies
+// recognisable vegetation, while this tile supplies the missing grazing light:
+// tiny sunward crests and cool lee hollows. It is applied only to the open
+// ground, before parcels, roads and water are painted, so those materials keep
+// their own purpose-built relief models.
+function makeGrassReliefTile(size, seed) {
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  const img = g.createImageData(size, size);
+  const d = img.data;
+  const coarseFreq = 1 / 32;
+  const fineFreq = 1 / 8;
+  const coarsePeriod = Math.round(size * coarseFreq);
+  const finePeriod = Math.round(size * fineFreq);
+  const heightAt = function (x, y) {
+    return vnoiseTile(x * coarseFreq, y * coarseFreq, seed, coarsePeriod, coarsePeriod) * 0.68
+      + vnoiseTile(x * fineFreq, y * fineFreq, seed + 311, finePeriod, finePeriod) * 0.32;
+  };
+
+  for (let y = 0, p = 0; y < size; y++) {
+    for (let x = 0; x < size; x++, p += 4) {
+      const h = heightAt(x, y);
+      const dx = heightAt(x + 1, y) - heightAt(x - 1, y);
+      const dy = heightAt(x, y + 1) - heightAt(x, y - 1);
+      const slope = -(dx * SUN.x + dy * SUN.y);
+      // Negative curvature darkens small hollows, giving the flock a contact
+      // component in addition to the directional highlight.
+      const curvature = heightAt(x + 2, y) + heightAt(x - 2, y)
+        + heightAt(x, y + 2) + heightAt(x, y - 2) - h * 4;
+      const value = clamp(0.5 + slope * 2.9 + curvature * 0.48, 0.14, 0.86);
+      const k = Math.round(value * 255);
+      d[p] = k; d[p + 1] = k; d[p + 2] = k; d[p + 3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  return c;
+}
+
+function paintGrassRelief(g, scale) {
+  const tile = makeGrassReliefTile(512, 6719);
+  const pattern = g.createPattern(tile, 'repeat');
+  if (!pattern) { tile.width = 1; tile.height = 1; return; }
+  try {
+    const inv = 1 / scale;
+    pattern.setTransform(new DOMMatrix().scaleSelf(inv, inv));
+  } catch (e) { /* pattern transforms unsupported: fall back to 1:1 repeat */ }
+
+  g.save();
+  g.globalCompositeOperation = 'overlay';
+  g.globalAlpha = 0.19;
+  g.fillStyle = pattern;
+  g.fillRect(0, 0, WORLD.w, WORLD.h);
+  g.restore();
+  tile.width = 1; tile.height = 1;
 }
 
 const COUNTRY_VEGETATION_CELL = 512;
@@ -797,13 +868,24 @@ function paintPloughed(g, p, b, R, soil, dark, lightC, pitch, crossRows) {
   }
   g.restore();
 
-  // Clods and stones turned up by the plough.
-  const clods = makeDotBatch();
-  for (let i = 0; i < 520; i++) {
+  // Clods and stones turned up by the plough. Every crumb has a cool contact
+  // mark, an earth body and a sunward cap; paired tones survive downsampling
+  // where single flat dots dissolve into texture noise.
+  const clodShadows = makeDotBatch();
+  const clodBodies = makeDotBatch();
+  const clodLights = makeDotBatch();
+  for (let i = 0; i < 920; i++) {
     const x = rnd(b.x0, b.x1), y = rnd(b.y0, b.y1);
-    batchDot(clods, Math.random() < 0.6 ? rgba(T.EARTH_DARK, 0.5) : rgba(T.EARTH_LIGHT, 0.45), x, y, rnd(0.6, 1.8));
+    const r = rnd(0.65, 2.15);
+    batchDot(clodShadows, 'rgba(' + SUN.shadowRGB + ',0.28)',
+      x + SUN.shadow.x * r * 0.62, y + SUN.shadow.y * r * 0.62, r * 1.02);
+    batchDot(clodBodies, Math.random() < 0.72 ? rgba(dark, 0.72) : rgba(T.ROCK, 0.58), x, y, r * 0.88);
+    if (i % 2 === 0) batchDot(clodLights, rgba(lightC, 0.62),
+      x + SUN.x * r * 0.32, y + SUN.y * r * 0.32, r * 0.34);
   }
-  flushDotBatch(g, clods);
+  flushDotBatch(g, clodShadows);
+  flushDotBatch(g, clodBodies);
+  flushDotBatch(g, clodLights);
 }
 
 function paintWheat(g, p, b, R) {
@@ -919,6 +1001,58 @@ function paintDirtPatches(g, count) {
     g.fillStyle = rgba(T.EARTH_DARK, rnd(0.22, 0.42));
     smoothClosedPath(g, inner);
     g.fill();
+
+    // Pebbly crumbs and tiny aggregate stop exposed soil reading as a smooth
+    // brown stain. The clip keeps every incident inside the irregular patch.
+    g.save();
+    smoothClosedPath(g, pts);
+    g.clip();
+    const crumbShade = makeDotBatch();
+    const crumbBody = makeDotBatch();
+    const crumbLight = makeDotBatch();
+    const crumbCount = Math.round(18 + rx * 0.16);
+    for (let k = 0; k < crumbCount; k++) {
+      const a = Math.random() * Math.PI * 2;
+      const d = Math.sqrt(Math.random());
+      const px = x + Math.cos(a) * rx * d;
+      const py = y + Math.sin(a) * ry * d;
+      const r = rnd(0.55, 1.65);
+      batchDot(crumbShade, 'rgba(' + SUN.shadowRGB + ',0.26)', px + 0.65, py + 0.72, r);
+      batchDot(crumbBody, Math.random() < 0.78 ? rgba(T.EARTH_DARK, 0.66) : rgba(T.ROCK, 0.58), px, py, r * 0.82);
+      if (k % 2 === 0) batchDot(crumbLight, rgba(T.EARTH_LIGHT, 0.58), px - r * 0.25, py - r * 0.30, r * 0.30);
+    }
+    flushDotBatch(g, crumbShade);
+    flushDotBatch(g, crumbBody);
+    flushDotBatch(g, crumbLight);
+
+    // Dry fissures and compressed hoof pocks provide readable incidents at
+    // command zoom. Keep them sparse: the patch remains exposed earth, not a
+    // cracked-clay decal repeated across the battlefield.
+    if (i % 3 === 0) {
+      g.strokeStyle = rgba(T.EARTH_DARK, 0.52);
+      g.lineWidth = 0.82;
+      for (let crack = 0; crack < 3; crack++) {
+        let px = x + rnd(-rx * 0.32, rx * 0.32);
+        let py = y + rnd(-ry * 0.25, ry * 0.25);
+        g.beginPath(); g.moveTo(px, py);
+        for (let seg = 0; seg < 3; seg++) {
+          px += rnd(-5.5, 5.5);
+          py += rnd(2.0, 6.5);
+          g.lineTo(px, py);
+        }
+        g.stroke();
+      }
+    }
+    for (let pock = 0; pock < 5; pock++) {
+      const px = x + rnd(-rx * 0.52, rx * 0.52);
+      const py = y + rnd(-ry * 0.42, ry * 0.42);
+      const pr = rnd(1.4, 3.2);
+      g.fillStyle = 'rgba(' + SUN.shadowRGB + ',0.22)';
+      g.beginPath(); g.ellipse(px + 0.7, py + 0.7, pr, pr * 0.52, rnd(-0.5, 0.5), 0, Math.PI * 2); g.fill();
+      g.fillStyle = rgba(T.EARTH_LIGHT, 0.30);
+      g.beginPath(); g.ellipse(px - 0.35, py - 0.35, pr * 0.62, pr * 0.22, rnd(-0.5, 0.5), 0, Math.PI * 2); g.fill();
+    }
+    g.restore();
 
     // Sunlit crumb rim on the up-left arc only. Offset along SUN.shadow —
     // see the note in paintParcel for why the inward direction is the one
@@ -1579,12 +1713,35 @@ function paintGravelBar(g, walk, t, width, side) {
   g.save();
   g.translate(f.x + f.nx * side * width * 0.24, f.y + f.ny * side * width * 0.24);
   g.rotate(f.angle);
-  const pts = blobPoints(0, 0, width * 0.76, width * 0.23, 13, 0.24, 0);
-  g.fillStyle = rgba(T.EARTH_DARK, 0.48); smoothClosedPath(g, pts); g.fill();
-  g.fillStyle = rgba(mixHex(T.ROAD_DUST, T.ROCK, 0.34), 0.92);
-  smoothClosedPath(g, blobPoints(-width * 0.04, -1, width * 0.68, width * 0.19, 13, 0.24, 0)); g.fill();
-  g.strokeStyle = rgba(T.ROCK_LIGHT, 0.42); g.lineWidth = 1.1;
+  // Tapered, broken plan form: a gravel bar follows the current and pinches
+  // at its ends; it must never read as a smooth oval island or puddle.
+  const pts = blobPoints(-width * 0.05, 0, width * 0.74, width * 0.18, 15, 0.44, 0);
+  g.fillStyle = rgba(T.SAND_DARK, 0.58); smoothClosedPath(g, pts); g.fill();
+  g.fillStyle = rgba(mixHex(T.SAND, T.ROCK, 0.22), 0.96);
+  smoothClosedPath(g, blobPoints(-width * 0.10, -1, width * 0.64, width * 0.145, 15, 0.38, 0)); g.fill();
+  g.fillStyle = rgba(T.SAND, 0.68);
+  smoothClosedPath(g, blobPoints(width * 0.42, 1, width * 0.28, width * 0.09, 9, 0.48, 0)); g.fill();
+  // Wet toe and dry sunward lip make sand read as a bank material instead of
+  // a beige fill. The grain pairs below give it scale between water and rock.
+  g.strokeStyle = rgba(T.SAND_DARK, 0.68); g.lineWidth = 2.2;
+  g.save(); g.translate(SUN.shadow.x * 1.2, SUN.shadow.y * 1.2);
+  smoothClosedPath(g, pts); g.stroke(); g.restore();
+  g.strokeStyle = rgba(T.SAND_LIGHT, 0.62); g.lineWidth = 1.05;
+  g.save(); g.translate(SUN.x * 0.9, SUN.y * 0.9);
   smoothClosedPath(g, pts); g.stroke();
+  g.restore();
+
+  const grainShade = makeDotBatch();
+  const grainLight = makeDotBatch();
+  for (let i = 0; i < 110; i++) {
+    const x = rnd(-width * 0.58, width * 0.52);
+    const y = rnd(-width * 0.12, width * 0.12);
+    const r = rnd(0.28, 0.75);
+    batchDot(grainShade, rgba(T.SAND_DARK, 0.52), x + 0.35, y + 0.38, r);
+    batchDot(grainLight, rgba(T.SAND_LIGHT, 0.64), x, y, r * 0.62);
+  }
+  flushDotBatch(g, grainShade);
+  flushDotBatch(g, grainLight);
   for (let i = 0; i < 30; i++) {
     drawTerrainPebble(g, rnd(-width * 0.58, width * 0.52), rnd(-width * 0.12, width * 0.12),
       rnd(0.8, 2.4), rnd(-0.7, 0.7), i < 10);
@@ -1860,9 +2017,9 @@ function paintBridge(g, ford, road, stream) {
 // ===========================================================================
 //  L7 — STATIC GRASS / FLOCK at 1:1. This is the layer that survives the
 //  2.4x zoom ceiling. Delivered as six pre-baked tileable 512x512 tuft
-//  canvases stamped in a randomised grid (6 tiles x 4 orientations = 24
-//  distinct block appearances, so the repeat never reads), plus ~34,000
-//  individually placed hero tufts coloured by the local material field.
+//  canvases stamped in a material-aware grid (6 tiles x 4 orientations = 24
+//  distinct block appearances), plus individually placed hero tussocks and
+//  ground litter coloured by the local material field.
 // ===========================================================================
 
 function makeTuftTile(size, ramp1, ramp2, density, seed) {
@@ -1870,71 +2027,93 @@ function makeTuftTile(size, ramp1, ramp2, density, seed) {
   c.width = size; c.height = size;
   const g = c.getContext('2d');
   g.lineCap = 'round';
-  const b = makeBatch();
-  const dots = makeDotBatch();
-  const margin = 8;
-  const n = density;
-  for (let i = 0; i < n; i++) {
+  const shadows = makeBatch();
+  const blades = makeBatch();
+  const litTips = makeBatch();
+  const roots = makeDotBatch();
+  const margin = 13;
+  for (let i = 0; i < density; i++) {
     const x = Math.random() * size, y = Math.random() * size;
+    const patch = vnoiseTile(x / 64, y / 64, seed + 907, size / 64, size / 64);
+    if (Math.random() > Math.min(1, 0.30 + patch * 0.95)) continue;
     const useA = Math.random() < 0.72;
     const pal = useA ? ramp1 : ramp2;
     // Weight toward the middle of the ramp so extremes stay as accents.
     const w = Math.random();
     const gi = w < 0.10 ? 0 : w < 0.30 ? 1 : w < 0.58 ? 2 : w < 0.80 ? 3 : w < 0.94 ? 4 : 5;
-    const col = pal[gi];
-    const len = rnd(2.2, 4.5);
-    const ang = (-100 + rnd(-22, 22)) * Math.PI / 180;
-    const dx = Math.cos(ang) * len, dy = Math.sin(ang) * len;
     // Wrap near-edge tufts so the tile is genuinely seamless (and stays
     // seamless under the flips used when stamping).
     const xs = (x < margin) ? [x, x + size] : (x > size - margin) ? [x, x - size] : [x];
     const ys = (y < margin) ? [y, y + size] : (y > size - margin) ? [y, y - size] : [y];
     for (const px of xs) {
       for (const py of ys) {
-        batchSeg(b, col, 0.8, px, py, px + dx, py + dy);
-        if (i % 3 === 0) batchDot(dots, rgba(T.TURF_DEEP, 0.30), px, py, 0.55);
+        const bladeCount = 2 + ((Math.random() * 3) | 0);
+        const tallest = rnd(4.2, 7.8);
+        batchSeg(shadows, 'rgba(' + SUN.shadowRGB + ',0.24)', 0.78,
+          px + 0.4, py + 0.45,
+          px + SUN.shadow.x * tallest * 0.72, py + SUN.shadow.y * tallest * 0.38);
+        for (let blade = 0; blade < bladeCount; blade++) {
+          const len = tallest * rnd(0.54, 1);
+          const ang = (-100 + rnd(-34, 34) + Math.sin(seed + i * 0.17) * 4) * Math.PI / 180;
+          const bx = px + rnd(-1.15, 1.15), by = py + rnd(-0.45, 0.45);
+          const tx = bx + Math.cos(ang) * len, ty = by + Math.sin(ang) * len;
+          const ci = clamp(gi + rndi(-1, 1), 0, 5);
+          batchSeg(blades, pal[ci], blade === 0 ? 1.0 : 0.78, bx, by, tx, ty);
+          if (blade === 0 && i % 3 === 0) {
+            batchSeg(litTips, rgba(pal[Math.min(5, ci + 1)], 0.70), 0.55,
+              lerp(bx, tx, 0.56), lerp(by, ty, 0.56), tx, ty);
+          }
+        }
+        if (i % 2 === 0) batchDot(roots, rgba(T.TURF_DEEP, 0.38), px, py, 0.72);
       }
     }
   }
-  flushBatch(g, b);
-  flushDotBatch(g, dots);
+  flushBatch(g, shadows);
+  flushBatch(g, blades);
+  flushBatch(g, litTips);
+  flushDotBatch(g, roots);
   return c;
 }
 
 function paintFlock(g) {
   const TILE = 512;
   const tiles = [
-    makeTuftTile(TILE, TUFT_TURF, TUFT_DRY, 6200, 1),
-    makeTuftTile(TILE, TUFT_TURF, TUFT_TURF, 7400, 2),
-    makeTuftTile(TILE, TUFT_DRY, TUFT_STRAW, 5600, 3),
-    makeTuftTile(TILE, TUFT_TURF, TUFT_STRAW, 6600, 4),
-    makeTuftTile(TILE, TUFT_STRAW, TUFT_DRY, 5200, 5),
-    makeTuftTile(TILE, TUFT_TURF, TUFT_DRY, 7000, 6),
+    makeTuftTile(TILE, TUFT_TURF, TUFT_TURF, 2500, 1),
+    makeTuftTile(TILE, TUFT_TURF, TUFT_DRY, 2300, 2),
+    makeTuftTile(TILE, TUFT_TURF, TUFT_STRAW, 2200, 3),
+    makeTuftTile(TILE, TUFT_DRY, TUFT_TURF, 2150, 4),
+    makeTuftTile(TILE, TUFT_DRY, TUFT_STRAW, 2050, 5),
+    makeTuftTile(TILE, TUFT_STRAW, TUFT_DRY, 1950, 6),
   ];
 
   const cols = Math.ceil(WORLD.w / TILE);
   const rows = Math.ceil(WORLD.h / TILE);
-  g.save();
-  g.globalAlpha = 0.24;
   for (let j = 0; j < rows; j++) {
     for (let i = 0; i < cols; i++) {
-      const t = tiles[(Math.random() * tiles.length) | 0];
+      const x = i * TILE, y = j * TILE;
+      const field = sampleField(x + TILE * 0.5, y + TILE * 0.5);
+      const first = field > 0.74 ? 4 : field > 0.58 ? 2 : 0;
+      const t = tiles[first + (Math.random() < 0.5 ? 0 : 1)];
       const fx = Math.random() < 0.5 ? 1 : -1;
       const fy = Math.random() < 0.5 ? 1 : -1;
       g.save();
-      g.translate(i * TILE + (fx < 0 ? TILE : 0), j * TILE + (fy < 0 ? TILE : 0));
+      // Settlement lawns retain the same depth cues at reduced contrast, so
+      // footprints remain readable without reverting to smooth green carpet.
+      g.globalAlpha = 0.40 - calmness(x + TILE * 0.5, y + TILE * 0.5) * 0.12;
+      g.translate(x + (fx < 0 ? TILE : 0), y + (fy < 0 ? TILE : 0));
       g.scale(fx, fy);
       g.drawImage(t, 0, 0);
       g.restore();
     }
   }
-  g.restore();
 
   for (const t of tiles) { t.width = 1; t.height = 1; }
 }
 
 function paintHeroTufts(g, count) {
-  const b = makeBatch();
+  const shadows = makeBatch();
+  const blades = makeBatch();
+  const highlights = makeBatch();
   const roots = makeDotBatch();
   const flowers = makeDotBatch();
   for (let i = 0; i < count; i++) {
@@ -1946,26 +2125,65 @@ function paintHeroTufts(g, count) {
     const pal = n > 0.80 ? TUFT_STRAW : n > 0.64 ? TUFT_DRY : TUFT_TURF;
     const w = Math.random();
     const gi = w < 0.08 ? 0 : w < 0.26 ? 1 : w < 0.54 ? 2 : w < 0.78 ? 3 : w < 0.93 ? 4 : 5;
-    const len = rnd(2.6, 5.4);
-    const ang = (-100 + rnd(-24, 24)) * Math.PI / 180;
-    const lw = Math.random() < 0.18 ? 1.1 : 0.8;
-    batchSeg(b, pal[gi], lw, x, y, x + Math.cos(ang) * len, y + Math.sin(ang) * len);
-    // Blade pair: a second shorter leaf leaning the other way reads as a clump.
-    if (Math.random() < 0.45) {
-      const a2 = (-100 + rnd(-40, 40)) * Math.PI / 180;
-      const l2 = len * rnd(0.5, 0.8);
-      batchSeg(b, pal[Math.max(0, gi - 1)], 0.8, x + rnd(-0.8, 0.8), y, x + Math.cos(a2) * l2, y + Math.sin(a2) * l2);
+    const tallest = rnd(5.0, 10.2);
+    batchSeg(shadows, 'rgba(' + SUN.shadowRGB + ',0.28)', 0.9, x + 0.45, y + 0.55,
+      x + SUN.shadow.x * tallest * 0.78, y + SUN.shadow.y * tallest * 0.42);
+    const bladeCount = 2 + ((Math.random() * 4) | 0);
+    for (let blade = 0; blade < bladeCount; blade++) {
+      const len = tallest * rnd(0.48, 1);
+      const ang = (-100 + rnd(-43, 43)) * Math.PI / 180;
+      const bx = x + rnd(-1.4, 1.4), by = y + rnd(-0.5, 0.5);
+      const tx = bx + Math.cos(ang) * len, ty = by + Math.sin(ang) * len;
+      const ci = clamp(gi + rndi(-1, 1), 0, 5);
+      batchSeg(blades, pal[ci], blade === 0 ? 1.15 : 0.82, bx, by, tx, ty);
+      if (blade === 0 && i % 3 === 0) batchSeg(highlights,
+        rgba(pal[Math.min(5, ci + 1)], 0.74), 0.6,
+        lerp(bx, tx, 0.58), lerp(by, ty, 0.58), tx, ty);
     }
-    if (i % 4 === 0) batchDot(roots, rgba(T.TURF_DEEP, 0.30), x, y, 0.6);
-    if (Math.random() < 0.0026) batchDot(flowers, pick(FLOWERS), x + rnd(-1, 1), y - len * rnd(0.7, 1.0), rnd(0.7, 1.3));
+    if (i % 2 === 0) batchDot(roots, rgba(T.TURF_DEEP, 0.42), x, y, 0.78);
+    if (Math.random() < 0.004) batchDot(flowers, pick(FLOWERS),
+      x + rnd(-1, 1), y - tallest * rnd(0.72, 1), rnd(0.75, 1.35));
   }
-  flushBatch(g, b);
+  flushBatch(g, shadows);
+  flushBatch(g, blades);
+  flushBatch(g, highlights);
   flushDotBatch(g, roots);
   flushDotBatch(g, flowers);
 }
 
+function paintGroundLitter(g, count) {
+  const shadows = makeBatch();
+  const fragments = makeBatch();
+  const pebbleShade = makeDotBatch();
+  const pebbleBody = makeDotBatch();
+  const pebbleLight = makeDotBatch();
+  for (let i = 0; i < count; i++) {
+    const x = Math.random() * WORLD.w, y = Math.random() * WORLD.h;
+    if (Math.random() < calmness(x, y) * 0.58) continue;
+    const field = sampleField(x, y);
+    if (Math.random() < 0.72) {
+      const len = rnd(1.4, field > 0.72 ? 4.2 : 3.0);
+      const angle = rnd(-0.8, 0.8);
+      batchSeg(shadows, 'rgba(' + SUN.shadowRGB + ',0.20)', 0.76,
+        x + 0.55, y + 0.65, x + Math.cos(angle) * len + 0.55, y + Math.sin(angle) * len + 0.65);
+      batchSeg(fragments, field > 0.72 ? pick(TUFT_STRAW) : pick(TUFT_DRY), 0.72,
+        x, y, x + Math.cos(angle) * len, y + Math.sin(angle) * len);
+    } else {
+      const r = rnd(0.45, 1.35);
+      batchDot(pebbleShade, rgba(T.ROCK_DARK, 0.44), x + 0.55, y + 0.62, r);
+      batchDot(pebbleBody, rgba(Math.random() < 0.55 ? T.ROCK : T.EARTH_LIGHT, 0.62), x, y, r * 0.82);
+      batchDot(pebbleLight, rgba(T.ROCK_LIGHT, 0.58), x - r * 0.24, y - r * 0.28, r * 0.28);
+    }
+  }
+  flushBatch(g, shadows);
+  flushBatch(g, fragments);
+  flushDotBatch(g, pebbleShade);
+  flushDotBatch(g, pebbleBody);
+  flushDotBatch(g, pebbleLight);
+}
+
 // ===========================================================================
-//  L8 — TREES, COPSES, BUSHES, ROCKS, SCRUB
+//  L9 — TREES, COPSES, BUSHES, ROCKS, SCRUB
 //  drawTree keeps its (g, x, y, r) signature; a fifth optional options object
 //  adds species / jitter / shadow control. All existing call sites work.
 // ===========================================================================
@@ -2257,6 +2475,25 @@ function drawRock(g, x, y, r) {
       g, productionAccents, 0, x, y + r * 0.84,
       r * 5.15, ((x + y) | 0) % 2 === 0,
     );
+    // The production outcrop carries the broad silhouette; these scale-aware
+    // marks restore crisp mineral planes after it has been reduced to board
+    // size. They follow the global sun instead of outlining the whole sprite.
+    g.strokeStyle = rgba(T.ROCK_DARK, 0.74);
+    g.lineWidth = Math.max(0.7, r * 0.075);
+    for (let i = 0; i < 3; i++) {
+      const sx = x + rnd(-r * 0.82, r * 0.54);
+      const sy = y + rnd(-r * 0.62, r * 0.25);
+      g.beginPath(); g.moveTo(sx, sy);
+      g.lineTo(sx + rnd(-r * 0.22, r * 0.18), sy + rnd(r * 0.20, r * 0.48));
+      g.stroke();
+    }
+    g.strokeStyle = rgba(T.ROCK_LIGHT, 0.76);
+    g.lineWidth = Math.max(0.65, r * 0.065);
+    g.beginPath();
+    g.moveTo(x - r * 1.28, y - r * 0.28);
+    g.lineTo(x - r * 0.42, y - r * 0.86);
+    g.lineTo(x + r * 0.54, y - r * 0.68);
+    g.stroke();
     for (let i = 0; i < 10; i++) {
       const a = rnd(0.12, Math.PI - 0.12);
       drawTerrainPebble(g, x + Math.cos(a) * rnd(r * 0.75, r * 1.70),
@@ -2511,7 +2748,7 @@ function placeUndergrowth(g, road, stream, trees) {
 }
 
 // ===========================================================================
-//  L9 — BOARD AO: large-scale tonal variation with no analytic edges.
+//  L8A — BOARD AO: large-scale tonal variation with no analytic edges.
 //  A low-frequency field blurred hard, multiplied for the hollows, then its
 //  inverse screened for the sunlit crests. This is the "landform" read.
 // ===========================================================================
@@ -2657,7 +2894,7 @@ function paintEdgeFalloff(g) {
 }
 
 // ===========================================================================
-//  L11 — 1:1 TACTILE GRAIN. This is what makes the ground feel like flocked
+//  L8B — 1:1 TACTILE GRAIN. This is what makes the ground feel like flocked
 //  board rather than painted paper at the 2.4x zoom ceiling. Two instances at
 //  different scales/rotations so the 256px repeat never reads.
 // ===========================================================================
@@ -2750,6 +2987,7 @@ function buildTerrain() {
   terrainField = buildMaterialField(terrainFieldW, terrainFieldH, seed);
   paintMaterialField(g, terrainFieldW, terrainFieldH);
   paintMeadowTexture(g);
+  paintGrassRelief(g, S);
 
   // ---- geometry that later layers need ------------------------------------
   const stream = buildStream();
@@ -2776,20 +3014,22 @@ function buildTerrain() {
 
   // ---- L7  STATIC GRASS / FLOCK -------------------------------------------
   paintFlock(g);
-  paintHeroTufts(g, 9000);
+  paintHeroTufts(g, 15000);
+  paintGroundLitter(g, 8200);
 
-  // ---- L8  TREES, BUSHES, ROCKS, SCRUB ------------------------------------
+  // ---- L8  GROUND LIGHTING AND TACTILE GRAIN ------------------------------
+  // These passes belong to the ground plane. Keeping them before upright
+  // scenery prevents terrain grain and broad AO from muddying tree canopies,
+  // rock facets and the production landscape accents.
+  paintBoardAO(g, 260, 160, seed + 17);
+  paintGrain(g, S);
+
+  // ---- L9  TREES, BUSHES, ROCKS, SCRUB ------------------------------------
   const trees = placeWoods(g, road, stream, parcels);
   placeUndergrowth(g, road, stream, trees);
 
-  // ---- L9  BOARD AO -------------------------------------------------------
-  paintBoardAO(g, 260, 160, seed + 17);
-
   // ---- L10 TABLE-EDGE FALLOFF ---------------------------------------------
   paintEdgeFalloff(g);
-
-  // ---- L11 1:1 TACTILE GRAIN ----------------------------------------------
-  paintGrain(g, S);
 
   terrainFeatures = {
     road: road, stream: stream, parcels: parcels,
