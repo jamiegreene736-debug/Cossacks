@@ -100,7 +100,7 @@ Measured at 1,625 living units: 0.4ms median frame draw against a 16.7ms budget.
 | File | Owns |
 | --- | --- |
 | `art-assets.js` | Central URL registry, preload lifecycle and lookup for production art. |
-| `terrain.js` | The board: material-aware meadow with directional micro-relief and modelled grass tussocks, faceted rocks, granular soil/sand, deadwood, river reeds, road/water materials, hedgerow and scrub art; material field and parcels. Bakes 1:1 into frustum-culled tiles; `drawTerrain()` is ≤12 blits. |
+| `terrain.js` | The board: material-aware meadow with directional micro-relief and modelled grass tussocks, faceted rocks, granular soil/sand, deadwood, river reeds, road/water materials, hedgerow and scrub art; material field and parcels. Bakes at 1.5 texels per world pixel into frustum-culled tiles; `drawTerrain()` is ≤12 blits. |
 | `buildings.js` | Nation-specific 18th-century architecture, farms, production and procedural resource nodes, scene props, waving Union flag, and cached damage/depletion states. |
 | `assets/buildings/` | Transparent high-resolution sources for completed English and Ottoman structures, nation-specific four-stage construction, and completed/in-progress stone fortifications. |
 | `assets/resources/` | Transparent woodland, berry, stone, and gold sources. |

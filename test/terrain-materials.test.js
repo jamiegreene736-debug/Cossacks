@@ -38,11 +38,27 @@ test('landscape material sources retain full-resolution surface detail', async (
   }
 });
 
+test('terrain keeps photographic material detail through inspection zoom', async () => {
+  const source = await readFile(new URL('../js/gfx/terrain.js', import.meta.url), 'utf8');
+
+  assert.match(source, /const TERRAIN_SCALE = 1\.5;/);
+  assert.match(source, /function setPatternNativeScale\(pattern, scale\)/);
+  assert.match(source, /pattern\.setTransform\(new DOMMatrix\(\)\.scaleSelf\(1 \/ scale, 1 \/ scale\)\)/);
+  assert.match(source, /paintMeadowTexture\(g, S\)/);
+  assert.match(source, /setPatternNativeScale\(pattern, scale\);/);
+  assert.match(source, /setPatternNativeScale\(roadPattern, TERRAIN_SCALE\);/);
+  assert.equal(
+    source.match(/setPatternNativeScale\(waterPattern, TERRAIN_SCALE\);/g)?.length,
+    2,
+    'both puddle and stream water must retain native source density',
+  );
+});
+
 test('terrain composition lights the ground before upright scenery', async () => {
   const source = await readFile(new URL('../js/gfx/terrain.js', import.meta.url), 'utf8');
   const build = source.slice(source.lastIndexOf('function buildTerrain()'));
 
-  const meadow = build.indexOf('paintMeadowTexture(g)');
+  const meadow = build.indexOf('paintMeadowTexture(g, S)');
   const relief = build.indexOf('paintGrassRelief(g, S)');
   const grass = build.indexOf('paintFlock(g)');
   const litter = build.indexOf('paintGroundLitter(g, 8200)');
