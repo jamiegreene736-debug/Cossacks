@@ -14,8 +14,11 @@ const COMBAT_FRAMES = Object.freeze({
 });
 
 const CARRY_FRAMES = Object.freeze({
-  first: 17,
-  second: 18,
+  woodFirst: 17,
+  woodLast: 20,
+  resourceFirst: 21,
+  resourceLast: 24,
+  count: 4,
 });
 
 const RESOURCE_ACTIONS = Object.freeze({
@@ -49,7 +52,9 @@ export function getWorkerFrame(worker, combatReady = false) {
     return WORK_FRAMES[action] + strikePhase;
   }
   if (worker.moving && (Number(worker.job?.carriedAmount) || 0) > 0) {
-    return CARRY_FRAMES.first + (((worker.animT * 6) | 0) % 2);
+    const first = worker.job?.resourceType === 'wood'
+      ? CARRY_FRAMES.woodFirst : CARRY_FRAMES.resourceFirst;
+    return first + (((worker.animT * 6) | 0) % CARRY_FRAMES.count);
   }
   if (worker.moving) return 1 + (((worker.animT * 6) | 0) % 2);
   return 0;

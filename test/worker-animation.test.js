@@ -42,11 +42,21 @@ test('walking and idle workers keep the established civilian frames', () => {
 test('villagers carrying gathered resources use the laden walking frames', () => {
   const worker = {
     state: 'move', moving: true, animT: 0,
-    job: { kind: 'gather', targetId: 1, carriedAmount: 10, phase: 'deliver' },
+    job: {
+      kind: 'gather', targetId: 1, carriedAmount: 10, phase: 'deliver', resourceType: 'wood',
+    },
   };
-  assert.equal(getWorkerFrame(worker), CARRY_FRAMES.first);
+  assert.equal(getWorkerFrame(worker), CARRY_FRAMES.woodFirst);
   worker.animT = 0.2;
-  assert.equal(getWorkerFrame(worker), CARRY_FRAMES.second);
+  assert.equal(getWorkerFrame(worker), CARRY_FRAMES.woodFirst + 1);
+  worker.animT = 0.6;
+  assert.equal(getWorkerFrame(worker), CARRY_FRAMES.woodLast);
+
+  worker.job.resourceType = 'stone';
+  worker.animT = 0;
+  assert.equal(getWorkerFrame(worker), CARRY_FRAMES.resourceFirst);
+  worker.animT = 0.6;
+  assert.equal(getWorkerFrame(worker), CARRY_FRAMES.resourceLast);
 });
 
 test('villagers visibly draw, advance, fire, reload and holster their muskets', () => {

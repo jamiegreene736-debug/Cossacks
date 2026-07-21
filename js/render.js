@@ -16,6 +16,7 @@ import {
   MILITARY_ART_ROWS,
   MILITARY_ART_SPECS,
   VILLAGER_COMBAT_ART_SPEC,
+  VILLAGER_CARRY_ART_SPECS,
   getProductionArt,
   getProductionFrameSlice,
 } from './gfx/art-assets.js';
@@ -413,6 +414,8 @@ function buildNationSprites(nationKey, side = 0) {
   const out = {};
   const productionWorker = getProductionArt(PRODUCTION_WORKER_ART[nationKey]);
   const productionWorkerCombat = getProductionArt(VILLAGER_COMBAT_ART_SPEC.key);
+  const carryArtSpec = VILLAGER_CARRY_ART_SPECS[nationKey];
+  const productionWorkerCarry = getProductionArt(carryArtSpec.key);
   const workerFrames = [
     ['idle', 0, null, 0], ['idle', 1, null, 1], ['idle', 2, null, 2],
     ['build', 0, 'build', 3], ['build', 1, 'build', 0],
@@ -424,8 +427,14 @@ function buildNationSprites(nationKey, side = 0) {
     ['combat', 1, 'advance', 1, 'combat'],
     ['combat', 0, 'fire', 2, 'combat'],
     ['combat', 0, 'reload', 3, 'combat'],
-    ['carry', 1, null, 0, 'procedural'],
-    ['carry', 2, null, 0, 'procedural'],
+    ['carry', 1, null, 0, 'carry', 0],
+    ['carry', 2, null, 1, 'carry', 0],
+    ['carry', 1, null, 2, 'carry', 0],
+    ['carry', 2, null, 3, 'carry', 0],
+    ['carry', 1, null, 0, 'carry', 1],
+    ['carry', 2, null, 1, 'carry', 1],
+    ['carry', 1, null, 2, 'carry', 1],
+    ['carry', 2, null, 3, 'carry', 1],
   ];
   const workerDefBase = productionWorker ? {
     w: PRODUCTION_WORKER.w,
@@ -450,6 +459,12 @@ function buildNationSprites(nationKey, side = 0) {
   };
   const workerDef = {
     ...workerDefBase,
+    carryProduction: productionWorkerCarry ? {
+      image: productionWorkerCarry,
+      sourceW: carryArtSpec.sourceW,
+      sourceH: carryArtSpec.sourceH,
+      sourceRow: 0,
+    } : null,
     combatProduction: productionWorkerCombat ? {
       image: productionWorkerCombat,
       sourceW: VILLAGER_COMBAT_ART_SPEC.sourceW,
@@ -500,25 +515,39 @@ function buildNationSprites(nationKey, side = 0) {
   for (const [type, def] of Object.entries(defs)) {
     const right = [], left = [];
     for (let frameIndex = 0; frameIndex < def.frames.length; frameIndex++) {
-      const [pose, leg, action = null, sourceFrame = frameIndex, sourceKind = 'default'] = def.frames[frameIndex];
+      const [
+        pose, leg, action = null, sourceFrame = frameIndex, sourceKind = 'default',
+        sourceRowOffset = 0,
+      ] = def.frames[frameIndex];
       const [c, g] = frameCanvas(def.w, def.h);
-      const production = sourceKind === 'procedural' ? null : sourceKind === 'combat'
+      let resolvedSourceFrame = sourceFrame;
+      let resolvedSourceRowOffset = sourceRowOffset;
+      let production = sourceKind === 'procedural' ? null : sourceKind === 'combat'
         ? def.combatProduction
-        : sourceKind === 'walk' ? def.walkProduction : def.production;
+        : sourceKind === 'walk' ? def.walkProduction
+          : sourceKind === 'carry' ? def.carryProduction : def.production;
+      // Carry art is an enhancement over the base detailed villager. If its
+      // file fails independently, keep the production character and reuse the
+      // two walking poses instead of changing style to the procedural body.
+      if (sourceKind === 'carry' && !production && def.production) {
+        production = def.production;
+        resolvedSourceFrame = 1 + (sourceFrame % 2);
+        resolvedSourceRowOffset = 0;
+      }
       if (production) {
         if (def.military) paintProductionMilitaryBase(g, def, side);
         g.imageSmoothingEnabled = true;
         g.imageSmoothingQuality = 'high';
         const slice = getProductionFrameSlice(
           production.sourceW,
-          sourceFrame,
+          resolvedSourceFrame,
           production.frameXBounds,
           def.w,
         );
         g.drawImage(
           production.image,
           slice.sourceX,
-          production.sourceRow * production.sourceH,
+          (production.sourceRow + resolvedSourceRowOffset) * production.sourceH,
           slice.sourceW, production.sourceH,
           slice.destX, 0, slice.destW, def.h,
         );
