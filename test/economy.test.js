@@ -10,6 +10,7 @@ import {
   getBuildingEconomyStats, getEconomyBreakdown, getFieldAttachmentStatus,
   getFieldWorkPoint, getGatherAssignmentStats, getMillFieldSlots,
   getRallyTarget, queueUnit, setRallyPoint, stepEconomy, validatePlacement,
+  VILLAGER_CARRY_CAPACITY,
 } from '../js/economy.js';
 
 function makeWorld() {
@@ -160,20 +161,163 @@ test('ordinary buildings remain waypoints and invalid rally targets fall back to
   assert.equal(fallback.orderY, forest.y);
 });
 
-test('villagers gather from deposits without allowing resource values to go negative', () => {
+test('villagers carry gathered resources to the Town Center before the stockpile increases', () => {
   const world = makeWorld();
   advance(world, 4.1);
   const worker = world.units.find(unit => unit.side === 0);
   const berries = findNearestResource(world, worker.x, worker.y, 'food', 0);
+  const townCenter = world.buildings.find(building => building.side === 0
+    && building.type === 'town_center');
   const beforeFood = world.sides[0].resources.food;
   const beforeDeposit = berries.amount;
   worker.x = berries.x + berries.radius + 5;
   worker.y = berries.y;
   assert.equal(assignGatherers(world, [worker], berries), true);
   stepEconomy(world, 1);
-  assert.ok(world.sides[0].resources.food > beforeFood);
+  assert.equal(world.sides[0].resources.food, beforeFood);
   assert.ok(berries.amount < beforeDeposit);
   assert.ok(berries.amount >= 0);
+  assert.ok(worker.job.carriedAmount > 0);
+
+  stepEconomy(world, 1);
+  assert.equal(worker.job.phase, 'deliver');
+  assert.equal(worker.job.dropoffId, townCenter.id);
+  assert.equal(worker.job.carriedAmount, VILLAGER_CARRY_CAPACITY);
+
+  worker.x = townCenter.x + townCenter.radius + 5;
+  worker.y = townCenter.y;
+  stepEconomy(world, 0.01);
+  assert.equal(world.sides[0].resources.food, beforeFood + VILLAGER_CARRY_CAPACITY);
+  assert.deepEqual(worker.job, { kind: 'gather', targetId: berries.id });
+
+  stepEconomy(world, 0.01);
+  assert.equal(worker.state, 'move');
+  assert.ok(Number.isFinite(worker.orderX));
+});
+
+test('the Town Center accepts carried food, wood, gold, and stone as the universal fallback', () => {
+  const world = makeWorld();
+  advance(world, 4.1);
+  const worker = world.units.find(unit => unit.side === 0);
+  const townCenter = world.buildings.find(building => building.side === 0
+    && building.type === 'town_center');
+
+  for (const resourceType of ['food', 'wood', 'gold', 'stone']) {
+    const source = findNearestResource(world, worker.x, worker.y, resourceType, 0);
+    const before = world.sides[0].resources[resourceType];
+    worker.x = source.x + source.radius + 5;
+    worker.y = source.y;
+    assignGatherers(world, [worker], source);
+    stepEconomy(world, 2);
+    assert.equal(worker.job.dropoffId, townCenter.id);
+
+    worker.x = townCenter.x + townCenter.radius + 5;
+    worker.y = townCenter.y;
+    stepEconomy(world, 0.01);
+    assert.equal(world.sides[0].resources[resourceType], before + VILLAGER_CARRY_CAPACITY);
+  }
+});
+
+test('food, wood, gold, and stone use their nearer specialized drop-off buildings', () => {
+  const world = makeWorld();
+  advance(world, 4.1);
+  const worker = world.units.find(unit => unit.side === 0);
+  const cases = [
+    ['food', 'mill'],
+    ['wood', 'lumber_camp'],
+    ['gold', 'mine'],
+    ['stone', 'mine'],
+  ];
+
+  for (const [resourceType, buildingType] of cases) {
+    const source = findNearestResource(world, worker.x, worker.y, resourceType, 0);
+    const dropoff = createBuilding(
+      0, buildingType, source.x + source.radius + 90, source.y, true,
+    );
+    world.buildings.push(dropoff);
+    const before = world.sides[0].resources[resourceType];
+    worker.x = source.x + source.radius + 5;
+    worker.y = source.y;
+    assert.equal(assignGatherers(world, [worker], source), true);
+
+    stepEconomy(world, 2);
+    assert.equal(worker.job.phase, 'deliver');
+    assert.equal(worker.job.resourceType, resourceType);
+    assert.equal(worker.job.dropoffId, dropoff.id);
+
+    worker.x = dropoff.x + dropoff.radius + 5;
+    worker.y = dropoff.y;
+    stepEconomy(world, 0.01);
+    assert.equal(world.sides[0].resources[resourceType], before + VILLAGER_CARRY_CAPACITY);
+    assert.deepEqual(worker.job, { kind: 'gather', targetId: source.id });
+  }
+});
+
+test('an attached field always delivers food to its mill and resumes farming', () => {
+  const world = makeWorld();
+  advance(world, 4.1);
+  const worker = world.units.find(unit => unit.side === 0);
+  const mill = createBuilding(0, 'mill', 980, 1600, true);
+  const slot = getMillFieldSlots(mill)[0];
+  const field = createBuilding(0, 'farm', slot.x, slot.y, true, slot);
+  world.buildings.push(mill, field);
+  const workPoint = getFieldWorkPoint(field, worker.id);
+  worker.x = workPoint.x;
+  worker.y = workPoint.y;
+  assignGatherers(world, [worker], field);
+
+  stepEconomy(world, 1);
+  assert.equal(worker.job.phase, 'deliver');
+  assert.equal(worker.job.dropoffId, mill.id);
+  worker.x = mill.x + mill.radius + 5;
+  worker.y = mill.y;
+  stepEconomy(world, 0.01);
+  assert.deepEqual(worker.job, { kind: 'gather', targetId: field.id });
+});
+
+test('a destroyed specialized drop-off reroutes a carried load to the Town Center', () => {
+  const world = makeWorld();
+  advance(world, 4.1);
+  const worker = world.units.find(unit => unit.side === 0);
+  const forest = findNearestResource(world, worker.x, worker.y, 'wood', 0);
+  const camp = createBuilding(0, 'lumber_camp', forest.x + forest.radius + 90, forest.y, true);
+  const townCenter = world.buildings.find(building => building.side === 0
+    && building.type === 'town_center');
+  world.buildings.push(camp);
+  worker.x = forest.x + forest.radius + 5;
+  worker.y = forest.y;
+  assignGatherers(world, [worker], forest);
+  stepEconomy(world, 2);
+  assert.equal(worker.job.dropoffId, camp.id);
+
+  camp.alive = false;
+  stepEconomy(world, 0.01);
+  assert.equal(worker.job.dropoffId, townCenter.id);
+  assert.equal(worker.job.carriedAmount, VILLAGER_CARRY_CAPACITY);
+});
+
+test('an exhausted source delivers its final partial load without becoming negative', () => {
+  const world = makeWorld();
+  advance(world, 4.1);
+  const worker = world.units.find(unit => unit.side === 0);
+  const berries = findNearestResource(world, worker.x, worker.y, 'food', 0);
+  const townCenter = world.buildings.find(building => building.side === 0
+    && building.type === 'town_center');
+  berries.amount = 3;
+  worker.x = berries.x + berries.radius + 5;
+  worker.y = berries.y;
+  const beforeFood = world.sides[0].resources.food;
+  assignGatherers(world, [worker], berries);
+  stepEconomy(world, 1);
+  assert.equal(berries.amount, 0);
+  assert.equal(berries.alive, false);
+  assert.equal(worker.job.carriedAmount, 3);
+
+  worker.x = townCenter.x + townCenter.radius + 5;
+  worker.y = townCenter.y;
+  stepEconomy(world, 0.01);
+  assert.equal(world.sides[0].resources.food, beforeFood + 3);
+  assert.equal(worker.job, null);
 });
 
 test('arriving workers face their target and expose the matching work animation', () => {
@@ -220,11 +364,19 @@ test('economy telemetry separates assigned hourly output from sampled live incom
 
   world.sides[0].incomeSampleTime = 0;
   world.sides[0].incomeSample = { food: 0, wood: 0, gold: 0, stone: 0 };
+  const beforeFood = world.sides[0].resources.food;
+  stepEconomy(world, 2);
+  assert.equal(world.sides[0].resources.food, beforeFood);
+  const townCenter = world.buildings.find(building => building.side === 0
+    && building.type === 'town_center');
+  worker.x = townCenter.x + townCenter.radius + 5;
+  worker.y = townCenter.y;
+  world.sides[0].incomeSampleTime = 0;
   stepEconomy(world, 0.75);
   const breakdown = getEconomyBreakdown(world, 0);
   assert.equal(breakdown.food.workers, 1);
   assert.equal(breakdown.food.projectedPerHour, 30_600);
-  assert.ok(Math.abs(breakdown.food.actualPerHour - 30_600) < 0.001);
+  assert.ok(Math.abs(breakdown.food.actualPerHour - 48_000) < 0.001);
   assert.equal(breakdown.wood.actualPerHour, 0);
 });
 

@@ -416,6 +416,8 @@ function buildNationSprites(nationKey, side = 0) {
     ['combat', 1, 'advance', 1, 'combat'],
     ['combat', 0, 'fire', 2, 'combat'],
     ['combat', 0, 'reload', 3, 'combat'],
+    ['carry', 1, null, 0, 'procedural'],
+    ['carry', 2, null, 0, 'procedural'],
   ];
   const workerDefBase = productionWorker ? {
     w: PRODUCTION_WORKER.w,
@@ -429,6 +431,7 @@ function buildNationSprites(nationKey, side = 0) {
       sourceRow: 0,
     },
     frames: workerFrames,
+    painter: (g, pose, leg, action) => drawWorker(g, nat, pose, leg, action),
   } : {
     w: VL_W,
     h: VL_H,
@@ -491,7 +494,7 @@ function buildNationSprites(nationKey, side = 0) {
     for (let frameIndex = 0; frameIndex < def.frames.length; frameIndex++) {
       const [pose, leg, action = null, sourceFrame = frameIndex, sourceKind = 'default'] = def.frames[frameIndex];
       const [c, g] = frameCanvas(def.w, def.h);
-      const production = sourceKind === 'combat'
+      const production = sourceKind === 'procedural' ? null : sourceKind === 'combat'
         ? def.combatProduction
         : sourceKind === 'walk' ? def.walkProduction : def.production;
       if (production) {

@@ -107,6 +107,7 @@ export function createGameSnapshot(world, commander, camera, savedAt = Date.now(
       attackTimer: commander.attackTimer,
       committed: [...commander.committed],
       planCursor: clone(commander.planCursor),
+      resourceCursor: commander.resourceCursor,
     },
     camera: {
       x: Number(camera?.x) || 660,
@@ -197,6 +198,7 @@ export function restoreGameSnapshot(snapshot) {
   commander.attackTimer = Number(snapshot.commander?.attackTimer) || 0;
   commander.committed = new Set(snapshot.commander?.committed || []);
   commander.planCursor = clone(snapshot.commander?.planCursor || {});
+  commander.resourceCursor = Math.max(0, Number(snapshot.commander?.resourceCursor) || 0);
 
   const savedCamera = snapshot.camera || {};
   return {

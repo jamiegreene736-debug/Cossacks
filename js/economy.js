@@ -32,8 +32,16 @@ export const MILL_FIELD_OFFSETS = Object.freeze([
 ]);
 const MILL_FIELD_PICK_RADIUS = 340;
 export const AUTO_BUILD_SEARCH_RADIUS = 420;
+export const VILLAGER_CARRY_CAPACITY = 10;
 const MIN_FULL_REPAIR_SECONDS = 18;
 const REPAIR_BUILD_TIME_MULTIPLIER = 1.5;
+
+const RESOURCE_DROPOFF_TYPES = Object.freeze({
+  food: Object.freeze(['mill']),
+  wood: Object.freeze(['lumber_camp']),
+  gold: Object.freeze(['mine']),
+  stone: Object.freeze(['mine']),
+});
 
 const FIELD_WORK_POSITIONS = Object.freeze([
   [-0.34, 0.05], [-0.10, 0.06], [0.14, 0.08], [0.36, 0.10],
@@ -916,6 +924,61 @@ function resourceMatchesBoost(boost, resourceType) {
     || (boost === 'mineral' && (resourceType === 'gold' || resourceType === 'stone'));
 }
 
+function isResourceDropoff(building, side, resourceType) {
+  if (!building?.alive || !building.complete || building.side !== side) return false;
+  return building.type === 'town_center'
+    || RESOURCE_DROPOFF_TYPES[resourceType]?.includes(building.type);
+}
+
+function findResourceDropoff(world, worker, source, resourceType) {
+  if (source?.type === 'farm') {
+    const mill = completedMillForField(world, source);
+    if (mill) return mill;
+  }
+
+  let nearest = null;
+  let nearestDistance = Infinity;
+  for (const building of world.buildings) {
+    if (!isResourceDropoff(building, worker.side, resourceType)) continue;
+    const distance = Math.max(0, Math.hypot(worker.x - building.x, worker.y - building.y)
+      - building.radius);
+    if (distance >= nearestDistance) continue;
+    nearest = building;
+    nearestDistance = distance;
+  }
+  return nearest;
+}
+
+function validGatherSource(world, worker, source) {
+  if (!source?.alive || !source.resourceType || source.amount <= 0) return false;
+  if (source.entityKind === 'resource') return true;
+  if (source.entityKind !== 'building' || source.side !== worker.side || !source.complete) return false;
+  return source.type !== 'farm' || isOperationalField(world, source);
+}
+
+function carriedAmount(worker) {
+  return Math.max(0, Number(worker.job?.carriedAmount) || 0);
+}
+
+function startResourceDelivery(world, worker, source, resourceType) {
+  const dropoff = findResourceDropoff(world, worker, source, resourceType);
+  if (!dropoff) return false;
+  worker.job.phase = 'deliver';
+  worker.job.resourceType = resourceType;
+  worker.job.dropoffId = dropoff.id;
+  worker.workAction = null;
+  worker.state = 'move';
+  clearVillagerPath(worker);
+  return true;
+}
+
+function resetDelivery(worker) {
+  delete worker.job.phase;
+  delete worker.job.resourceType;
+  delete worker.job.dropoffId;
+  delete worker.job.carriedAmount;
+}
+
 function findGatherBoostBuilding(world, worker, resourceType, x, y) {
   for (const building of world.buildings) {
     if (!building.alive || !building.complete || building.side !== worker.side) continue;
@@ -1094,7 +1157,35 @@ function updateWorkers(world, dt) {
 
   for (const worker of world.units) {
     if (!worker.alive || worker.type !== 'villager' || !worker.job) continue;
-    const target = findTarget(world, worker.job.targetId);
+    const jobTarget = findTarget(world, worker.job.targetId);
+    let target = jobTarget;
+    if (worker.job.kind === 'gather' && worker.job.phase === 'deliver') {
+      if (carriedAmount(worker) <= 0) {
+        resetDelivery(worker);
+      } else {
+        const resourceType = worker.job.resourceType || jobTarget?.resourceType;
+        let dropoff = findTarget(world, worker.job.dropoffId);
+        if (!resourceType || !isResourceDropoff(dropoff, worker.side, resourceType)) {
+          dropoff = resourceType
+            ? findResourceDropoff(world, worker, jobTarget, resourceType) : null;
+          if (dropoff) worker.job.dropoffId = dropoff.id;
+        }
+        if (!dropoff) {
+          worker.job = null;
+          worker.workAction = null;
+          worker.state = 'idle';
+          continue;
+        }
+        target = dropoff;
+      }
+    }
+    if (worker.job.kind === 'gather' && worker.job.phase !== 'deliver'
+      && !validGatherSource(world, worker, jobTarget)) {
+      worker.job = null;
+      worker.workAction = null;
+      if (worker.state === 'work') worker.state = 'idle';
+      continue;
+    }
     if (!target || !target.alive) {
       if (worker.job.kind === 'build' && advanceBuildQueue(world, worker, target)) continue;
       worker.job = null;
@@ -1182,26 +1273,48 @@ function updateWorkers(world, dt) {
     }
 
     if (worker.job.kind === 'gather') {
-      const resourceType = target.resourceType;
-      if (!resourceType || target.amount <= 0 || (target.entityKind === 'building' && !target.complete)
-        || (target.type === 'farm' && !isOperationalField(world, target))) {
-        worker.job = null;
-        worker.workAction = null;
-        worker.state = 'idle';
+      if (worker.job.phase === 'deliver') {
+        const resourceType = worker.job.resourceType;
+        const delivered = carriedAmount(worker);
+        const side = world.sides[worker.side];
+        side.resources[resourceType] += delivered;
+        side.incomeSample[resourceType] += delivered;
+        resetDelivery(worker);
+
+        const source = findTarget(world, worker.job.targetId);
+        if (validGatherSource(world, worker, source)) {
+          worker.state = 'move';
+          worker.workAction = null;
+          clearVillagerPath(worker);
+        } else {
+          worker.job = null;
+          worker.workAction = null;
+          worker.state = 'idle';
+        }
         continue;
       }
-      const profile = gatherProfileAt(world, worker, target, worker.x, worker.y);
-      const gathered = Math.min(target.amount, GATHER_RATES[resourceType] * (profile?.multiplier || 1) * dt);
-      target.amount -= gathered;
-      const side = world.sides[worker.side];
-      side.resources[resourceType] += gathered;
-      side.incomeSample[resourceType] += gathered;
-      if (target.amount <= 0) {
-        target.amount = 0;
-        if (target.entityKind === 'resource') target.alive = false;
-        worker.job = null;
-        worker.workAction = null;
-        worker.state = 'idle';
+
+      const resourceType = jobTarget.resourceType;
+      const profile = gatherProfileAt(world, worker, jobTarget, worker.x, worker.y);
+      const space = VILLAGER_CARRY_CAPACITY - carriedAmount(worker);
+      const gathered = Math.min(
+        jobTarget.amount,
+        space,
+        GATHER_RATES[resourceType] * (profile?.multiplier || 1) * dt,
+      );
+      jobTarget.amount -= gathered;
+      worker.job.carriedAmount = carriedAmount(worker) + gathered;
+      if (jobTarget.amount <= 0) {
+        jobTarget.amount = 0;
+        if (jobTarget.entityKind === 'resource') jobTarget.alive = false;
+      }
+      if (worker.job.carriedAmount >= VILLAGER_CARRY_CAPACITY - 1e-6
+        || jobTarget.amount <= 0) {
+        if (!startResourceDelivery(world, worker, jobTarget, resourceType)) {
+          worker.job = null;
+          worker.workAction = null;
+          worker.state = 'idle';
+        }
       }
       continue;
     }

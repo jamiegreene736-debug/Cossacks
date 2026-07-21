@@ -176,7 +176,7 @@ export const UNIT_TYPES = {
 
 export const BUILDING_TYPES = {
   town_center: {
-    label: 'Town Center', description: 'Heart of the settlement. Trains villagers.',
+    label: 'Town Center', description: 'Heart of the settlement. Trains villagers and accepts every carried resource.',
     w: 132, h: 104, radius: 70, visualScale: 1.35, hp: 3200, buildTime: 0,
     cost: {}, popCap: 40, trains: ['villager'], hotkey: 'T',
   },
@@ -191,17 +191,17 @@ export const BUILDING_TYPES = {
     cost: { wood: 55 }, resource: 'food', amount: 5000, hotkey: 'F',
   },
   mill: {
-    label: 'Mill', description: 'Anchors up to eight attached fields and boosts their food gathering by 20%.',
+    label: 'Mill', description: 'Accepts food, anchors up to eight fields, and boosts nearby food gathering by 20%.',
     w: 70, h: 60, radius: 38, visualScale: 1.25, hp: 900, buildTime: 11,
     cost: { wood: 120 }, boost: 'food', hotkey: 'M',
   },
   lumber_camp: {
-    label: 'Lumber Camp', description: 'Employs woodcutters and boosts nearby wood gathering by 20%.',
+    label: 'Lumber Camp', description: 'Accepts wood, employs woodcutters, and boosts nearby wood gathering by 20%.',
     w: 72, h: 58, radius: 39, visualScale: 1.28, hp: 900, buildTime: 10,
     cost: { wood: 105 }, boost: 'wood', workResources: ['wood'], hotkey: 'L',
   },
   mine: {
-    label: 'Mining Camp', description: 'Employs miners and boosts nearby gold and stone gathering.',
+    label: 'Mining Camp', description: 'Accepts gold and stone, employs miners, and boosts nearby mineral gathering.',
     w: 74, h: 58, radius: 40, visualScale: 1.26, hp: 950, buildTime: 12,
     cost: { wood: 110, stone: 20 }, boost: 'mineral', workResources: ['gold', 'stone'], hotkey: 'N',
   },

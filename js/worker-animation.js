@@ -13,6 +13,11 @@ const COMBAT_FRAMES = Object.freeze({
   reload: 16,
 });
 
+const CARRY_FRAMES = Object.freeze({
+  first: 17,
+  second: 18,
+});
+
 const RESOURCE_ACTIONS = Object.freeze({
   wood: 'chop',
   gold: 'mine',
@@ -43,8 +48,11 @@ export function getWorkerFrame(worker, combatReady = false) {
     const strikePhase = ((worker.animT * 2) | 0) & 1;
     return WORK_FRAMES[action] + strikePhase;
   }
+  if (worker.moving && (Number(worker.job?.carriedAmount) || 0) > 0) {
+    return CARRY_FRAMES.first + (((worker.animT * 6) | 0) % 2);
+  }
   if (worker.moving) return 1 + (((worker.animT * 6) | 0) % 2);
   return 0;
 }
 
-export { COMBAT_FRAMES, WORK_FRAMES };
+export { CARRY_FRAMES, COMBAT_FRAMES, WORK_FRAMES };
