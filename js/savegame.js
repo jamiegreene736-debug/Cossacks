@@ -137,7 +137,7 @@ function applyCurrentUnitBalance(unit) {
   const previousHp = Number(unit.hp);
   const healthRatio = Number.isFinite(previousMaxHp) && previousMaxHp > 0 && Number.isFinite(previousHp)
     ? Math.max(0, Math.min(1, previousHp / previousMaxHp)) : 1;
-  const stats = getUnitRuntimeStats(unit.type);
+  const stats = getUnitRuntimeStats(unit.unitType || unit.type);
   Object.assign(unit, stats);
   unit.hp = stats.maxHp * healthRatio;
   unit.reload = Math.max(0, Math.min(Number(unit.reload) || 0, stats.reloadTime));

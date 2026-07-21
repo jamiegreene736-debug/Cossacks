@@ -103,8 +103,14 @@ export function getUnitRuntimeStats(type) {
 
 function makeUnit(side, nationKey, type, x, y) {
   const stats = getUnitRuntimeStats(type);
+  const definition = UNIT_TYPES[type];
   return {
-    id: nextId++, side, type, nation: nationKey,
+    id: nextId++, side,
+    // Worker kinds share the mature villager job/navigation surface while the
+    // durable unitType preserves their own balance, renderer and save identity.
+    type: definition.worker ? 'villager' : type,
+    unitType: type,
+    nation: nationKey,
     x, y, px: x, py: y,
     ...stats,
     hp: stats.maxHp,
@@ -452,12 +458,44 @@ function fireCannon(world, u, t, d) {
   sfx.cannonFire(u.x);
 }
 
+function fireWomanVillagerCannon(world, u, target, distance) {
+  u.reload = u.reloadTime;
+  u.fireT = 0.52;
+  const nx = (target.x - u.x) / distance;
+  const ny = (target.y - u.y) / distance;
+  const muzzleX = u.x + nx * 30;
+  const muzzleY = u.y + ny * 30 - 7;
+  const flightDistance = Math.hypot(target.x - muzzleX, target.y - muzzleY);
+  world.projectiles.push({
+    kind: 'woman_cannon',
+    sx: muzzleX, sy: muzzleY,
+    x: muzzleX, y: muzzleY, px: muzzleX, py: muzzleY,
+    tx: target.x, ty: target.y, t: 0,
+    dur: Math.min(1.1, Math.max(0.32, flightDistance / 430)),
+    arc: Math.min(56, Math.max(12, flightDistance * 0.11)),
+    dmg: u.dmg, splash: 0, target, attackerId: u.id,
+  });
+  smokePuff(world, muzzleX, muzzleY, true);
+  smokePuff(world, muzzleX - nx * 4, muzzleY - ny * 4 - 2, false);
+  flash(world, muzzleX, muzzleY, true);
+  sfx.cannonFire(u.x);
+}
+
 function explodeShell(world, p) {
   world.pendingDecals.push({ kind: 'crater', x: p.tx, y: p.ty });
   smokePuff(world, p.tx, p.ty - 3, true);
   smokePuff(world, p.tx + 5, p.ty - 6, false);
   flash(world, p.tx, p.ty - 2, true);
   sfx.cannonImpact(p.tx);
+  if (p.kind === 'woman_cannon') {
+    const target = p.target;
+    const attacker = world.units.find(unit => unit.id === p.attackerId) || null;
+    if (target?.alive) {
+      const soldier = target.entityKind !== 'building' && target.type !== 'villager';
+      damage(world, target, soldier ? target.hp + target.maxHp + 1 : p.dmg, attacker);
+    }
+    return;
+  }
   if (p.target?.alive && p.target.entityKind === 'building') {
     const d = Math.hypot(p.target.x - p.tx, p.target.y - p.ty);
     if (d <= p.target.radius + p.splash) damage(world, p.target, p.dmg, null);
@@ -570,12 +608,14 @@ function updateUnit(world, u, dt) {
     if (u.reload <= 0) {
       let rate = 1;
       if (u.formation === 'square') rate = 0.75;
-      if (u.type !== 'gun' && fireBlocked(world, u, t, d)) {
+      const cannonWorker = u.unitType === 'woman_villager';
+      if (u.type !== 'gun' && !cannonWorker && fireBlocked(world, u, t, d)) {
         // rear rank: mostly hold fire, sometimes shoot past shoulders
         if (Math.random() < 0.2) fireMusket(world, u, t, d, 0.7);
         else u.reload = 0.6 + Math.random() * 0.9;
       } else if (rate === 1 || Math.random() < rate) {
         if (u.type === 'gun') fireCannon(world, u, t, d);
+        else if (cannonWorker) fireWomanVillagerCannon(world, u, t, d);
         else fireMusket(world, u, t, d);
       } else {
         u.reload = 0.3;

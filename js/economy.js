@@ -805,7 +805,7 @@ export function queueUnit(world, building, unitType, count = 1, options = {}) {
   for (let i = 0; i < wanted; i++) {
     if (!populationSpace(side, unitType)) break;
     if (!options.free && !spendResources(side, def.cost)) break;
-    const nationMult = unitType === 'villager'
+    const nationMult = def.worker
       ? (NATIONS[side.nation].mults.villagerTrain || 1) : 1;
     const total = (options.trainTime ?? def.trainTime) * nationMult;
     building.queue.push({ type: unitType, remaining: total, total });
@@ -819,7 +819,8 @@ export function queueUnit(world, building, unitType, count = 1, options = {}) {
       message: capFull ? 'Population cap reached — build houses.' : `Need ${formatCost(def.cost)}.`,
     };
   }
-  return { ok: true, queued, message: `${queued} ${def.label.toLowerCase()} queued.` };
+  const unitLabel = queued === 1 ? def.short : def.label;
+  return { ok: true, queued, message: `${queued} ${unitLabel.toLowerCase()} queued.` };
 }
 
 function validRallyTarget(building, target) {
@@ -1412,8 +1413,12 @@ function spawnFromQueue(world, building, unitType) {
   const unit = world.spawnUnit(building.side, unitType, x, y);
   sfx.unitReady(building.x);
   applyRallyOrder(world, building, unit);
-  if (unitType === 'villager') {
-    world.events.push({ side: building.side, text: 'A villager is ready.', tone: 'good' });
+  if (UNIT_TYPES[unitType].worker) {
+    world.events.push({
+      side: building.side,
+      text: `${UNIT_TYPES[unitType].short} is ready.`,
+      tone: 'good',
+    });
   }
 }
 
@@ -1544,7 +1549,8 @@ export function stepEconomy(world, dt) {
 
 export function onUnitKilled(world, unit) {
   const side = world.sides[unit.side];
-  side.population = Math.max(0, side.population - (UNIT_TYPES[unit.type].pop || 1));
+  const definition = UNIT_TYPES[unit.unitType] || UNIT_TYPES[unit.type];
+  side.population = Math.max(0, side.population - (definition.pop || 1));
 }
 
 export function onBuildingDestroyed(world, building) {

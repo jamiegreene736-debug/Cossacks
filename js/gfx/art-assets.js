@@ -19,6 +19,22 @@ const VILLAGER_CARRY_ART_SPECS = Object.freeze({
   }),
 });
 
+const WOMAN_VILLAGER_ART_SPECS = Object.freeze({
+  england: Object.freeze({
+    key: 'englishWomanVillager', file: 'english-woman-villager.webp', columns: 4, rows: 1,
+    sourceW: 384, sourceH: 448,
+  }),
+  ottoman: Object.freeze({
+    key: 'ottomanWomanVillager', file: 'ottoman-woman-villager.webp', columns: 4, rows: 1,
+    sourceW: 384, sourceH: 448,
+  }),
+});
+
+const WOMAN_VILLAGER_CANNON_ART_SPEC = Object.freeze({
+  key: 'womanVillagerCannon', file: 'woman-villager-cannon.webp', columns: 4, rows: 2,
+  sourceW: 384, sourceH: 512,
+});
+
 const WALK_ART_SPECS = Object.freeze({
   musk: Object.freeze({
     key: 'musketeersWalk', file: 'musketeers-walk.webp', columns: 6, rows: 2,
@@ -152,6 +168,9 @@ const ART_URLS = Object.freeze({
   englishVillagerCarry: new URL('../../assets/units/english-villager-carry.webp', import.meta.url).href,
   ottomanVillagerCarry: new URL('../../assets/units/ottoman-villager-carry.webp', import.meta.url).href,
   villagerMuskets: new URL('../../assets/units/villager-muskets.webp', import.meta.url).href,
+  englishWomanVillager: new URL('../../assets/units/english-woman-villager.webp', import.meta.url).href,
+  ottomanWomanVillager: new URL('../../assets/units/ottoman-woman-villager.webp', import.meta.url).href,
+  womanVillagerCannon: new URL('../../assets/units/woman-villager-cannon.webp', import.meta.url).href,
   musketeers: new URL('../../assets/units/musketeers.webp', import.meta.url).href,
   musketeersWalk: new URL('../../assets/units/musketeers-walk.webp', import.meta.url).href,
   partisans: new URL('../../assets/units/partisans.webp', import.meta.url).href,
@@ -202,6 +221,8 @@ export {
   MILITARY_ART_SPECS,
   VILLAGER_COMBAT_ART_SPEC,
   VILLAGER_CARRY_ART_SPECS,
+  WOMAN_VILLAGER_ART_SPECS,
+  WOMAN_VILLAGER_CANNON_ART_SPEC,
   getProductionFrameSlice,
   preloadProductionArt,
   getProductionArt,

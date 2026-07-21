@@ -32,7 +32,7 @@ npm start
   stables, artillery foundries, defensive towers, and a late-game Grand Artillery Castle.
 - Employ villagers directly at completed mills and economic camps, with exact
   assigned and live income-per-hour readouts for each resource.
-- Train villagers, musketeers, pikemen, hussars, and cannon individually or in
+- Train villagers, women villagers, musketeers, pikemen, hussars, and cannon individually or in
   batches of 5 and 20.
 - Raise the costly bastioned castle to fire long-range three-cannon volleys and
   recruit infantry, cavalry, or artillery from one fortified command post.
@@ -40,7 +40,9 @@ npm start
   morale, volley, cavalry-charge, artillery, and spatial-grid combat systems.
 - Marching trained soldiers automatically engage nearby enemies, reposition for
   their weapon, and resume their original route after the skirmish. Villager
-  muskets remain explicit-order only.
+  weapons remain explicit-order only. Women villagers wheel out a compact
+  cannon whose direct hit instantly defeats a soldier; civilians and buildings
+  receive its ordinary damage instead.
 - Destroy the enemy Town Center while protecting your own.
 
 The Ottoman or English opponent uses the same resource costs, construction,
@@ -72,7 +74,7 @@ does not alter unit combat stats or give the CPU free resources.
 - **Select units, then left-click an enemy** — focus the selection on that attack target
 - **Select villagers, then hover and left-click a deposit or economic building** — gather resources or work there
 - **Select villagers, then hover and left-click a damaged friendly building** — use the hammer cursor to assign repairs, suppress any fire, and rebuild it to full integrity
-- **Select villagers, then hover and left-click an enemy soldier or building** — draw civilian muskets and attack at reduced range, accuracy, fire rate, and damage
+- **Select villagers, then hover and left-click an enemy soldier or building** — men draw civilian muskets; women wheel out their compact cannon, whose direct hit instantly defeats a soldier
 - **Right-click / Mac two-finger click / Control-click** — alternate move, construct, attack, wall-mount, or rally command
 - **Town Center selected + primary click on a resource or worksite** — send newly trained villagers there to gather, work, or build
 - **Build card, then click terrain** — place a foundation

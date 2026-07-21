@@ -440,8 +440,15 @@ function attackUnits(world, units, target) {
   });
   if (villagers.length) {
     const def = target.entityKind === 'building' ? BUILDING_TYPES[target.type] : UNIT_TYPES[target.type];
+    const women = villagers.filter(villager => villager.unitType === 'woman_villager').length;
+    const men = villagers.length - women;
+    const groups = [];
+    if (men) groups.push(`${men} villager${men === 1 ? '' : 's'} armed`);
+    if (women) {
+      groups.push(`${women} woman villager${women === 1 ? '' : 's'} wheeling out ${women === 1 ? 'a cannon' : 'cannons'}`);
+    }
     callbacks.onToast?.(
-      `${villagers.length} villager${villagers.length === 1 ? '' : 's'} armed and attacking ${def?.short || def?.label || 'the enemy'}.`,
+      `${groups.join(' and ')} to attack ${def?.short || def?.label || 'the enemy'}.`,
       'danger',
     );
   }
