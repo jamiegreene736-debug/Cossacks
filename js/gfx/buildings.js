@@ -9,6 +9,7 @@ import {
   fortificationAxis, fortificationEndpoints, fortificationsShareEndpoint,
   isFortificationType, normalizeFortificationOrientation, WALL_WALK_ELEVATION,
 } from '../fortifications.js';
+import { viewMirrorsHorizontalFacing } from '../camera.js';
 import { getProductionArt } from './art-assets.js';
 
 let ctx = null;
@@ -4653,17 +4654,17 @@ function bdFortificationArtGeometry(building) {
 }
 
 function bdFortificationArtView(building) {
+  const rearView = viewMirrorsHorizontalFacing(camera.rotation);
   if (building.orientation === 'diagonal') {
-    return { orientationIndex: 1, mirror: camera.rotation >= Math.PI / 2 };
+    return { orientationIndex: 1, mirror: rearView };
   }
   if (!Number.isFinite(building.orientation)) {
-    return { orientationIndex: 0, mirror: camera.rotation >= Math.PI / 2 };
+    return { orientationIndex: 0, mirror: rearView };
   }
   let angle = normalizeFortificationOrientation(building.orientation);
   if (angle > Math.PI / 2) angle -= Math.PI;
   if (angle <= -Math.PI / 2) angle += Math.PI;
   const diagonal = Math.abs(angle) > 0.27;
-  const rearView = camera.rotation >= Math.PI / 2;
   return { orientationIndex: diagonal ? 1 : 0, mirror: (angle < -0.27) !== rearView };
 }
 

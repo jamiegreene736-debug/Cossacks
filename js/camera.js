@@ -1,16 +1,42 @@
 // Pure camera transforms shared by rendering and input. The battlefield turns
-// in exact opposing-view steps so the authored isometric architecture stays
-// upright and crisp while players can inspect the far side of a fortification.
+// in exact cardinal steps so the authored isometric architecture stays upright
+// and crisp while players can inspect every side of a formation or settlement.
 
-export const VIEW_TURN = Math.PI;
+export const VIEW_TURN = Math.PI / 2;
+export const MIN_CAMERA_ZOOM = 0.3;
+export const MAX_CAMERA_ZOOM = 2.5;
+export const CAMERA_ZOOM_STEP = 1.25;
+
+const VIEW_DIRECTION_LABELS = ['South', 'East', 'North', 'West'];
 
 export function normalizeViewRotation(rotation) {
   const turns = Math.round((Number(rotation) || 0) / VIEW_TURN);
-  return ((turns % 2) + 2) % 2 * VIEW_TURN;
+  return ((turns % VIEW_DIRECTION_LABELS.length) + VIEW_DIRECTION_LABELS.length)
+    % VIEW_DIRECTION_LABELS.length * VIEW_TURN;
 }
 
 export function turnView(rotation, direction) {
   return normalizeViewRotation(rotation + Math.sign(direction || 1) * VIEW_TURN);
+}
+
+export function clampCameraZoom(zoom) {
+  const value = Number(zoom);
+  if (!Number.isFinite(value)) return 1;
+  return Math.max(MIN_CAMERA_ZOOM, Math.min(MAX_CAMERA_ZOOM, value));
+}
+
+export function stepCameraZoom(zoom, direction) {
+  const factor = Math.sign(direction || 1) < 0 ? 1 / CAMERA_ZOOM_STEP : CAMERA_ZOOM_STEP;
+  return clampCameraZoom(clampCameraZoom(zoom) * factor);
+}
+
+// Side-on unit/building art has one mirrored counterpart. At East/West, where
+// world-X projects vertically, keep the mirror stable with the adjoining view
+// instead of allowing floating-point noise around cos(90deg) to flip sprites.
+export function viewMirrorsHorizontalFacing(rotation) {
+  const turn = Math.round(normalizeViewRotation(rotation) / VIEW_TURN)
+    % VIEW_DIRECTION_LABELS.length;
+  return turn === 2 || turn === 3;
 }
 
 export function screenVectorToWorld(camera, dx, dy) {
@@ -52,6 +78,7 @@ export function rotatedViewHalfExtents(camera, viewWidth, viewHeight) {
 }
 
 export function viewDirectionLabel(rotation) {
-  const turn = Math.round(normalizeViewRotation(rotation) / VIEW_TURN) % 2;
-  return ['South', 'North'][turn];
+  const turn = Math.round(normalizeViewRotation(rotation) / VIEW_TURN)
+    % VIEW_DIRECTION_LABELS.length;
+  return VIEW_DIRECTION_LABELS[turn];
 }

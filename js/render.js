@@ -26,8 +26,9 @@ import {
   chooseRenderDpr, circleIntersectsBounds, getVisibleWorldBounds,
 } from './render-performance.js';
 import {
-  normalizeViewRotation, rotatedViewHalfExtents, screenPointToWorld,
-  screenVectorToWorld, turnView as nextViewRotation, worldViewDepth,
+  clampCameraZoom, normalizeViewRotation, rotatedViewHalfExtents, screenPointToWorld,
+  screenVectorToWorld, stepCameraZoom, turnView as nextViewRotation,
+  viewMirrorsHorizontalFacing, worldViewDepth,
 } from './camera.js';
 import { setBuildingRefs, bdResetCaches, drawResourceNode, drawFarm,
          drawFarmForeground, drawFoundation, drawCompleteBuilding, drawBuilding,
@@ -139,7 +140,14 @@ export function rotateView(direction) {
   return camera.rotation;
 }
 
+export function zoomView(direction) {
+  camera.zoom = stepCameraZoom(camera.zoom, direction);
+  clampCamera();
+  return camera.zoom;
+}
+
 export function clampCamera() {
+  camera.zoom = clampCameraZoom(camera.zoom);
   const extents = rotatedViewHalfExtents(camera, cw, ch);
   const halfW = extents.x, halfH = extents.y;
   const m = 0;
@@ -925,7 +933,7 @@ export function draw(
     } else {
       frame = getMilitaryFrame(u);
     }
-    const rearView = rotation >= Math.PI / 2;
+    const rearView = viewMirrorsHorizontalFacing(rotation);
     const dir = (u.facing >= 0) !== rearView ? 0 : 1;
     ctx.save();
     const verticalOffset = u.type === 'villager' ? 0 : getMilitaryVerticalOffset(u);

@@ -38,6 +38,8 @@
       <button id="btn-view-left" title="Turn view left (Q)" aria-label="Turn view left">&#8634;</button>
       <span id="view-direction" title="Current viewing direction">South</span>
       <button id="btn-view-right" title="Turn view right (E)" aria-label="Turn view right">&#8635;</button>
+      <button id="btn-zoom-out" title="Zoom out farther (-)" aria-label="Zoom out">&minus;</button>
+      <button id="btn-zoom-in" title="Zoom in (+)" aria-label="Zoom in">&plus;</button>
       <span id="hud-timer">0:00</span>
       <button id="btn-pause" title="Pause (P)">&#10074;&#10074;</button>
       <button id="btn-speed" title="Toggle game speed">1&times;</button>
@@ -70,7 +72,7 @@
     <canvas id="minimap" class="hidden" width="244" height="150"></canvas>
 
     <div id="hint-bar" class="hud hidden">
-      Units: select, then click ground to move or an enemy to attack · Town Center: click a resource or worksite to rally villagers · Villagers auto-continue nearby work · Two-finger or Control-click for alternate orders · Select a gate to toggle · Three-finger / horizontal trackpad swipe or Q/E turns view · WASD pan · Wheel zoom
+      Units: select, then click ground to move or an enemy to attack · Town Center: click a resource or worksite to rally villagers · Villagers auto-continue nearby work · Two-finger or Control-click for alternate orders · Select a gate to toggle · Three-finger / horizontal trackpad swipe or Q/E turns through South, East, North and West · WASD pan · Wheel or -/+ zooms to full-map command view
     </div>
     <div id="placement-tip" class="hud hidden" role="status" aria-live="polite">
       <span id="placement-message">Move to place · Click terrain to build</span>

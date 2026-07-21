@@ -87,6 +87,8 @@ export function bindControls(cbs) {
   $('btn-speed').addEventListener('click', cbs.onSpeed);
   $('btn-view-left').addEventListener('click', () => cbs.onView?.(-1));
   $('btn-view-right').addEventListener('click', () => cbs.onView?.(1));
+  $('btn-zoom-out').addEventListener('click', () => cbs.onZoom?.(-1));
+  $('btn-zoom-in').addEventListener('click', () => cbs.onZoom?.(1));
   $('btn-halt').addEventListener('click', cbs.onHalt);
   $('btn-again').addEventListener('click', cbs.onAgain);
   $('btn-resume').addEventListener('click', cbs.onPause);

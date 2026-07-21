@@ -1,5 +1,6 @@
 // Powder smoke, muzzle flash, projectiles, blood, dust.
 import { WORLD, BUILDING_TYPES } from '../config.js';
+import { rotatedViewHalfExtents } from '../camera.js';
 let camera = { x: 0, y: 0, zoom: 1 };
 let cw = 0, ch = 0;
 function setEffectsCamera(c) { camera = c; }
@@ -1257,12 +1258,12 @@ function stampSpill(x, y, r) {
  *  only ever touches texels that can reach the screen.
  */
 function fxBlitField(ctx, field, a, dx0, dy0, dw, dh) {
-  const z = camera.zoom;
   const m = BANK_DIV * 3;                 // ~3 field texels of slack
-  let x0 = camera.x - cw / 2 / z - m;
-  let x1 = camera.x + cw / 2 / z + m;
-  let y0 = camera.y - ch / 2 / z - m;
-  let y1 = camera.y + ch / 2 / z + m;
+  const extents = rotatedViewHalfExtents(camera, cw, ch);
+  let x0 = camera.x - extents.x - m;
+  let x1 = camera.x + extents.x + m;
+  let y0 = camera.y - extents.y - m;
+  let y1 = camera.y + extents.y + m;
   const dx1 = dx0 + dw, dy1 = dy0 + dh;
   if (x0 < dx0) x0 = dx0;
   if (y0 < dy0) y0 = dy0;
