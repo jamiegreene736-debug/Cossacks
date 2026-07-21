@@ -17,6 +17,7 @@ import {
 import { resolveWorkerAction } from './worker-animation.js';
 import { sfx } from './audio.js';
 import { assignVillagerPath, clearVillagerPath } from './navigation.js';
+import { isPeaceTime } from './truce.js';
 
 let nextEntityId = 100000;
 
@@ -1429,6 +1430,7 @@ function updateQueues(world, dt) {
 }
 
 function updateTowers(world, dt) {
+  if (isPeaceTime(world)) return;
   for (const tower of world.buildings) {
     if (!tower.alive || !tower.complete || tower.type !== 'tower') continue;
     const def = BUILDING_TYPES.tower;
@@ -1517,6 +1519,7 @@ function fireCastleVolley(world, castle, def, targets) {
 }
 
 function updateCastles(world, dt) {
+  if (isPeaceTime(world)) return;
   const def = BUILDING_TYPES.castle;
   for (const building of world.buildings) {
     if (!building.alive || !building.complete || building.type !== 'castle') continue;

@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 
 import { applyAttackOrder, applyMoveOrder } from '../js/formations.js';
 import { createWorld, damage, spawnUnit, step } from '../js/sim.js';
+import { OPENING_PEACE_SECONDS } from '../js/truce.js';
 
 function makeEmptyWorld() {
   const world = createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
+  world.time = OPENING_PEACE_SECONDS;
   world.buildings = [];
   world.resources = [];
   return world;

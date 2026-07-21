@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createWorld, spawnUnit, step } from '../js/sim.js';
+import { OPENING_PEACE_SECONDS } from '../js/truce.js';
 import {
   assignVillagersToConstruction, assignVillagersToRepair, getVillagerAttackTargetAt,
   getVillagerRepairTargetAt, isOpenGroundMoveTarget,
@@ -128,7 +129,9 @@ test('building placement supports one-action click-away, secondary-click, and Es
 });
 
 function makeWorld() {
-  return createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
+  const world = createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
+  world.time = OPENING_PEACE_SECONDS;
+  return world;
 }
 
 function findOpenPoint(world) {
