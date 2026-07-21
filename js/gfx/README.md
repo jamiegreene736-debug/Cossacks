@@ -2,11 +2,11 @@
 
 The renderer combines procedural art with checked-in, high-resolution sprites
 where fine masonry, weathering, glazing, foliage, carved ornament, cloth, and
-human anatomy need to survive close gameplay zoom. England's complete building
-roster, both nations' complete military and civilian rosters, natural resource nodes, meadow, mature trees,
+human anatomy need to survive close gameplay zoom. Both nations' complete building,
+military, and civilian rosters, natural resource nodes, meadow, mature trees,
 rock and riverbank accents, deadwood, road aggregate, water, cultivated soil,
-country vegetation, progressive Georgian construction sites, and English
-stone walls/gates use coordinated production-art sets. Construction sheets
+country vegetation, progressive Georgian and Ottoman construction sites, and
+nation-specific stone walls/gates use coordinated production-art sets. Construction sheets
 crossfade through authored masonry/scaffold stages, while fortifications carry
 separate completed and under-construction states for both board orientations.
 Those assets are preloaded
@@ -81,7 +81,7 @@ A battle can put thousands of units on the field, so:
 - Procedural buildings bake at 4x and procedural resources at 3x. Production
   sprites load once, then use lazy scale/damage/depletion variants. Civilian
   and military production frames bake into the same left/right unit atlas at battle start.
-  The Town Center's waving flag is the only live architectural overlay.
+  The English Town Center's waving flag is the only live architectural overlay.
 - Work done **per unit per frame** must stay at about one `drawImage`. Per-unit
   gradients, shadow ellipses, `save`/`restore` churn, `ctx.filter` or
   `ctx.shadowBlur` in the hot loop are regressions.
@@ -102,10 +102,11 @@ Measured at 1,625 living units: 0.4ms median frame draw against a 16.7ms budget.
 | `art-assets.js` | Central URL registry, preload lifecycle and lookup for production art. |
 | `terrain.js` | The board: production meadow, trees, rocks, deadwood, river reeds, road/water/soil materials, hedgerow and scrub art; material field and parcels. Bakes 1:1 into frustum-culled tiles; `drawTerrain()` is ≤12 blits. |
 | `buildings.js` | Nation-specific 18th-century architecture, farms, production and procedural resource nodes, scene props, waving Union flag, and cached damage/depletion states. |
-| `assets/buildings/` | Transparent high-resolution sources for completed England structures, four-stage construction, and completed/in-progress stone fortifications. |
+| `assets/buildings/` | Transparent high-resolution sources for completed English and Ottoman structures, nation-specific four-stage construction, and completed/in-progress stone fortifications. |
 | `assets/resources/` | Transparent woodland, berry, stone, and gold sources. |
 | `assets/terrain/` | Seamless meadow, road, water, soil and stubble materials plus alpha tree, rock, reed, deadwood and country-vegetation sources. |
 | `assets/units/` | English and Ottoman civilian, musketeer, polearm-guard, cavalry, and artillery production sheets; mobile troops use separate lossless six-pose walk cycles. |
+| `docs/ottoman-architecture-art-references.md` | Period anchors and material decisions for the Ottoman production architecture set. |
 | `infantry.js` | `drawSoldier()` — resilient procedural musketeer and polearm fallback. |
 | `mounted.js` | Resilient procedural `drawCavalry()` and `drawCannon()` fallbacks. |
 | `military-animation.js` | Shared ready/six-pose travel/attack frame selection, formation stride cohorts, and grounded footfall motion. |

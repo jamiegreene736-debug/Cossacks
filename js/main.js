@@ -127,6 +127,7 @@ async function startBattle(opts) {
   setupLocalCurvedWallPreview(world);
   setupLocalTowerCombatPreview(world);
   setupLocalCastlePreview(world);
+  setupLocalOttomanArchitecturePreview(world);
   setupLocalFormationMovementPreview(world);
   ui.showBattleHud(world);
   ui.setPauseLabel(false);
@@ -282,6 +283,90 @@ function setupLocalCastlePreview(activeWorld) {
   camera.x = castle.x + 150;
   camera.y = castle.y;
   camera.zoom = 1.45;
+  clampCamera();
+}
+
+function setupLocalOttomanArchitecturePreview(activeWorld) {
+  const debugParams = new URLSearchParams(window.location.search);
+  const debugName = debugParams.get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || !['ottoman-architecture', 'ottoman-construction'].includes(debugName)) return;
+
+  // Keep this gallery deterministic even if the menu's last nation selection
+  // was England. It is localhost-only and never changes a normal campaign.
+  activeWorld.sides[0].nation = 'ottoman';
+  const previewBounds = { left: 1650, right: 3550, top: 800, bottom: 2550 };
+  activeWorld.resources = activeWorld.resources.filter(resource => (
+    resource.x < previewBounds.left || resource.x > previewBounds.right
+    || resource.y < previewBounds.top || resource.y > previewBounds.bottom
+  ));
+
+  if (debugName === 'ottoman-construction') {
+    const stages = [
+      ['house', 1940, 1430, 0.12],
+      ['barracks', 2360, 1430, 0.38],
+      ['town_center', 2780, 1430, 0.66],
+      ['foundry', 3200, 1430, 0.90],
+    ];
+    for (const [type, x, y, progress] of stages) {
+      const building = createBuilding(0, type, x, y, false);
+      building.progress = progress;
+      building.hp = Math.max(1, building.maxHp * progress);
+      activeWorld.buildings.push(building);
+    }
+
+    const fortificationStages = [
+      ['wall', 2200, 2000, 0.28, 'horizontal', true],
+      ['wall', 2480, 2000, 0.72, 'diagonal', true],
+      ['gate', 2830, 2000, 0.34, 'horizontal', false],
+      ['gate', 3220, 2000, 0.78, 'diagonal', false],
+    ];
+    for (const [type, x, y, progress, orientation, gateOpen] of fortificationStages) {
+      const building = createBuilding(0, type, x, y, false, { orientation, gateOpen });
+      building.progress = progress;
+      building.hp = Math.max(1, building.maxHp * progress);
+      activeWorld.buildings.push(building);
+    }
+
+    camera.x = 2580;
+    camera.y = debugParams.get('focus') === 'fortifications' ? 2000 : 1430;
+    camera.zoom = debugParams.has('focus') ? 1.08 : 0.92;
+    clampCamera();
+    return;
+  }
+
+  const buildings = [
+    ['house', 1860, 1180],
+    ['mill', 2200, 1150],
+    ['lumber_camp', 2550, 1140],
+    ['mine', 2910, 1170],
+    ['tower', 3300, 1200],
+    ['barracks', 1900, 1690],
+    ['town_center', 2390, 1660],
+    ['stable', 2860, 1690],
+    ['foundry', 3290, 1690],
+  ];
+  for (const [type, x, y] of buildings) {
+    activeWorld.buildings.push(createBuilding(0, type, x, y, true));
+  }
+
+  const fortifications = [
+    ['wall', 1900, 2210, 'horizontal', true],
+    ['wall', 2250, 2210, 'diagonal', true],
+    ['gate', 2630, 2210, 'horizontal', true],
+    ['gate', 3030, 2210, 'diagonal', false],
+  ];
+  for (const [type, x, y, orientation, gateOpen] of fortifications) {
+    activeWorld.buildings.push(
+      createBuilding(0, type, x, y, true, { orientation, gateOpen }),
+    );
+  }
+
+  camera.x = 2570;
+  camera.y = debugParams.get('focus') === 'upper' ? 1160
+    : debugParams.get('focus') === 'fortifications' ? 2200 : 1620;
+  camera.zoom = debugParams.has('focus') ? 1.05 : 0.82;
   clampCamera();
 }
 
