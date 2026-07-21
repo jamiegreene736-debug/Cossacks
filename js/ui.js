@@ -339,7 +339,7 @@ function renderSelection(world, selection) {
       });
     }
     for (const unitType of def.trains || []) {
-      const counts = unitType === 'villager' ? [1, 5] : [1, 5, 20];
+      const counts = UNIT_TYPES[unitType].worker ? [1, 5] : [1, 5, 20];
       for (const count of counts) addCommand(grid, {
         action: 'train', type: unitType, count,
         icon: unitIcon(unitType),
@@ -364,13 +364,19 @@ function renderSelection(world, selection) {
     const economy = getEconomyBreakdown(world, 0, villagers);
     const gatherers = RESOURCE_KEYS.reduce((sum, resourceType) => sum + economy[resourceType].workers, 0);
     const projected = RESOURCE_KEYS.reduce((sum, resourceType) => sum + economy[resourceType].projectedPerHour, 0);
-    title.textContent = `${villagers.length} Villager${villagers.length === 1 ? '' : 's'}`;
+    const women = villagers.filter(worker => worker.unitType === 'woman_villager').length;
+    title.textContent = villagers.length === 1 && women === 1
+      ? 'Woman Villager'
+      : `${villagers.length} Villager${villagers.length === 1 ? '' : 's'}`;
     const working = villagers.filter(worker => worker.job).length;
     const carrying = villagers.filter(worker => (Number(worker.job?.carriedAmount) || 0) > 0).length;
-    info.textContent = `${working} working · ${villagers.length - working} ready for orders${carrying ? ` · ${carrying} carrying` : ''}`;
+    info.textContent = `${working} working · ${villagers.length - working} ready for orders${carrying ? ` · ${carrying} carrying` : ''}${women ? ` · ${women} cannon-trained` : ''}`;
+    const attackInstruction = women
+      ? 'hover an enemy and click to wheel out their cannon'
+      : 'hover an enemy and click to draw muskets';
     detail.textContent = gatherers
-      ? `${gatherers} working · ${formatHourly(projected)} assigned · hover an enemy and click to draw muskets`
-      : 'Click open ground to move; hover and click work targets or enemies to gather, build, or draw muskets.';
+      ? `${gatherers} working · ${formatHourly(projected)} assigned · ${attackInstruction}`
+      : `Click open ground to move; hover and click work targets or enemies to gather, build, or ${women ? 'wheel out cannon' : 'draw muskets'}.`;
     context.textContent = gatherers ? 'Selected output and construction' : 'Construct a building';
     for (const resourceType of RESOURCE_KEYS) {
       if (economy[resourceType].workers) addEconomyMetric(grid, economy[resourceType]);
@@ -474,7 +480,9 @@ function multiplyCost(cost, count) {
 }
 
 function unitIcon(type) {
-  return { villager: '⚒', musk: '♟', pike: '†', cav: '♞', gun: '◉' }[type] || '•';
+  return {
+    villager: '⚒', woman_villager: '⚒◉', musk: '♟', pike: '†', cav: '♞', gun: '◉',
+  }[type] || '•';
 }
 
 function buildingIcon(type) {

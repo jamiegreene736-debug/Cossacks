@@ -105,14 +105,14 @@ Measured at 1,625 living units: 0.4ms median frame draw against a 16.7ms budget.
 | `assets/buildings/` | Transparent high-resolution sources for completed English and Ottoman structures, nation-specific four-stage construction, and completed/in-progress stone fortifications. |
 | `assets/resources/` | Transparent woodland, berry, stone, and gold sources. |
 | `assets/terrain/` | Seamless meadow, road, water, soil and stubble materials plus alpha tree, rock, reed, deadwood and country-vegetation sources. |
-| `assets/units/` | English and Ottoman civilian, musketeer, polearm-guard, cavalry, and artillery production sheets; mobile troops use separate lossless six-pose walk cycles. |
+| `assets/units/` | English and Ottoman men/women civilian, musketeer, polearm-guard, cavalry, and artillery production sheets; women have nation-specific work sheets and a shared two-row cannon deployment/attack sheet, while mobile troops use separate lossless walk cycles. |
 | `docs/ottoman-architecture-art-references.md` | Period anchors and material decisions for the Ottoman production architecture set. |
 | `infantry.js` | `drawSoldier()` — resilient procedural musketeer and polearm fallback. |
 | `mounted.js` | Resilient procedural `drawCavalry()` and `drawCannon()` fallbacks. |
 | `military-animation.js` | Shared ready/six-pose travel/attack frame selection, formation stride cohorts, and grounded footfall motion. |
 | `docs/military-art-references.md` | Museum references and chronology decisions for the production military roster. |
 | `villager.js` | `drawWorker()` — resilient procedural civilian fallback with axe, pickaxe, hoe, sickle, and mallet poses. |
-| `worker-animation.js` | Shared job-to-tool action mapping and cached atlas-frame selection. |
+| `worker-animation.js` | Shared job-to-tool action mapping plus men/women cached atlas-frame selection. |
 | `decals.js` | Persistent aftermath: corpses, craters, wrecks, ruins, trample. |
 | `effects.js` | Powder smoke, muzzle flash, projectiles, blood, dust. |
 | `composite.js` | Frame composition: haze, grade, vignette, selection, health bars, order flags, minimap. |

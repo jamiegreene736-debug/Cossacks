@@ -141,12 +141,24 @@ export const NATIONS = {
 export const UNIT_TYPES = {
   villager: {
     label: 'Villager', short: 'Villager', hp: 38, speed: 54, radius: 5,
+    worker: true,
     // Civilian militia only fire when explicitly ordered. Their shorter range,
     // slower reload, lower accuracy and lower damage keep trained musketeers
     // decisively superior in every sustained fight.
     range: 160, acquire: 0, reload: 6, dmg: 5, acc: 0.27,
     meleeDmg: 2, meleeRate: 1.5, chase: 0,
     cost: { food: 50 }, trainTime: 6, pop: 1,
+  },
+  woman_villager: {
+    label: 'Women Villagers', short: 'Woman Villager', hp: 38, speed: 52, radius: 6,
+    // Women share the full economy/construction role while their explicit
+    // combat order wheels out a compact falconet. The projectile owns the
+    // soldier-only lethal rule; these baseline numbers cover buildings and
+    // other civilians without turning the cannon into an area wipe.
+    worker: true, cannonWorker: true,
+    range: 390, minRange: 60, acquire: 0, reload: 11, dmg: 12, acc: 1,
+    meleeDmg: 2, meleeRate: 1.5, chase: 0,
+    cost: { food: 75, wood: 25, gold: 15 }, trainTime: 8, pop: 1,
   },
   musk: {
     label: 'Musketeers', short: 'Musketeer', hp: 34, speed: 46, radius: 5,
@@ -178,7 +190,7 @@ export const BUILDING_TYPES = {
   town_center: {
     label: 'Town Center', description: 'Heart of the settlement. Trains villagers and accepts every carried resource.',
     w: 132, h: 104, radius: 70, visualScale: 1.35, hp: 3200, buildTime: 0,
-    cost: {}, popCap: 40, trains: ['villager'], hotkey: 'T',
+    cost: {}, popCap: 40, trains: ['villager', 'woman_villager'], hotkey: 'T',
   },
   house: {
     label: 'House', description: '+40 population capacity.',

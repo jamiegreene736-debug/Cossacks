@@ -6,6 +6,7 @@ import { BUILDING_TYPES, NATIONS } from '../js/config.js';
 import {
   getProductionFrameSlice, MILITARY_ART_ROWS, MILITARY_ART_SPECS,
   VILLAGER_CARRY_ART_SPECS, VILLAGER_COMBAT_ART_SPEC,
+  WOMAN_VILLAGER_ART_SPECS, WOMAN_VILLAGER_CANNON_ART_SPEC,
 } from '../js/gfx/art-assets.js';
 
 const MILITARY_BUILDINGS = ['barracks', 'stable', 'foundry'];
@@ -153,4 +154,31 @@ test('each nation has detailed firewood and resource carrying walk cycles', asyn
       height: spec.sourceH * spec.rows,
     });
   }
+});
+
+test('each nation has detailed woman worker poses and a complete cannon sequence', async () => {
+  assert.deepEqual(Object.keys(WOMAN_VILLAGER_ART_SPECS).sort(), Object.keys(NATIONS).sort());
+
+  for (const [nationKey, spec] of Object.entries(WOMAN_VILLAGER_ART_SPECS)) {
+    assert.equal(spec.columns, 4, `${nationKey} needs idle, walk and construction poses`);
+    assert.equal(spec.rows, 1);
+    const data = await readFile(new URL(`../assets/units/${spec.file}`, import.meta.url));
+    assert.equal(data.subarray(0, 4).toString(), 'RIFF', spec.file);
+    assert.equal(data.subarray(8, 12).toString(), 'WEBP', spec.file);
+    assert.ok(data.byteLength > 200_000, `${spec.file} unexpectedly lost its source detail`);
+    assert.deepEqual(readLosslessWebpSize(data), {
+      width: spec.sourceW * spec.columns,
+      height: spec.sourceH,
+    });
+  }
+
+  const cannon = WOMAN_VILLAGER_CANNON_ART_SPEC;
+  assert.equal(cannon.columns, 4, 'deploy, aim, fire and reload poses are all required');
+  assert.equal(cannon.rows, Object.keys(NATIONS).length);
+  const data = await readFile(new URL(`../assets/units/${cannon.file}`, import.meta.url));
+  assert.ok(data.byteLength > 700_000, 'cannon art unexpectedly lost its source detail');
+  assert.deepEqual(readLosslessWebpSize(data), {
+    width: cannon.sourceW * cannon.columns,
+    height: cannon.sourceH * cannon.rows,
+  });
 });

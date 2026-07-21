@@ -11,7 +11,8 @@ import { initInput, updateInput, getSelection, getDragRect,
          beginPlacement, setFormation,
          cancelPlacement, haltSelection, resetForBattle } from './input.js';
 import {
-  createBuilding, placeBuilding, placeWallRun, planWallRun, queueUnit, validatePlacement,
+  assignBuilders, createBuilding, placeBuilding, placeWallRun, planWallRun,
+  queueUnit, validatePlacement,
 } from './economy.js';
 import * as ui from './ui.js';
 import { sfx } from './audio.js';
@@ -21,7 +22,7 @@ import {
   deleteCampaign, getCampaignSummary, loadCampaign, restoreGameSnapshot, saveCampaign,
 } from './savegame.js';
 import { toggleGate } from './fortifications.js';
-import { applyMoveOrder } from './formations.js';
+import { applyAttackOrder, applyMoveOrder } from './formations.js';
 
 let world = null;
 let commander = null;
@@ -150,6 +151,7 @@ async function startBattle(opts) {
   setupLocalOttomanArchitecturePreview(world);
   setupLocalFormationMovementPreview(world);
   setupLocalVillagerCarryPreview(world);
+  setupLocalWomanVillagerPreview(world);
   ui.showBattleHud(world);
   ui.setPauseLabel(false);
   ui.setSpeedLabel(1);
@@ -532,6 +534,47 @@ function setupLocalVillagerCarryPreview(activeWorld) {
   camera.x = 760;
   camera.y = 1575;
   camera.zoom = 2.2;
+  clampCamera();
+}
+
+function setupLocalWomanVillagerPreview(activeWorld) {
+  const debugName = new URLSearchParams(window.location.search).get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'woman-villager') return;
+
+  const previewBounds = { left: 780, right: 1750, top: 1160, bottom: 1840 };
+  activeWorld.resources = activeWorld.resources.filter(resource => (
+    resource.x < previewBounds.left || resource.x > previewBounds.right
+    || resource.y < previewBounds.top || resource.y > previewBounds.bottom
+  ));
+
+  const foundation = createBuilding(0, 'house', 940, 1540, false);
+  foundation.progress = 0.38;
+  foundation.hp = foundation.maxHp * foundation.progress;
+  activeWorld.buildings.push(foundation);
+  const builder = spawnUnit(activeWorld, 0, 'woman_villager', 850, 1540);
+  assignBuilders(activeWorld, [builder], foundation);
+
+  const firingWoman = spawnUnit(activeWorld, 0, 'woman_villager', 1120, 1455);
+  const firingTarget = spawnUnit(activeWorld, 1, 'musk', 1370, 1455);
+  firingTarget.acquire = 0;
+  firingTarget.speed = 0;
+  firingTarget.reload = 999;
+  firingWoman.reload = 0;
+  applyAttackOrder([firingWoman], firingTarget);
+
+  const readyWoman = spawnUnit(activeWorld, 0, 'woman_villager', 1120, 1505);
+  const readyTarget = spawnUnit(activeWorld, 1, 'pike', 1430, 1505);
+  readyTarget.acquire = 0;
+  readyTarget.speed = 0;
+  readyTarget.reload = 999;
+  readyWoman.reload = 999;
+  applyAttackOrder([readyWoman], readyTarget);
+
+  camera.x = 1130;
+  camera.y = 1490;
+  camera.zoom = 2.3;
   clampCamera();
 }
 

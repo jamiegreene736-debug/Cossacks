@@ -21,6 +21,16 @@ const CARRY_FRAMES = Object.freeze({
   count: 4,
 });
 
+const WOMAN_WORKER_FRAMES = Object.freeze({
+  idle: 0,
+  walkFirst: 1,
+  work: 3,
+  deploy: 4,
+  aim: 5,
+  fire: 6,
+  reload: 7,
+});
+
 const RESOURCE_ACTIONS = Object.freeze({
   wood: 'chop',
   gold: 'mine',
@@ -60,4 +70,22 @@ export function getWorkerFrame(worker, combatReady = false) {
   return 0;
 }
 
-export { CARRY_FRAMES, COMBAT_FRAMES, WORK_FRAMES };
+export function getWomanVillagerFrame(worker, combatReady = false) {
+  if (worker.fireT > 0) return WOMAN_WORKER_FRAMES.fire;
+  if (worker.orderTarget) {
+    if (worker.moving) return WOMAN_WORKER_FRAMES.deploy;
+    if (worker.reload > 0) return WOMAN_WORKER_FRAMES.reload;
+    return WOMAN_WORKER_FRAMES.aim;
+  }
+  if (combatReady) return WOMAN_WORKER_FRAMES.aim;
+  if (worker.state === 'work') {
+    return ((worker.animT * 2) | 0) & 1
+      ? WOMAN_WORKER_FRAMES.work : WOMAN_WORKER_FRAMES.idle;
+  }
+  if (worker.moving) {
+    return WOMAN_WORKER_FRAMES.walkFirst + (((worker.animT * 6) | 0) & 1);
+  }
+  return WOMAN_WORKER_FRAMES.idle;
+}
+
+export { CARRY_FRAMES, COMBAT_FRAMES, WOMAN_WORKER_FRAMES, WORK_FRAMES };

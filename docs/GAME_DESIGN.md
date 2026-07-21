@@ -12,6 +12,7 @@ with light, historically flavored bonuses rather than opaque hard counters.
 1. The Town Center automatically prepares the first villager so a literal
    Town-Center-only start cannot deadlock.
 2. Villagers gather food, wood, gold, and stone from visible map deposits.
+   Town Centers train both men and women; both perform every worker job.
 3. Villagers place and construct houses, mills with attached fields, economic camps, barracks,
    stables, artillery foundries, towers, and the late-game Grand Artillery Castle.
 4. Buildings train individual units or batches of 5 and 20. Houses expand the
@@ -62,6 +63,10 @@ economy or entity interfaces introduced here.
 - The first villager emerges, can gather, establish a mill and fields, construct military
   infrastructure, and explicitly draw a low-powered civilian musket against a hovered enemy
   soldier or building.
+- Women villagers are separately trainable for England and the Ottoman Empire,
+  retain every construction/economy order, and use an explicit deploy-aim-fire-recoil
+  cannon sequence. A direct shot defeats any soldier instantly without applying
+  that lethal override to civilians or buildings.
 - Damaged completed buildings remain operational and can be explicitly repaired by selected
   villagers. Multiple repairers stack their labor; active crews suppress flames while the
   damage art, scaffolding, and working course visibly return the structure to full integrity.

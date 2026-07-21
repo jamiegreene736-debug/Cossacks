@@ -17,11 +17,13 @@ import {
   MILITARY_ART_SPECS,
   VILLAGER_COMBAT_ART_SPEC,
   VILLAGER_CARRY_ART_SPECS,
+  WOMAN_VILLAGER_ART_SPECS,
+  WOMAN_VILLAGER_CANNON_ART_SPEC,
   getProductionArt,
   getProductionFrameSlice,
 } from './gfx/art-assets.js';
 import { fortificationCorners, isFortificationType } from './fortifications.js';
-import { getWorkerFrame } from './worker-animation.js';
+import { getWomanVillagerFrame, getWorkerFrame } from './worker-animation.js';
 import { getMilitaryFrame, getMilitaryVerticalOffset } from './military-animation.js';
 import {
   chooseRenderDpr, circleIntersectsBounds, getVisibleWorldBounds,
@@ -404,6 +406,24 @@ function paintFallbackWorkerMusket(g, phase, w, h) {
   g.restore();
 }
 
+function paintFallbackWomanWorker(g, nat, pose, leg, action) {
+  g.save();
+  g.translate(29, 20);
+  drawWorker(g, nat, pose, leg, action);
+  g.restore();
+}
+
+function paintFallbackWomanCannon(g, nat, pose, side) {
+  g.save();
+  g.translate(3, 20);
+  drawWorker(g, nat, pose === 'deploy' ? 'idle' : 'work', pose === 'fire' ? 1 : 0, 'build');
+  g.restore();
+  g.save();
+  g.translate(34, 24);
+  drawCannon(g, nat, pose === 'fire' ? 'fire' : 'idle', side);
+  g.restore();
+}
+
 
 
 
@@ -416,6 +436,9 @@ function buildNationSprites(nationKey, side = 0) {
   const productionWorkerCombat = getProductionArt(VILLAGER_COMBAT_ART_SPEC.key);
   const carryArtSpec = VILLAGER_CARRY_ART_SPECS[nationKey];
   const productionWorkerCarry = getProductionArt(carryArtSpec.key);
+  const womanArtSpec = WOMAN_VILLAGER_ART_SPECS[nationKey];
+  const productionWomanWorker = getProductionArt(womanArtSpec.key);
+  const productionWomanCannon = getProductionArt(WOMAN_VILLAGER_CANNON_ART_SPEC.key);
   const workerFrames = [
     ['idle', 0, null, 0], ['idle', 1, null, 1], ['idle', 2, null, 2],
     ['build', 0, 'build', 3], ['build', 1, 'build', 0],
@@ -472,9 +495,39 @@ function buildNationSprites(nationKey, side = 0) {
       sourceRow: MILITARY_ART_ROWS[nationKey],
     } : null,
   };
+  const womanWorkerFrames = [
+    ['idle', 0, null, 0],
+    ['idle', 1, null, 1],
+    ['idle', 2, null, 2],
+    ['build', 0, 'build', 3],
+    ['deploy', 0, null, 0, 'combat'],
+    ['aim', 0, null, 1, 'combat'],
+    ['fire', 0, null, 2, 'combat'],
+    ['reload', 0, null, 3, 'combat'],
+  ];
+  const womanWorkerDef = {
+    w: 86, h: 58, ax: 43, ay: 53,
+    frames: womanWorkerFrames,
+    cannonWorker: true,
+    production: productionWomanWorker ? {
+      image: productionWomanWorker,
+      sourceW: womanArtSpec.sourceW,
+      sourceH: womanArtSpec.sourceH,
+      sourceRow: 0,
+    } : null,
+    combatProduction: productionWomanCannon ? {
+      image: productionWomanCannon,
+      sourceW: WOMAN_VILLAGER_CANNON_ART_SPEC.sourceW,
+      sourceH: WOMAN_VILLAGER_CANNON_ART_SPEC.sourceH,
+      sourceRow: MILITARY_ART_ROWS[nationKey],
+    } : null,
+    painter: (g, pose, leg, action) => paintFallbackWomanWorker(g, nat, pose, leg, action),
+    combatPainter: (g, pose) => paintFallbackWomanCannon(g, nat, pose, side),
+  };
 
   const proceduralDefs = {
     villager: workerDef,
+    woman_villager: womanWorkerDef,
     musk: { w: INF_W, h: INF_H, ax: INF_AX, ay: INF_AY, frames: [
       ['idle', 0],
       ['idle', 0, null, 0, 'walk'], ['idle', 1, null, 1, 'walk'],
@@ -554,6 +607,8 @@ function buildNationSprites(nationKey, side = 0) {
         if (!def.military && action && sourceKind !== 'combat') {
           paintProductionWorkerTool(g, nationKey, action, leg);
         }
+      } else if (sourceKind === 'combat' && def.cannonWorker) {
+        def.combatPainter(g, pose);
       } else if (sourceKind === 'combat' && def.production) {
         g.drawImage(
           def.production.image,
@@ -953,11 +1008,14 @@ export function draw(
   drawSelection(ctx, sortBuf, alpha);
 
   for (const u of sortBuf) {
-    const sp = sprites[u.side][u.type];
+    const unitType = u.unitType || u.type;
+    const sp = sprites[u.side][unitType];
     const ix = u.px + (u.x - u.px) * alpha;
     const iy = u.py + (u.y - u.py) * alpha - (u.wallElevation || 0);
     let frame;
-    if (u.type === 'villager') {
+    if (unitType === 'woman_villager') {
+      frame = getWomanVillagerFrame(u, hoverKind === 'attack' && u.selected);
+    } else if (u.type === 'villager') {
       frame = getWorkerFrame(u, hoverKind === 'attack' && u.selected);
     } else {
       frame = getMilitaryFrame(u);

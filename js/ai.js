@@ -2,7 +2,7 @@
 // gathering and population rules as the player; only its decisions are scripted.
 
 import {
-  WORLD, BUILDING_TYPES, CPU_DIFFICULTIES, normalizeCpuDifficulty,
+  WORLD, BUILDING_TYPES, CPU_DIFFICULTIES, UNIT_TYPES, normalizeCpuDifficulty,
 } from './config.js';
 import { applyMoveOrder, applyAttackOrder } from './formations.js';
 import {
@@ -50,13 +50,19 @@ export class Commander {
     const tc = getTownCenter(world, this.side);
     if (!tc) return;
     const villagers = unitsOf(world, this.side, 'villager');
+    const queuedVillagers = tc.queue.filter(item => UNIT_TYPES[item.type]?.worker);
 
     // Keep the economy growing, but never bury military production beneath a
     // long villager queue.
-    if (villagers.length + tc.queue.filter(item => item.type === 'villager').length
+    if (villagers.length + queuedVillagers.length
           < this.profile.villagerTarget
         && tc.queue.length < this.profile.villagerQueueLimit) {
-      queueUnit(world, tc, 'villager', 1);
+      const women = villagers.filter(worker => worker.unitType === 'woman_villager').length
+        + queuedVillagers.filter(item => item.type === 'woman_villager').length;
+      const womenTarget = Math.max(1, Math.floor(this.profile.villagerTarget / 4));
+      const unitType = villagers.length >= 2 && women < womenTarget
+        ? 'woman_villager' : 'villager';
+      queueUnit(world, tc, unitType, 1);
     }
 
     const priorities = ['food', 'wood', 'food', 'gold', 'wood', 'stone'];

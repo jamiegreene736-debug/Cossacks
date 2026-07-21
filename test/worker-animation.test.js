@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  CARRY_FRAMES, COMBAT_FRAMES, resolveWorkerAction, getWorkerFrame,
+  CARRY_FRAMES, COMBAT_FRAMES, WOMAN_WORKER_FRAMES,
+  resolveWorkerAction, getWomanVillagerFrame, getWorkerFrame,
 } from '../js/worker-animation.js';
 
 test('worker jobs resolve to historically legible tool actions', () => {
@@ -79,4 +80,34 @@ test('villagers visibly draw, advance, fire, reload and holster their muskets', 
 
   worker.orderTarget = null;
   assert.equal(getWorkerFrame(worker), 0, 'a completed or replaced attack order holsters the musket');
+});
+
+test('woman villagers visibly work, wheel out, fire and reload their cannon', () => {
+  const worker = {
+    state: 'idle', moving: false, animT: 0, fireT: 0, reload: 0, orderTarget: null,
+  };
+  assert.equal(getWomanVillagerFrame(worker), WOMAN_WORKER_FRAMES.idle);
+
+  worker.moving = true;
+  assert.equal(getWomanVillagerFrame(worker), WOMAN_WORKER_FRAMES.walkFirst);
+
+  worker.moving = false;
+  worker.state = 'work';
+  worker.animT = 0.5;
+  assert.equal(getWomanVillagerFrame(worker), WOMAN_WORKER_FRAMES.work);
+
+  worker.state = 'idle';
+  worker.orderTarget = { alive: true };
+  worker.moving = true;
+  assert.equal(getWomanVillagerFrame(worker), WOMAN_WORKER_FRAMES.deploy);
+
+  worker.moving = false;
+  assert.equal(getWomanVillagerFrame(worker), WOMAN_WORKER_FRAMES.aim);
+
+  worker.fireT = 0.1;
+  assert.equal(getWomanVillagerFrame(worker), WOMAN_WORKER_FRAMES.fire);
+
+  worker.fireT = 0;
+  worker.reload = 4;
+  assert.equal(getWomanVillagerFrame(worker), WOMAN_WORKER_FRAMES.reload);
 });
