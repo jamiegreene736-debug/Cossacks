@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { COMBAT_FRAMES, resolveWorkerAction, getWorkerFrame } from '../js/worker-animation.js';
+import {
+  CARRY_FRAMES, COMBAT_FRAMES, resolveWorkerAction, getWorkerFrame,
+} from '../js/worker-animation.js';
 
 test('worker jobs resolve to historically legible tool actions', () => {
   const gather = { kind: 'gather', targetId: 7 };
@@ -35,6 +37,16 @@ test('walking and idle workers keep the established civilian frames', () => {
   assert.equal(getWorkerFrame({ state: 'idle', moving: false, animT: 0 }), 0);
   assert.equal(getWorkerFrame({ state: 'move', moving: true, animT: 0 }), 1);
   assert.equal(getWorkerFrame({ state: 'move', moving: true, animT: 0.2 }), 2);
+});
+
+test('villagers carrying gathered resources use the laden walking frames', () => {
+  const worker = {
+    state: 'move', moving: true, animT: 0,
+    job: { kind: 'gather', targetId: 1, carriedAmount: 10, phase: 'deliver' },
+  };
+  assert.equal(getWorkerFrame(worker), CARRY_FRAMES.first);
+  worker.animT = 0.2;
+  assert.equal(getWorkerFrame(worker), CARRY_FRAMES.second);
 });
 
 test('villagers visibly draw, advance, fire, reload and holster their muskets', () => {

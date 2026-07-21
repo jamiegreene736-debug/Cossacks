@@ -52,23 +52,20 @@
    ---------------------------------------------------------------------------
    POSES, AND WHAT THE SIM CAN ACTUALLY SELECT
 
-   economy.js gives a villager exactly two jobs — job.kind === 'build' and
-   job.kind === 'gather' — and updateWorkers() sets worker.state to 'move'
-   while travelling and 'work' once inside target.radius + 16. Gathering is
-   CONTINUOUS (economy.js credits side.resources every tick); there are no
-   carry trips, so no carry state exists in the sim today.
+   economy.js gives gathering villagers a collect/deliver loop. updateWorkers()
+   sets worker.state to 'move' while travelling and 'work' once inside the
+   active source or drop-off radius. Resources enter the stockpile only after
+   a laden villager reaches a valid drop-off building.
 
    This painter therefore supports four poses:
 
      'idle'   legPhase 0 | 1 | 2   stand / walk stride A / walk stride B
      'work'   legPhase 0 | 1       axe raised / axe struck   (job.kind 'gather')
      'build'  legPhase 0 | 1       mallet raised / struck    (job.kind 'build')
-     'carry'  legPhase 1 | 2       laden walk A / B          (OPTIONAL — see below)
+     'carry'  legPhase 1 | 2       laden walk A / B
 
-   'carry' is fully implemented and costs nothing to bake, but NOTHING IN THE
-   SIM CAN SELECT IT. Do not bake it until sim/economy gains a carry trip.
-   The recommended 7-frame list omits it; adding it appends frames 7 and 8 with
-   no other change anywhere.
+   The carry frames are selected while a gather job has a non-zero load and
+   the villager is moving toward a Town Center or specialized drop-off.
 
    ---------------------------------------------------------------------------
    SPRITE BOX (see sprite_box_changes — this is a CHANGE render.js must make)

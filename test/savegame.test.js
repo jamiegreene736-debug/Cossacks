@@ -37,7 +37,10 @@ test('a campaign round trip preserves economy, AI, camera and entity references'
   const townCenter = world.buildings.find(building => building.side === 0 && building.type === 'town_center');
   setRallyPoint(townCenter, field.x, field.y, field);
   const millWorker = spawnUnit(world, 0, 'villager', 800, 1420);
-  millWorker.job = { kind: 'gather', targetId: field.id };
+  millWorker.job = {
+    kind: 'gather', targetId: field.id, phase: 'deliver', resourceType: 'food',
+    dropoffId: mill.id, carriedAmount: 10,
+  };
   const enemyTownCenter = world.buildings.find(building => building.side === 1);
   attacker.target = defender;
   attacker.orderTarget = enemyTownCenter;
@@ -51,6 +54,7 @@ test('a campaign round trip preserves economy, AI, camera and entity references'
   commander.attackTimer = 41;
   commander.committed.add(defender.id);
   commander.planCursor = { house: 4 };
+  commander.resourceCursor = 11;
 
   const gate = createBuilding(0, 'gate', 920, 1380, true, {
     orientation: 'horizontal', gateOpen: false,
@@ -77,8 +81,10 @@ test('a campaign round trip preserves economy, AI, camera and entity references'
   assert.deepEqual(restored.world.decals, world.decals);
   assert.equal(restored.commander.committed.has(defender.id), true);
   assert.deepEqual(restored.commander.planCursor, { house: 4 });
+  assert.equal(restored.commander.resourceCursor, 11);
   assert.deepEqual(restoredMillWorker.job, {
-    kind: 'gather', targetId: field.id,
+    kind: 'gather', targetId: field.id, phase: 'deliver', resourceType: 'food',
+    dropoffId: mill.id, carriedAmount: 10,
   });
   const restoredField = restored.world.buildings.find(building => building.id === field.id);
   const restoredTownCenter = restored.world.buildings.find(building => building.id === townCenter.id);

@@ -29,6 +29,7 @@ export class Commander {
     this.attackTimer = this.profile.firstAttackDelay;
     this.committed = new Set();
     this.planCursor = {};
+    this.resourceCursor = 0;
   }
 
   update(dt) {
@@ -59,10 +60,9 @@ export class Commander {
     }
 
     const priorities = ['food', 'wood', 'food', 'gold', 'wood', 'stone'];
-    let idleIndex = 0;
     for (const worker of villagers) {
       if (worker.job) continue;
-      const resourceType = priorities[idleIndex++ % priorities.length];
+      const resourceType = priorities[this.resourceCursor++ % priorities.length];
       const target = findNearestResource(world, worker.x, worker.y, resourceType, this.side);
       if (target) assignGatherers(world, [worker], target);
     }

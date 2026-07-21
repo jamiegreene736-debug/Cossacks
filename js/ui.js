@@ -357,7 +357,8 @@ function renderSelection(world, selection) {
     const projected = RESOURCE_KEYS.reduce((sum, resourceType) => sum + economy[resourceType].projectedPerHour, 0);
     title.textContent = `${villagers.length} Villager${villagers.length === 1 ? '' : 's'}`;
     const working = villagers.filter(worker => worker.job).length;
-    info.textContent = `${working} working · ${villagers.length - working} ready for orders`;
+    const carrying = villagers.filter(worker => (Number(worker.job?.carriedAmount) || 0) > 0).length;
+    info.textContent = `${working} working · ${villagers.length - working} ready for orders${carrying ? ` · ${carrying} carrying` : ''}`;
     detail.textContent = gatherers
       ? `${gatherers} working · ${formatHourly(projected)} assigned · hover an enemy and click to draw muskets`
       : 'Click open ground to move; hover and click work targets or enemies to gather, build, or draw muskets.';
