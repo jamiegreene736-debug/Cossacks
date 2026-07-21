@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { createWorld, damage, spawnUnit, step } from '../js/sim.js';
 import { Commander } from '../js/ai.js';
 import { BUILDING_TYPES } from '../js/config.js';
+import { OPENING_PEACE_SECONDS } from '../js/truce.js';
 import {
   assignBuilders, assignGatherers, AUTO_BUILD_SEARCH_RADIUS,
   createBuilding, findNearestResource, findResourceAt, placeBuilding,
@@ -591,12 +592,12 @@ test('hostile soldiers mark building damage for siege ambience without treating 
   const building = world.buildings.find(candidate => candidate.side === 1);
   const soldier = spawnUnit(world, 0, 'pike', building.x - 40, building.y);
   const villager = spawnUnit(world, 0, 'villager', building.x - 30, building.y);
-  world.time = 312.5;
+  world.time = OPENING_PEACE_SECONDS + 12.5;
 
   damage(world, building, 10, villager);
   assert.equal(building.lastHostileUnitDamageAt, undefined);
   damage(world, building, 10, soldier);
-  assert.equal(building.lastHostileUnitDamageAt, 312.5);
+  assert.equal(building.lastHostileUnitDamageAt, OPENING_PEACE_SECONDS + 12.5);
   assert.equal(building.lastHostileUnitSide, 0);
 });
 

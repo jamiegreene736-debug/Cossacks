@@ -2,7 +2,7 @@
 // in one dependency-free module lets input, AI, simulation, defenses and the
 // HUD agree on the exact frame when combat becomes legal.
 
-export const OPENING_PEACE_SECONDS = 5 * 60;
+export const OPENING_PEACE_SECONDS = 10 * 60;
 
 export function peaceTimeRemaining(world) {
   const elapsed = Math.max(0, Number(world?.time) || 0);

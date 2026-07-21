@@ -19,14 +19,14 @@ function makeWorld() {
   return world;
 }
 
-test('the opening peace counts down from exactly five simulation minutes', () => {
+test('the opening peace counts down from exactly ten simulation minutes', () => {
   const world = makeWorld();
   assert.equal(isPeaceTime(world), true);
-  assert.equal(peaceTimeRemaining(world), 300);
-  assert.equal(formatPeaceTime(world), '5:00');
+  assert.equal(peaceTimeRemaining(world), 600);
+  assert.equal(formatPeaceTime(world), '10:00');
 
   world.time = 60.2;
-  assert.equal(formatPeaceTime(world), '4:00');
+  assert.equal(formatPeaceTime(world), '9:00');
   world.state = 'paused';
   step(world, 20);
   assert.equal(world.time, 60.2, 'pausing freezes the peace countdown');

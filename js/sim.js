@@ -715,7 +715,7 @@ export function step(world, dt) {
     for (const side of [0, 1]) {
       world.events.push({
         side,
-        text: 'The five-minute peace has ended. Combat is now permitted.',
+        text: 'The ten-minute peace has ended. Combat is now permitted.',
         tone: side === 0 ? 'danger' : 'good',
       });
     }
