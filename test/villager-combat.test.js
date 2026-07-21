@@ -5,9 +5,12 @@ import { UNIT_TYPES } from '../js/config.js';
 import { createBuilding } from '../js/economy.js';
 import { applyAttackOrder } from '../js/formations.js';
 import { createWorld, damage, spawnUnit, step } from '../js/sim.js';
+import { OPENING_PEACE_SECONDS } from '../js/truce.js';
 
 function makeWorld() {
-  return createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
+  const world = createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
+  world.time = OPENING_PEACE_SECONDS;
+  return world;
 }
 
 test('civilian muskets are deliberately weaker and never auto-acquire enemies', () => {

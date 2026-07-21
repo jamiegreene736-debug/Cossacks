@@ -9,11 +9,14 @@ import {
   getBuildingProductionArtSpec,
 } from '../js/gfx/buildings.js';
 import { createWorld, spawnUnit, step } from '../js/sim.js';
+import { OPENING_PEACE_SECONDS } from '../js/truce.js';
 
 const MILITARY_ROSTER = ['musk', 'pike', 'cav', 'gun'];
 
 function makeWorld() {
-  return createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
+  const world = createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
+  world.time = OPENING_PEACE_SECONDS;
+  return world;
 }
 
 test('the Grand Artillery Castle is an expensive late-game fortress', () => {

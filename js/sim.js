@@ -17,6 +17,7 @@ import {
 import {
   assignVillagerPath, clearVillagerPath, segmentBlocksVillager,
 } from './navigation.js';
+import { isHostilePair, isPeaceTime } from './truce.js';
 
 const PARTICLE_CAP = 900;
 const blockingFortifications = [];
@@ -216,7 +217,8 @@ function maybeBreak(world, u) {
 }
 
 export function damage(world, victim, amount, attacker) {
-  if (!victim.alive) return;
+  if (!victim.alive) return false;
+  if (isPeaceTime(world) && isHostilePair(attacker, victim)) return false;
   victim.hp -= amount;
   if (victim.entityKind === 'building' && attacker?.alive && attacker.entityKind !== 'building'
     && attacker.type !== 'villager' && attacker.side !== victim.side) {
@@ -234,6 +236,7 @@ export function damage(world, victim, amount, attacker) {
   } else if (victim.entityKind !== 'building') {
     maybeBreak(world, victim);
   }
+  return true;
 }
 
 export function buildingFireIntensity(building) {
@@ -354,6 +357,7 @@ function fireMusket(world, u, t, d, accMul = 1) {
 
 export function launchBuildingTorch(world, u, building, amount, usesReload = false) {
   if (!u?.alive || !building?.alive || building.entityKind !== 'building') return null;
+  if (isPeaceTime(world) && isHostilePair(u, building)) return null;
   if (usesReload) u.reload = u.reloadTime * (0.85 + Math.random() * 0.3);
   const dx = building.x - u.x;
   const dy = building.y - u.y;
@@ -536,6 +540,14 @@ function updateUnit(world, u, dt) {
   if (wallState === 'mounted') u.state = 'wall';
 
   // -- Target upkeep / acquisition (staggered) --
+  // A saved or queued hostile order cannot leak through the opening treaty.
+  // Movement orders remain intact so both realms can scout and form ranks.
+  const peaceActive = isPeaceTime(world);
+  if (peaceActive) {
+    u.target = null;
+    u.orderTarget = null;
+    u.deferredAttack = null;
+  }
   if (u.target && !u.target.alive) u.target = null;
   if (u.orderTarget && !u.orderTarget.alive) {
     u.orderTarget = null;
@@ -543,7 +555,7 @@ function updateUnit(world, u, dt) {
     if (u.state === 'move' && Number.isNaN(u.orderX)) u.state = 'idle';
   }
   u.acquireT -= dt;
-  if (u.acquire > 0 && u.acquireT <= 0) {
+  if (!peaceActive && u.acquire > 0 && u.acquireT <= 0) {
     u.acquireT = 0.35 + Math.random() * 0.35;
     if (u.orderTarget) {
       u.target = u.orderTarget;
@@ -734,7 +746,20 @@ function stepBuildingFires(world, dt) {
 
 export function step(world, dt) {
   if (world.state !== 'running') return;
+  const peaceWasActive = isPeaceTime(world);
+  // Attack projectiles serialized by an older build are disarmed rather than
+  // being allowed to land during the newly enforced treaty.
+  if (peaceWasActive && world.projectiles.length) world.projectiles.length = 0;
   world.time += dt;
+  if (peaceWasActive && !isPeaceTime(world)) {
+    for (const side of [0, 1]) {
+      world.events.push({
+        side,
+        text: 'The ten-minute peace has ended. Combat is now permitted.',
+        tone: side === 0 ? 'danger' : 'good',
+      });
+    }
+  }
 
   const active = world.active;
   active.length = 0;

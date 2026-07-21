@@ -5,6 +5,7 @@ import { BUILDING_TYPES } from '../js/config.js';
 import { createBuilding, stepEconomy } from '../js/economy.js';
 import { visibleTowerAttackRange } from '../js/gfx/composite.js';
 import { createWorld, spawnUnit, step } from '../js/sim.js';
+import { OPENING_PEACE_SECONDS } from '../js/truce.js';
 
 function advance(world, seconds) {
   const ticks = Math.ceil(seconds * 30);
@@ -13,6 +14,7 @@ function advance(world, seconds) {
 
 function makeTowerEngagement(distance = 240) {
   const world = createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
+  world.time = OPENING_PEACE_SECONDS;
   const tower = createBuilding(0, 'tower', 1200, 1500, true);
   tower.reload = 0;
   world.buildings.push(tower);

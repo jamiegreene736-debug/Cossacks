@@ -23,6 +23,7 @@ import {
 } from './savegame.js';
 import { toggleGate } from './fortifications.js';
 import { applyAttackOrder, applyMoveOrder } from './formations.js';
+import { OPENING_PEACE_SECONDS } from './truce.js';
 
 let world = null;
 let commander = null;
@@ -152,6 +153,7 @@ async function startBattle(opts) {
   setupLocalFormationMovementPreview(world);
   setupLocalVillagerCarryPreview(world);
   setupLocalWomanVillagerPreview(world);
+  setupLocalOpeningTrucePreview(world);
   ui.showBattleHud(world);
   ui.setPauseLabel(false);
   ui.setSpeedLabel(1);
@@ -161,6 +163,29 @@ async function startBattle(opts) {
   endShown = false;
   acc = 0;
   resetFrameMetrics();
+}
+
+function setupLocalOpeningTrucePreview(activeWorld) {
+  const debugName = new URLSearchParams(window.location.search).get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'opening-truce') return;
+
+  activeWorld.units.length = 0;
+  activeWorld.sides[0].alive = 0;
+  activeWorld.sides[1].alive = 0;
+  activeWorld.time = OPENING_PEACE_SECONDS - 6;
+  const player = spawnUnit(activeWorld, 0, 'musk', 2420, 1500);
+  const enemy = spawnUnit(activeWorld, 1, 'musk', 2570, 1500);
+  for (const unit of [player, enemy]) {
+    unit.speed = 0;
+    unit.reload = 0;
+    unit.acquireT = 0;
+  }
+  camera.x = 2495;
+  camera.y = 1500;
+  camera.zoom = 1.2;
+  clampCamera();
 }
 
 function setupLocalBuildingFirePreview(activeWorld) {
@@ -543,6 +568,7 @@ function setupLocalWomanVillagerPreview(activeWorld) {
     || window.location.hostname === '127.0.0.1';
   if (!localHost || debugName !== 'woman-villager') return;
 
+  activeWorld.time = OPENING_PEACE_SECONDS;
   const previewBounds = { left: 780, right: 1750, top: 1160, bottom: 1840 };
   activeWorld.resources = activeWorld.resources.filter(resource => (
     resource.x < previewBounds.left || resource.x > previewBounds.right

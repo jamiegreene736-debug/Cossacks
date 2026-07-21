@@ -9,12 +9,15 @@ import {
 import { applyAttackOrder } from '../js/formations.js';
 import { createGameSnapshot, restoreGameSnapshot } from '../js/savegame.js';
 import { createWorld, spawnUnit, step } from '../js/sim.js';
+import { OPENING_PEACE_SECONDS } from '../js/truce.js';
 
 function makeWorld(playerNation = 'england') {
-  return createWorld({
+  const world = createWorld({
     playerNation,
     enemyNation: playerNation === 'england' ? 'ottoman' : 'england',
   });
+  world.time = OPENING_PEACE_SECONDS;
+  return world;
 }
 
 function advance(world, seconds) {

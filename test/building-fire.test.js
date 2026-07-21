@@ -7,8 +7,10 @@ import { createGameSnapshot, restoreGameSnapshot } from '../js/savegame.js';
 import {
   buildingFireIntensity, createWorld, damage, launchBuildingTorch, spawnUnit, step,
 } from '../js/sim.js';
+import { OPENING_PEACE_SECONDS } from '../js/truce.js';
 
 function makeTarget(world, hp = null) {
+  world.time = OPENING_PEACE_SECONDS;
   const target = createBuilding(1, 'house', 900, 1500, true);
   if (hp !== null) target.hp = hp;
   world.buildings.push(target);

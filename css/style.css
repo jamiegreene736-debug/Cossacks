@@ -102,6 +102,16 @@ button, select { font: inherit; }
   pointer-events: auto;
 }
 #hud-timer { min-width: 42px; text-align: center; font: 14px Arial, sans-serif; color: #ddd4bb; }
+#hud-truce {
+  display: grid; grid-template-columns: 13px auto; grid-template-rows: 9px 15px;
+  min-width: 68px; padding: 2px 7px 3px; border: 1px solid rgba(191, 174, 103, .62);
+  border-radius: 3px; background: linear-gradient(180deg, rgba(69, 73, 42, .96), rgba(37, 40, 25, .96));
+  box-shadow: inset 0 1px rgba(241, 226, 164, .12), 0 2px 7px rgba(0, 0, 0, .28);
+  color: #eee2ba;
+}
+#hud-truce i { grid-row: 1 / 3; align-self: center; color: #d2ba63; font-style: normal; font-size: 12px; }
+#hud-truce small { color: #aaa078; font: 700 7px/9px Arial, sans-serif; letter-spacing: 1px; text-transform: uppercase; }
+#hud-truce b { font: 700 13px/15px Arial, sans-serif; letter-spacing: .5px; }
 #view-direction { min-width: 38px; text-align: center; font: 9px Arial, sans-serif; text-transform: uppercase; letter-spacing: .08em; color: #bdb18b; }
 #time-controls button {
   min-width: 31px; padding: 2px 6px; color: var(--paper); background: #343222;
