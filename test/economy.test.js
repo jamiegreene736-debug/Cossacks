@@ -591,12 +591,12 @@ test('hostile soldiers mark building damage for siege ambience without treating 
   const building = world.buildings.find(candidate => candidate.side === 1);
   const soldier = spawnUnit(world, 0, 'pike', building.x - 40, building.y);
   const villager = spawnUnit(world, 0, 'villager', building.x - 30, building.y);
-  world.time = 12.5;
+  world.time = 312.5;
 
   damage(world, building, 10, villager);
   assert.equal(building.lastHostileUnitDamageAt, undefined);
   damage(world, building, 10, soldier);
-  assert.equal(building.lastHostileUnitDamageAt, 12.5);
+  assert.equal(building.lastHostileUnitDamageAt, 312.5);
   assert.equal(building.lastHostileUnitSide, 0);
 });
 

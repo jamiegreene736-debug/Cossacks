@@ -8,6 +8,7 @@ import {
   formatCost, getBuildingEconomyStats, getEconomyBreakdown,
   getFieldAttachmentStatus, getGatherAssignmentStats, getRallyTarget,
 } from './economy.js';
+import { formatPeaceTime, isPeaceTime } from './truce.js';
 
 const $ = id => document.getElementById(id);
 let callbacks = {};
@@ -241,6 +242,10 @@ export function updateHud(world, selection) {
   $('res-pop').textContent = `${player.population + player.queuedPopulation} / ${player.popCap}`;
   const seconds = world.time | 0;
   $('hud-timer').textContent = `${(seconds / 60) | 0}:${String(seconds % 60).padStart(2, '0')}`;
+  const truce = $('hud-truce');
+  const peaceActive = isPeaceTime(world);
+  truce.classList.toggle('hidden', !peaceActive);
+  if (peaceActive) truce.querySelector('b').textContent = formatPeaceTime(world);
 
   while (world.events.length) {
     const event = world.events.shift();

@@ -10,9 +10,12 @@ import {
   fortificationEndpoints, lineIntersectsFortification,
   resolveUnitFortificationCollision, toggleGate, updateWallAssignment,
 } from '../js/fortifications.js';
+import { OPENING_PEACE_SECONDS } from '../js/truce.js';
 
 function makeWorld() {
-  return createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
+  const world = createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
+  world.time = OPENING_PEACE_SECONDS;
+  return world;
 }
 
 function builder() {

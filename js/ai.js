@@ -9,6 +9,7 @@ import {
   assignBuilders, assignGatherers, buildingsOf, findNearestResource, getTownCenter,
   getMillFieldSlots, placeBuilding, queueUnit, setRallyPoint, unitsOf,
 } from './economy.js';
+import { isPeaceTime } from './truce.js';
 
 const MILITARY_TYPES = new Set(['musk', 'pike', 'cav', 'gun']);
 
@@ -36,12 +37,13 @@ export class Commander {
     if (this.world.state !== 'running') return;
     updateDeferredAiOrders(this.world);
     this.thinkTimer -= dt;
-    this.attackTimer -= dt;
+    const peaceActive = isPeaceTime(this.world);
+    if (!peaceActive) this.attackTimer -= dt;
     if (this.thinkTimer > 0) return;
     this.thinkTimer = this.profile.planningInterval;
     this.manageEconomy();
     this.manageProduction();
-    this.manageArmy();
+    if (!peaceActive) this.manageArmy();
   }
 
   manageEconomy() {
@@ -239,6 +241,10 @@ export class Commander {
 }
 
 export function updateDeferredAiOrders(world) {
+  if (isPeaceTime(world)) {
+    for (const unit of world.units) unit.deferredAttack = null;
+    return;
+  }
   for (const unit of world.units) {
     if (!unit.alive || !unit.deferredAttack || world.time < unit.deferredAttack.at) continue;
     const target = unit.deferredAttack.target;

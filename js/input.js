@@ -14,6 +14,7 @@ import {
   assignMusketeersToWall, dismountWallUnits,
   isFortificationType, rotateFortificationOrientation,
 } from './fortifications.js';
+import { formatPeaceTime, isPeaceTime } from './truce.js';
 import { assignVillagerPath, clearVillagerPath } from './navigation.js';
 import {
   beginThreeFingerViewGesture, createViewGestureState, endThreeFingerViewGesture,
@@ -421,6 +422,13 @@ function moveUnitsTo(world, units, x, y, formation) {
 
 function attackUnits(world, units, target) {
   if (!units.length || !target?.alive || target.side === units[0].side) return false;
+  if (isPeaceTime(world)) {
+    callbacks.onToast?.(
+      `The opening peace lasts ${formatPeaceTime(world)} longer. Combat orders are locked.`,
+      'good',
+    );
+    return true;
+  }
   clearWorkerJobs(units);
   const villagers = units.filter(unit => unit.type === 'villager');
   for (const villager of villagers) clearVillagerPath(villager);
@@ -489,7 +497,7 @@ export function getVillagerRepairTargetAt(world, selected, x, y) {
 
 export function getVillagerAttackTargetAt(world, selected, x, y) {
   const workers = selected.filter(entity => entity?.alive && entity.type === 'villager');
-  if (!world || workers.length === 0) return null;
+  if (!world || isPeaceTime(world) || workers.length === 0) return null;
   const side = workers[0].side;
   if (workers.some(worker => worker.side !== side)) return null;
   const target = findEntityAt(world, x, y, side === 0 ? 1 : 0);
@@ -506,7 +514,7 @@ function hoverableVillagerAttackTargetAt(screenX, screenY) {
 export function issueVillagerAttack(world, selected, target) {
   const workers = selected.filter(entity => entity?.alive && entity.type === 'villager'
     && target?.alive && entity.side !== target.side);
-  if (!world || !target?.alive || workers.length === 0) return 0;
+  if (!world || isPeaceTime(world) || !target?.alive || workers.length === 0) return 0;
   clearWorkerJobs(workers);
   for (const worker of workers) clearVillagerPath(worker);
   applyAttackOrder(workers, target);
