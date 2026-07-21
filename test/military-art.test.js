@@ -5,7 +5,7 @@ import test from 'node:test';
 import { BUILDING_TYPES, NATIONS } from '../js/config.js';
 import {
   getProductionFrameSlice, MILITARY_ART_ROWS, MILITARY_ART_SPECS,
-  VILLAGER_COMBAT_ART_SPEC,
+  VILLAGER_CARRY_ART_SPECS, VILLAGER_COMBAT_ART_SPEC,
 } from '../js/gfx/art-assets.js';
 
 const MILITARY_BUILDINGS = ['barracks', 'stable', 'foundry'];
@@ -136,4 +136,21 @@ test('civilian musket poses provide a detailed nation-specific production sheet'
     width: spec.sourceW * spec.columns,
     height: spec.sourceH * spec.rows,
   });
+});
+
+test('each nation has detailed firewood and resource carrying walk cycles', async () => {
+  assert.deepEqual(Object.keys(VILLAGER_CARRY_ART_SPECS).sort(), Object.keys(NATIONS).sort());
+
+  for (const [nationKey, spec] of Object.entries(VILLAGER_CARRY_ART_SPECS)) {
+    assert.equal(spec.columns, 4, `${nationKey} needs a complete four-pose carry cycle`);
+    assert.equal(spec.rows, 2, `${nationKey} needs firewood and general-resource rows`);
+    const data = await readFile(new URL(`../assets/units/${spec.file}`, import.meta.url));
+    assert.equal(data.subarray(0, 4).toString(), 'RIFF', spec.file);
+    assert.equal(data.subarray(8, 12).toString(), 'WEBP', spec.file);
+    assert.ok(data.byteLength > 500_000, `${spec.file} unexpectedly lost its source detail`);
+    assert.deepEqual(readLosslessWebpSize(data), {
+      width: spec.sourceW * spec.columns,
+      height: spec.sourceH * spec.rows,
+    });
+  }
 });

@@ -149,6 +149,7 @@ async function startBattle(opts) {
   setupLocalCastlePreview(world);
   setupLocalOttomanArchitecturePreview(world);
   setupLocalFormationMovementPreview(world);
+  setupLocalVillagerCarryPreview(world);
   ui.showBattleHud(world);
   ui.setPauseLabel(false);
   ui.setSpeedLabel(1);
@@ -469,6 +470,64 @@ function setupLocalFormationMovementPreview(activeWorld) {
   clampCamera();
 }
 
+function setupLocalVillagerCarryPreview(activeWorld) {
+  const debugName = new URLSearchParams(window.location.search).get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'villager-carry') return;
+
+  const resourceTypes = ['wood', 'food', 'gold', 'stone'];
+  const sources = resourceTypes.map(resourceType => activeWorld.resources.find(resource => (
+    resource.alive && resource.resourceType === resourceType
+  ))).filter(Boolean);
+  activeWorld.buildings.length = 0;
+  activeWorld.resources = sources;
+  for (let index = 0; index < sources.length; index++) {
+    sources[index].x = 320;
+    sources[index].y = 1430 + index * 110;
+    sources[index].amount = Math.max(sources[index].amount, 1000);
+  }
+  const dropoffs = [
+    createBuilding(0, 'town_center', 1420, 1580, true),
+    createBuilding(1, 'town_center', 1420, 1580, true),
+  ];
+  activeWorld.buildings.push(...dropoffs);
+  activeWorld.sides[0].townCenterId = dropoffs[0].id;
+  activeWorld.sides[1].townCenterId = dropoffs[1].id;
+
+  for (let side = 0; side < 2; side++) {
+    for (let index = 0; index < resourceTypes.length; index++) {
+      const resourceType = resourceTypes[index];
+      const source = sources[index];
+      if (!source) continue;
+      const worker = spawnUnit(
+        activeWorld,
+        side,
+        'villager',
+        580 + side * 35 - index * 18,
+        1510 + index * 36,
+      );
+      worker.job = {
+        kind: 'gather',
+        targetId: source.id,
+        phase: 'deliver',
+        resourceType,
+        dropoffId: dropoffs[side].id,
+        carriedAmount: 10,
+      };
+      worker.state = 'move';
+      worker.facing = 1;
+      worker.speed = 14;
+      worker.animT = index * 0.13;
+    }
+  }
+
+  camera.x = 760;
+  camera.y = 1575;
+  camera.zoom = 2.2;
+  clampCamera();
+}
+
 function handleCommand(command) {
   if (!world) return;
   if (command.action === 'build') {
@@ -756,6 +815,10 @@ window.__state = () => {
     )).length,
     resources: world.sides.map(side => Object.fromEntries(Object.entries(side.resources).map(([key, value]) => [key, Math.floor(value)]))),
     incomePerHour: world.sides.map(side => Object.fromEntries(Object.entries(side.incomePerHour).map(([key, value]) => [key, Math.round(value)]))),
+    carryingVillagers: world.units.filter(unit => (
+      unit.alive && unit.type === 'villager' && unit.moving
+        && (Number(unit.job?.carriedAmount) || 0) > 0
+    )).length,
   };
 };
 

@@ -8,6 +8,17 @@ const VILLAGER_COMBAT_ART_SPEC = Object.freeze({
   sourceW: 384, sourceH: 512,
 });
 
+const VILLAGER_CARRY_ART_SPECS = Object.freeze({
+  england: Object.freeze({
+    key: 'englishVillagerCarry', file: 'english-villager-carry.webp', columns: 4, rows: 2,
+    sourceW: 384, sourceH: 448,
+  }),
+  ottoman: Object.freeze({
+    key: 'ottomanVillagerCarry', file: 'ottoman-villager-carry.webp', columns: 4, rows: 2,
+    sourceW: 384, sourceH: 448,
+  }),
+});
+
 const WALK_ART_SPECS = Object.freeze({
   musk: Object.freeze({
     key: 'musketeersWalk', file: 'musketeers-walk.webp', columns: 6, rows: 2,
@@ -136,6 +147,8 @@ const ART_URLS = Object.freeze({
   countryStubble: new URL('../../assets/terrain/country-stubble.jpg', import.meta.url).href,
   englishVillager: new URL('../../assets/units/english-villager.webp', import.meta.url).href,
   ottomanVillager: new URL('../../assets/units/ottoman-villager.webp', import.meta.url).href,
+  englishVillagerCarry: new URL('../../assets/units/english-villager-carry.webp', import.meta.url).href,
+  ottomanVillagerCarry: new URL('../../assets/units/ottoman-villager-carry.webp', import.meta.url).href,
   villagerMuskets: new URL('../../assets/units/villager-muskets.webp', import.meta.url).href,
   musketeers: new URL('../../assets/units/musketeers.webp', import.meta.url).href,
   musketeersWalk: new URL('../../assets/units/musketeers-walk.webp', import.meta.url).href,
@@ -186,6 +199,7 @@ export {
   MILITARY_ART_ROWS,
   MILITARY_ART_SPECS,
   VILLAGER_COMBAT_ART_SPEC,
+  VILLAGER_CARRY_ART_SPECS,
   getProductionFrameSlice,
   preloadProductionArt,
   getProductionArt,
