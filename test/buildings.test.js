@@ -4,7 +4,8 @@ import { readFile, stat } from 'node:fs/promises';
 
 import { BUILDING_TYPES } from '../js/config.js';
 import {
-  bdConstructionArtFrame, getBuildingPresentation, getFortificationRenderProfile,
+  bdConstructionArtFrame, getBuildingPresentation, getFortificationConstructionStage,
+  getFortificationRenderProfile,
   usesFixedFortificationFrameArt,
 } from '../js/gfx/buildings.js';
 import { MILITARY_ART_SPECS } from '../js/gfx/art-assets.js';
@@ -68,6 +69,27 @@ test('production construction art advances continuously through four authored st
   assert.ok(blend.mix > 0 && blend.mix < 1);
 });
 
+test('wall construction starts as a surveyed trench before masonry and scaffold rise', () => {
+  assert.deepEqual(getFortificationConstructionStage(0), {
+    length: 0, height: 0, scaffold: 0, crown: 0,
+  });
+
+  const footing = getFortificationConstructionStage(0.10);
+  assert.ok(footing.length > 0 && footing.length < 0.5);
+  assert.equal(footing.height, 0);
+  assert.ok(footing.scaffold > 0 && footing.scaffold < 0.2);
+
+  const masonry = getFortificationConstructionStage(0.50);
+  assert.equal(masonry.length, 1);
+  assert.ok(masonry.height > 0.5 && masonry.height < 0.6);
+  assert.equal(masonry.scaffold, 1);
+  assert.equal(masonry.crown, 0);
+
+  assert.deepEqual(getFortificationConstructionStage(1), {
+    length: 1, height: 1, scaffold: 1, crown: 1,
+  });
+});
+
 test('freehand walls bypass fixed frames while snapped orientations can use them', () => {
   assert.equal(usesFixedFortificationFrameArt({ orientation: 'horizontal' }), true);
   assert.equal(usesFixedFortificationFrameArt({ orientation: 'diagonal' }), true);
@@ -102,4 +124,12 @@ test('the closed gate uses a substantial transparent production render', async (
   assert.ok(metadata.size > 1_000_000, 'closed-gate source should retain high-resolution masonry detail');
   assert.deepEqual([...header.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
   assert.equal(header[25], 6, 'closed-gate source must preserve an RGBA transparency channel');
+});
+
+test('curved walls use a substantial high-resolution masonry material', async () => {
+  const url = new URL('../assets/buildings/fortification-masonry.webp', import.meta.url);
+  const [metadata, header] = await Promise.all([stat(url), readFile(url)]);
+  assert.ok(metadata.size > 300_000, 'masonry texture should retain weathered source detail');
+  assert.equal(header.subarray(0, 4).toString('ascii'), 'RIFF');
+  assert.equal(header.subarray(8, 12).toString('ascii'), 'WEBP');
 });

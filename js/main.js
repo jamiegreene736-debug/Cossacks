@@ -242,22 +242,29 @@ function setupLocalCurvedWallPreview(activeWorld) {
   const debugName = new URLSearchParams(window.location.search).get('debug');
   const localHost = window.location.hostname === 'localhost'
     || window.location.hostname === '127.0.0.1';
-  if (!localHost || debugName !== 'curved-wall') return;
+  if (!localHost || !['curved-wall', 'wall-construction'].includes(debugName)) return;
 
   const wallWidth = BUILDING_TYPES.wall.w;
   const angles = [-0.52, -0.36, -0.20, -0.04, 0.12, 0.28, 0.44];
+  const constructionProgress = [0.02, 0.10, 0.22, 0.40, 0.58, 0.76, 0.92];
+  const underConstruction = debugName === 'wall-construction';
   let endpoint = { x: 910, y: 1500 };
   const walls = [];
-  for (const angle of angles) {
+  for (let index = 0; index < angles.length; index++) {
+    const angle = angles[index];
     const axis = { x: Math.cos(angle), y: Math.sin(angle) };
     const wall = createBuilding(
       0,
       'wall',
       endpoint.x + axis.x * wallWidth * 0.5,
       endpoint.y + axis.y * wallWidth * 0.5,
-      true,
+      !underConstruction,
       { orientation: angle },
     );
+    if (underConstruction) {
+      wall.progress = constructionProgress[index];
+      wall.hp = Math.max(1, wall.maxHp * wall.progress);
+    }
     walls.push(wall);
     endpoint = {
       x: endpoint.x + axis.x * wallWidth,
