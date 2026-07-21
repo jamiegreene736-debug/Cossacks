@@ -101,6 +101,24 @@ test('military art assets are checked-in WebP files with substantial source deta
   }
 });
 
+test('foot and mounted troops have lossless six-pose walk sheets', async () => {
+  for (const [type, spec] of Object.entries(MILITARY_ART_SPECS)) {
+    if (type === 'gun') continue;
+    const walk = spec.walk;
+    assert.equal(walk.columns, 6, `${type} needs a complete six-pose cycle`);
+    assert.equal(walk.rows, Object.keys(NATIONS).length);
+
+    const data = await readFile(new URL(`../assets/units/${walk.file}`, import.meta.url));
+    assert.equal(data.subarray(0, 4).toString(), 'RIFF', walk.file);
+    assert.equal(data.subarray(8, 12).toString(), 'WEBP', walk.file);
+    assert.ok(data.byteLength > 500_000, `${walk.file} unexpectedly lost its source detail`);
+    assert.deepEqual(readLosslessWebpSize(data), {
+      width: walk.sourceW * walk.columns,
+      height: walk.sourceH * walk.rows,
+    });
+  }
+});
+
 test('procedural fallbacks retain nation-specific headgear', () => {
   assert.equal(NATIONS.england.headgear, 'tricorn');
   assert.equal(NATIONS.ottoman.headgear, 'turban');

@@ -127,6 +127,7 @@ async function startBattle(opts) {
   setupLocalCurvedWallPreview(world);
   setupLocalTowerCombatPreview(world);
   setupLocalCastlePreview(world);
+  setupLocalFormationMovementPreview(world);
   ui.showBattleHud(world);
   ui.setPauseLabel(false);
   ui.setSpeedLabel(1);
@@ -314,6 +315,52 @@ function setupLocalTowerCombatPreview(activeWorld) {
   camera.x = tower.x + 60;
   camera.y = tower.y;
   camera.zoom = 1.35;
+  clampCamera();
+}
+
+function setupLocalFormationMovementPreview(activeWorld) {
+  const debugParams = new URLSearchParams(window.location.search);
+  const debugName = debugParams.get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'formation-movement') return;
+
+  const lanes = [
+    { type: 'musk', count: 15, y: 1450 },
+    { type: 'pike', count: 12, y: 1560 },
+    { type: 'cav', count: 8, y: 1680 },
+    { type: 'gun', count: 3, y: 1800 },
+  ];
+  activeWorld.resources = activeWorld.resources.filter(resource => (
+    resource.x < 2200 || resource.x > 3100 || resource.y < 1300 || resource.y > 2080
+  ));
+  for (const lane of lanes) {
+    const units = [];
+    for (let index = 0; index < lane.count; index++) {
+      const unit = spawnUnit(
+        activeWorld,
+        0,
+        lane.type,
+        2380 + (index % 6) * 18,
+        lane.y + Math.floor(index / 6) * 18,
+      );
+      unit.acquire = 0;
+      unit.reload = 999;
+      units.push(unit);
+    }
+    applyMoveOrder(units, 2920, lane.y, 'line');
+  }
+
+  const soloMusketeer = spawnUnit(activeWorld, 0, 'musk', 2400, 1900);
+  const soloCavalry = spawnUnit(activeWorld, 0, 'cav', 2400, 1980);
+  soloMusketeer.acquire = 0;
+  soloCavalry.acquire = 0;
+  applyMoveOrder([soloMusketeer], 2920, 1900, 'line');
+  applyMoveOrder([soloCavalry], 2920, 1980, 'line');
+
+  camera.x = 2650;
+  camera.y = debugParams.get('focus') === 'rear' ? 1860 : 1590;
+  camera.zoom = 1.65;
   clampCamera();
 }
 

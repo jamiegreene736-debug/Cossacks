@@ -2,19 +2,45 @@
 // The battlefield runs west (player) to east (enemy), so formations face
 // along an arbitrary vector: "across" spans the front, "depth" goes to the rear.
 
-function slotSpec(n, formation) {
+import { MILITARY_WALK_FRAME_COUNT } from './military-animation.js';
+
+const UNIT_FORMATION_FOOTPRINT = Object.freeze({
+  villager: Object.freeze({ across: 16, depth: 15 }),
+  musk: Object.freeze({ across: 22, depth: 18 }),
+  pike: Object.freeze({ across: 22, depth: 18 }),
+  cav: Object.freeze({ across: 34, depth: 24 }),
+  gun: Object.freeze({ across: 42, depth: 28 }),
+});
+const ANIMATED_MILITARY_TYPES = new Set(['musk', 'pike', 'cav']);
+
+function formationSpacing(units) {
+  let across = 13;
+  let depth = 15;
+  for (const unit of units) {
+    const footprint = UNIT_FORMATION_FOOTPRINT[unit.type];
+    if (!footprint) continue;
+    across = Math.max(across, footprint.across);
+    depth = Math.max(depth, footprint.depth);
+  }
+  return { across, depth };
+}
+
+export function getFormationSlots(units, formation) {
+  const n = units.length;
+  if (n === 0) return [];
   const slots = [];
-  let perRow, sx, sy;
+  const spacing = formationSpacing(units);
+  let perRow;
   if (formation === 'square') {
     perRow = Math.max(2, Math.ceil(Math.sqrt(n)));
-    sx = 12; sy = 12;
   } else if (formation === 'column') {
     perRow = Math.max(3, Math.min(8, Math.round(Math.sqrt(n / 2.5))));
-    sx = 13; sy = 14;
   } else { // line
     const ranks = n > 120 ? 4 : n > 40 ? 3 : 2;
-    perRow = Math.ceil(n / ranks);
-    sx = 13; sy = 15;
+    // Preserve a readable battlefield width for Cossacks-scale selections.
+    // Wider unit art naturally creates more ranks instead of overflowing the map.
+    const maxPerRow = Math.max(6, Math.floor(900 / spacing.across) + 1);
+    perRow = Math.min(Math.ceil(n / ranks), maxPerRow);
   }
   const rows = Math.ceil(n / perRow);
   for (let i = 0; i < n; i++) {
@@ -22,8 +48,10 @@ function slotSpec(n, formation) {
     const col = i % perRow;
     const inRow = row === rows - 1 ? n - row * perRow : perRow;
     slots.push({
-      a: (col - (inRow - 1) / 2) * sx,   // across the front
-      b: row * sy,                       // depth behind the front rank
+      a: (col - (inRow - 1) / 2) * spacing.across, // across the front
+      b: row * spacing.depth,                       // depth behind the front rank
+      row,
+      col,
     });
   }
   return slots;
@@ -50,7 +78,7 @@ export function applyMoveOrder(units, dx, dy, formation) {
   }
   const rx = -fy, ry = fx; // "across" axis, perpendicular to facing
 
-  const slots = slotSpec(units.length, formation);
+  const slots = getFormationSlots(units, formation);
   // Pair units to slots without crossing paths: sort both by (across, depth).
   const sortedSlots = slots.slice().sort((p, q) => (p.a - q.a) || (p.b - q.b));
   const sortedUnits = units.slice().sort((p, q) => {
@@ -61,6 +89,8 @@ export function applyMoveOrder(units, dx, dy, formation) {
     const qb = -((q.x - c.x) * fx + (q.y - c.y) * fy);
     return pb - qb;
   });
+  const sharedAnimT = sortedUnits.find(unit => ANIMATED_MILITARY_TYPES.has(unit.type))
+    ?.animT || 0;
 
   for (let i = 0; i < sortedUnits.length; i++) {
     const u = sortedUnits[i];
@@ -69,6 +99,13 @@ export function applyMoveOrder(units, dx, dy, formation) {
     u.orderY = dy + ry * s.a - fy * s.b;
     u.orderTarget = null;
     u.formation = formation;
+    if (ANIMATED_MILITARY_TYPES.has(u.type) && !u.moving) {
+      u.animT = sharedAnimT;
+      // Three coordinated cohorts keep a regiment from changing every large
+      // silhouette on the same render frame without returning to random noise.
+      u.walkPhaseOffset = ((s.row + s.col * 2) % 3)
+        * (MILITARY_WALK_FRAME_COUNT / 3);
+    }
     if (u.state === 'flee') continue;
     u.state = 'move';
   }
@@ -76,8 +113,16 @@ export function applyMoveOrder(units, dx, dy, formation) {
 
 // Order units to attack one specific enemy unit.
 export function applyAttackOrder(units, target) {
-  for (const u of units) {
+  const orderedUnits = units.slice().sort((a, b) => a.id - b.id);
+  const sharedAnimT = orderedUnits.find(unit => ANIMATED_MILITARY_TYPES.has(unit.type))
+    ?.animT || 0;
+  for (let index = 0; index < orderedUnits.length; index++) {
+    const u = orderedUnits[index];
     if (u.state === 'flee') continue;
+    if (ANIMATED_MILITARY_TYPES.has(u.type) && !u.moving) {
+      u.animT = sharedAnimT;
+      u.walkPhaseOffset = (index % 3) * (MILITARY_WALK_FRAME_COUNT / 3);
+    }
     u.orderTarget = target;
     u.orderX = NaN;
     u.target = target;

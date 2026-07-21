@@ -105,10 +105,10 @@ Measured at 1,625 living units: 0.4ms median frame draw against a 16.7ms budget.
 | `assets/buildings/` | Transparent high-resolution sources for completed England structures, four-stage construction, and completed/in-progress stone fortifications. |
 | `assets/resources/` | Transparent woodland, berry, stone, and gold sources. |
 | `assets/terrain/` | Seamless meadow, road, water, soil and stubble materials plus alpha tree, rock, reed, deadwood and country-vegetation sources. |
-| `assets/units/` | English and Ottoman civilian, musketeer, polearm-guard, cavalry, and artillery production sheets. |
+| `assets/units/` | English and Ottoman civilian, musketeer, polearm-guard, cavalry, and artillery production sheets; mobile troops use separate lossless six-pose walk cycles. |
 | `infantry.js` | `drawSoldier()` — resilient procedural musketeer and polearm fallback. |
 | `mounted.js` | Resilient procedural `drawCavalry()` and `drawCannon()` fallbacks. |
-| `military-animation.js` | Shared ready/travel/attack frame selection. Travel frames sling muskets, trail polearms, and sheath cavalry sabres. |
+| `military-animation.js` | Shared ready/six-pose travel/attack frame selection, formation stride cohorts, and grounded footfall motion. |
 | `docs/military-art-references.md` | Museum references and chronology decisions for the production military roster. |
 | `villager.js` | `drawWorker()` — resilient procedural civilian fallback with axe, pickaxe, hoe, sickle, and mallet poses. |
 | `worker-animation.js` | Shared job-to-tool action mapping and cached atlas-frame selection. |

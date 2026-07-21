@@ -117,7 +117,8 @@ function makeUnit(side, nationKey, type, x, y) {
     target: null, acquireT: Math.random() * 0.5,
     formation: 'line',
     facing: side === 0 ? 1 : -1,
-    moving: false, animT: Math.random() * 10, fireT: 0, torchT: 0,
+    moving: false, animT: Math.random() * 10, walkPhaseOffset: 0,
+    fireT: 0, torchT: 0,
     fleeYDrift: 0,
     job: null,
     workAction: null,
@@ -746,8 +747,16 @@ export function step(world, dt) {
           u.x += dx / dd * push;
           u.y += dy / dd * push;
         } else {
-          u.x += Math.random() - 0.5;
-          u.y += Math.random() - 0.5;
+          // Exact overlaps used to pick a new random escape direction every
+          // tick, which made dense moving ranks visibly jitter. A unit-id pair
+          // now always separates along the same opposing vector.
+          const lowId = Math.min(u.id, v.id);
+          const highId = Math.max(u.id, v.id);
+          const hash = ((lowId * 73856093) ^ (highId * 19349663)) >>> 0;
+          const angle = hash / 0xffffffff * Math.PI * 2;
+          const sign = u.id === lowId ? 1 : -1;
+          u.x += Math.cos(angle) * minD * 0.25 * sign;
+          u.y += Math.sin(angle) * minD * 0.25 * sign;
         }
       }
     });
