@@ -306,7 +306,13 @@ function renderSelection(world, selection) {
       ? `${Math.ceil(building.hp).toLocaleString()} / ${building.maxHp.toLocaleString()} integrity · ${economy.workers} assigned · ${formatHourly(economy.projectedPerHour)} projected`
       : `${Math.ceil(building.hp).toLocaleString()} / ${building.maxHp.toLocaleString()} integrity`;
     detail.textContent = rally ? `${status} · ${rally}` : status;
-    context.textContent = building.complete ? (economy ? 'Building output per hour' : 'Production') : 'Construction';
+    context.textContent = building.complete
+      ? (economy
+        ? (building.type === 'town_center'
+          ? 'Routed output / rolling stockpile income per hour'
+          : 'Building output per hour')
+        : 'Production')
+      : 'Construction';
     if (!building.complete) return;
     if (building.type === 'tower') {
       info.textContent = 'Garrisoned defensive cannon — measured fire with no splash damage.';
@@ -316,6 +322,7 @@ function renderSelection(world, selection) {
     if (economy) {
       for (const row of economy.resources) {
         addEconomyMetric(grid, row, {
+          showActual: building.type === 'town_center',
           bonusPerHour: row.bonusPerHour,
           remaining: building.resourceType === row.resourceType ? economy.remaining : null,
         });
