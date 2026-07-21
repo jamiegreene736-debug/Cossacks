@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   Soundscape,
+  audioBusLevels,
   campaignTrackOrder,
   findNearestBuildingSiege,
   findNearestAudibleEntity,
@@ -54,6 +55,55 @@ test('pause music can duck smoothly or become fully silent', () => {
   assert.equal(pausedMusicMultiplier(false, 'mute'), 1);
   assert.equal(pausedMusicMultiplier(true, 'duck'), 0.16);
   assert.equal(pausedMusicMultiplier(true, 'mute'), 0);
+});
+
+test('battlefield volume settings scale every audible bus', () => {
+  assert.deepEqual(audioBusLevels({
+    master: 0.35, effects: 0, music: 0.6, pauseMusic: 'duck', muted: false,
+  }), {
+    master: 0.35, effects: 0, music: 0.6, ambience: 0,
+  });
+  assert.deepEqual(audioBusLevels({
+    master: 0.35, effects: 0.5, music: 0.6, pauseMusic: 'mute', muted: true,
+  }, true), {
+    master: 0, effects: 0.5, music: 0, ambience: 0.009,
+  });
+});
+
+test('effects and music reverberation stay on their volume-controlled buses', () => {
+  const connectable = name => ({
+    name,
+    connections: [],
+    connect(target) {
+      this.connections.push(target);
+      return target;
+    },
+  });
+  const soundscape = new Soundscape();
+  const sends = [];
+  soundscape.ctx = {
+    createGain() {
+      const send = { ...connectable('send'), gain: { value: 1 } };
+      sends.push(send);
+      return send;
+    },
+  };
+  soundscape.effects = connectable('effects');
+  soundscape.music = connectable('music');
+  soundscape.effectsReverb = connectable('effects-reverb');
+  soundscape.musicReverb = connectable('music-reverb');
+  const effectSource = connectable('effect-source');
+  const musicSource = connectable('music-source');
+
+  soundscape.route(effectSource, soundscape.effects, 0, 0.4);
+  soundscape.route(musicSource, soundscape.music, 0, 0.25);
+
+  assert.deepEqual(effectSource.connections, [soundscape.effects, sends[0]]);
+  assert.deepEqual(sends[0].connections, [soundscape.effectsReverb]);
+  assert.equal(sends[0].gain.value, 0.4);
+  assert.deepEqual(musicSource.connections, [soundscape.music, sends[1]]);
+  assert.deepEqual(sends[1].connections, [soundscape.musicReverb]);
+  assert.equal(sends[1].gain.value, 0.25);
 });
 
 test('audio settings reject unknown pause behavior and clamp every bus', () => {

@@ -67,6 +67,16 @@ export function pausedMusicMultiplier(paused, pauseMusic) {
   return pauseMusic === 'mute' ? 0 : 0.16;
 }
 
+export function audioBusLevels(settings, paused = false) {
+  const normalized = normalizeAudioSettings(settings);
+  return {
+    master: normalized.muted ? 0 : normalized.master,
+    effects: normalized.effects,
+    music: normalized.music * pausedMusicMultiplier(paused, normalized.pauseMusic),
+    ambience: normalized.effects * (paused ? 0.018 : 0.12),
+  };
+}
+
 export function workerSoundKind(worker, target) {
   if (worker?.job?.kind === 'build' || worker?.job?.kind === 'repair') return 'build';
   if (worker?.job?.kind !== 'gather' && worker?.job?.kind !== 'workplace') return null;
@@ -151,7 +161,8 @@ export class Soundscape {
     this.effects = null;
     this.music = null;
     this.ambience = null;
-    this.reverb = null;
+    this.effectsReverb = null;
+    this.musicReverb = null;
     this.settings = this.readSettings();
     this.muted = this.settings.muted;
     this.paused = false;
@@ -200,13 +211,19 @@ export class Soundscape {
     compressor.ratio.value = 4;
     compressor.attack.value = 0.004;
     compressor.release.value = 0.24;
-    this.reverb = this.createReverb();
-    const reverbReturn = this.ctx.createGain();
-    reverbReturn.gain.value = 0.22;
+    this.effectsReverb = this.createReverb();
+    this.musicReverb = this.createReverb();
+    const effectsReverbReturn = this.ctx.createGain();
+    const musicReverbReturn = this.ctx.createGain();
+    effectsReverbReturn.gain.value = 0.22;
+    musicReverbReturn.gain.value = 0.22;
     this.effects.connect(this.master);
     this.music.connect(this.master);
     this.ambience.connect(this.master);
-    this.reverb.connect(reverbReturn).connect(this.master);
+    // Wet signals return through their own buses so moving Effects or Music
+    // to zero silences the complete sound, including its reverberation tail.
+    this.effectsReverb.connect(effectsReverbReturn).connect(this.effects);
+    this.musicReverb.connect(musicReverbReturn).connect(this.music);
     this.master.connect(compressor).connect(this.ctx.destination);
     this.noise = this.createNoiseBuffer(3);
     this.startFieldAmbience();
@@ -296,13 +313,12 @@ export class Soundscape {
   syncGains(immediate = false) {
     if (!this.ctx) return;
     const time = this.ctx.currentTime;
-    const masterLevel = this.settings.muted ? 0 : this.settings.master;
-    const pauseLevel = pausedMusicMultiplier(this.paused, this.settings.pauseMusic);
+    const levels = audioBusLevels(this.settings, this.paused);
     const values = [
-      [this.master.gain, masterLevel],
-      [this.effects.gain, this.settings.effects],
-      [this.music.gain, this.settings.music * pauseLevel],
-      [this.ambience.gain, this.paused ? 0.018 : 0.12],
+      [this.master.gain, levels.master],
+      [this.effects.gain, levels.effects],
+      [this.music.gain, levels.music],
+      [this.ambience.gain, levels.ambience],
     ];
     for (const [param, value] of values) {
       param.cancelScheduledValues(time);
@@ -404,7 +420,8 @@ export class Soundscape {
     this.effects = null;
     this.music = null;
     this.ambience = null;
-    this.reverb = null;
+    this.effectsReverb = null;
+    this.musicReverb = null;
     this.noise = null;
     this.fieldAmbienceSource = null;
     this.musketQueue = 0;
@@ -451,9 +468,12 @@ export class Soundscape {
     }
     output.connect(bus);
     if (reverbAmount > 0) {
-      const send = this.ctx.createGain();
-      send.gain.value = reverbAmount;
-      output.connect(send).connect(this.reverb);
+      const reverb = bus === this.music ? this.musicReverb : this.effectsReverb;
+      if (reverb) {
+        const send = this.ctx.createGain();
+        send.gain.value = reverbAmount;
+        output.connect(send).connect(reverb);
+      }
     }
   }
 
