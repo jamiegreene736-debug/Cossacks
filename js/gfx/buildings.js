@@ -4483,7 +4483,21 @@ const BD_ENGLISH_BUILDING_ART = Object.freeze({
   stable: { key: 'englishStable' },
   foundry: { key: 'englishFoundry' },
   tower: { key: 'englishTower' },
+  castle: { key: 'englishCastle' },
 });
+
+const BD_OTTOMAN_BUILDING_ART = Object.freeze({
+  castle: { key: 'ottomanCastle' },
+});
+
+const BD_BUILDING_ART_BY_NATION = Object.freeze({
+  england: BD_ENGLISH_BUILDING_ART,
+  ottoman: BD_OTTOMAN_BUILDING_ART,
+});
+
+export function getBuildingProductionArtSpec(nation, type) {
+  return BD_BUILDING_ART_BY_NATION[nation]?.[type] || null;
+}
 
 // Production sprites previously used unrelated hard-coded heights. Since the
 // sources have very different aspect ratios, that made the narrow mill and
@@ -4689,10 +4703,10 @@ export function getFortificationRenderProfile(building, world) {
 }
 
 /**
- * The British civic hall uses a pre-rendered source rather than the general
+ * Production buildings use pre-rendered sources rather than the general
  * material-lining pipeline. Passing this art through bdPassLining or the hard
  * gallery-light bands would destroy the sub-pixel masonry, glazing and carved
- * stone detail that the production asset supplies.
+ * stone detail that the authored assets supply.
  */
 function bdProductionBuildingSprite(type, def, image, side, damageStage, seed) {
   const presentation = getBuildingPresentation(type, def);
@@ -4764,7 +4778,7 @@ function bdProductionBuildingSprite(type, def, image, side, damageStage, seed) {
 }
 
 function bdBuildingSprite(type, def, side, nation, natRoof, variant, damageStage, animFrame) {
-  const art = nation === 'england' ? BD_ENGLISH_BUILDING_ART[type] : null;
+  const art = getBuildingProductionArtSpec(nation, type);
   const image = art ? getProductionArt(art.key) : null;
   const frame = type === 'mill' && !image ? (animFrame || 0) : 0;
   const damage = damageStage || 0;

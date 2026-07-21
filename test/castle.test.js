@@ -1,9 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { stat } from 'node:fs/promises';
 
 import { BUILDING_TYPES } from '../js/config.js';
 import { createBuilding, queueUnit } from '../js/economy.js';
-import { getBuildingPresentation } from '../js/gfx/buildings.js';
+import {
+  getBuildingPresentation,
+  getBuildingProductionArtSpec,
+} from '../js/gfx/buildings.js';
 import { createWorld, spawnUnit, step } from '../js/sim.js';
 
 const MILITARY_ROSTER = ['musk', 'pike', 'cav', 'gun'];
@@ -35,6 +39,21 @@ test('castle presentation is the largest piece in the settlement hierarchy', () 
   assert.ok(castle.displayArtWidth > townCenter.displayArtWidth * 1.5);
   assert.ok(castle.apronRx >= BUILDING_TYPES.castle.radius);
   assert.ok(castle.apronRy >= BUILDING_TYPES.castle.h * 0.5);
+});
+
+test('both nations use substantial production castle artwork', async () => {
+  const assets = [
+    ['england', 'english-grand-artillery-castle.webp'],
+    ['ottoman', 'ottoman-grand-artillery-castle.webp'],
+  ];
+
+  for (const [nation, filename] of assets) {
+    const art = getBuildingProductionArtSpec(nation, 'castle');
+    assert.ok(art?.key, `${nation} should select production castle art`);
+    const source = new URL(`../assets/buildings/${filename}`, import.meta.url);
+    assert.ok((await stat(source)).size > 350_000,
+      `${filename} should retain high-resolution architectural detail`);
+  }
 });
 
 test('a completed castle can queue infantry, cavalry, and artillery', () => {
