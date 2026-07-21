@@ -218,6 +218,31 @@ test('the Town Center accepts carried food, wood, gold, and stone as the univers
   }
 });
 
+test('natural stone deliveries update the stockpile and remain visible in hourly telemetry', () => {
+  const world = makeWorld();
+  advance(world, 4.1);
+  const worker = world.units.find(unit => unit.side === 0 && unit.type === 'villager');
+  const stone = findNearestResource(world, worker.x, worker.y, 'stone', 0);
+  const townCenter = world.buildings.find(building => building.side === 0
+    && building.type === 'town_center');
+  const side = world.sides[0];
+  const startingStone = side.resources.stone;
+
+  assert.equal(assignGatherers(world, [worker], stone), true);
+  for (let tick = 0; tick < 30 * 30 && side.resources.stone === startingStone; tick++) {
+    step(world, 1 / 30);
+  }
+
+  assert.equal(side.resources.stone, startingStone + VILLAGER_CARRY_CAPACITY);
+  advance(world, 0.75);
+  assert.ok(side.incomePerHour.stone > 0, 'the rolling receipt rate remains visible after delivery');
+  const stats = getBuildingEconomyStats(world, townCenter);
+  const stoneStats = stats.resources.find(row => row.resourceType === 'stone');
+  assert.equal(stoneStats.workers, 1);
+  assert.equal(stoneStats.projectedPerHour, 18_720);
+  assert.equal(stoneStats.actualPerHour, side.incomePerHour.stone);
+});
+
 test('food, wood, gold, and stone use their nearer specialized drop-off buildings', () => {
   const world = makeWorld();
   advance(world, 4.1);
@@ -376,8 +401,14 @@ test('economy telemetry separates assigned hourly output from sampled live incom
   const breakdown = getEconomyBreakdown(world, 0);
   assert.equal(breakdown.food.workers, 1);
   assert.equal(breakdown.food.projectedPerHour, 30_600);
-  assert.ok(Math.abs(breakdown.food.actualPerHour - 48_000) < 0.001);
+  assert.ok(breakdown.food.actualPerHour > 0);
+  assert.ok(breakdown.food.actualPerHour < 48_000);
   assert.equal(breakdown.wood.actualPerHour, 0);
+
+  const sampledRate = breakdown.food.actualPerHour;
+  stepEconomy(world, 0.75);
+  assert.ok(world.sides[0].incomePerHour.food > 0);
+  assert.ok(world.sides[0].incomePerHour.food < sampledRate);
 });
 
 test('economic-building readouts attribute workers and the exact 20% local bonus', () => {

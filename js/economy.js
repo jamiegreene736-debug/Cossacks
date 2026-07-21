@@ -35,6 +35,10 @@ export const AUTO_BUILD_SEARCH_RADIUS = 420;
 export const VILLAGER_CARRY_CAPACITY = 10;
 const MIN_FULL_REPAIR_SECONDS = 18;
 const REPAIR_BUILD_TIME_MULTIPLIER = 1.5;
+const INCOME_SAMPLE_SECONDS = 0.75;
+// Ten-unit hand-ins are much farther apart than HUD samples. Smoothing keeps
+// the live rate legible between ordinary mine-to-drop-off round trips.
+const INCOME_SMOOTHING_SECONDS = 18;
 
 const RESOURCE_DROPOFF_TYPES = Object.freeze({
   food: Object.freeze(['mill']),
@@ -59,6 +63,32 @@ function freshResources() {
 
 function freshRates() {
   return Object.fromEntries(RESOURCE_KEYS.map(key => [key, 0]));
+}
+
+function normalizeEconomyLedgers(side) {
+  side.resources ||= {};
+  side.incomeSample ||= {};
+  side.incomePerHour ||= {};
+  for (const resourceType of RESOURCE_KEYS) {
+    if (!Number.isFinite(side.resources[resourceType])) side.resources[resourceType] = 0;
+    if (!Number.isFinite(side.incomeSample[resourceType])) side.incomeSample[resourceType] = 0;
+    if (!Number.isFinite(side.incomePerHour[resourceType])) side.incomePerHour[resourceType] = 0;
+  }
+  if (!Number.isFinite(side.incomeSampleTime) || side.incomeSampleTime < 0) {
+    side.incomeSampleTime = 0;
+  }
+}
+
+export function repairEconomyLedgers(world) {
+  for (const side of world.sides || []) normalizeEconomyLedgers(side);
+}
+
+function creditResource(side, resourceType, amount) {
+  if (!RESOURCE_KEYS.includes(resourceType) || !Number.isFinite(amount) || amount <= 0) return false;
+  normalizeEconomyLedgers(side);
+  side.resources[resourceType] += amount;
+  side.incomeSample[resourceType] += amount;
+  return true;
 }
 
 export function formatCost(cost = {}) {
@@ -1084,9 +1114,16 @@ export function getGatherAssignmentStats(world, workers, target) {
 export function getBuildingEconomyStats(world, building) {
   if (!building?.alive || !building.complete) return null;
   const def = BUILDING_TYPES[building.type];
-  if (!building.resourceType && !def.boost && !def.workResources?.length) return null;
+  const universalDropoff = building.type === 'town_center';
+  if (!universalDropoff && !building.resourceType && !def.boost && !def.workResources?.length) {
+    return null;
+  }
   const resources = Object.fromEntries(RESOURCE_KEYS.map(resourceType => [resourceType, {
-    resourceType, workers: 0, projectedPerHour: 0, bonusPerHour: 0,
+    resourceType,
+    workers: 0,
+    projectedPerHour: 0,
+    actualPerHour: world.sides[building.side].incomePerHour?.[resourceType] || 0,
+    bonusPerHour: 0,
   }]));
   for (const worker of world.units) {
     if (!worker.alive || worker.side !== building.side || worker.type !== 'villager') continue;
@@ -1095,7 +1132,9 @@ export function getBuildingEconomyStats(world, building) {
     const belongsToFarm = building.resourceType && profile.target.id === building.id;
     const employedHere = worker.job?.kind === 'workplace' && worker.job.targetId === building.id;
     const boostedHere = def.boost && profile.boostBuildingId === building.id;
-    if (!belongsToFarm && !employedHere && !boostedHere) continue;
+    const routedHere = universalDropoff && worker.job?.kind === 'gather'
+      && findResourceDropoff(world, worker, profile.target, profile.resourceType)?.id === building.id;
+    if (!belongsToFarm && !employedHere && !boostedHere && !routedHere) continue;
     const row = resources[profile.resourceType];
     row.workers++;
     row.projectedPerHour += profile.projectedPerHour;
@@ -1105,6 +1144,7 @@ export function getBuildingEconomyStats(world, building) {
     .filter(row => row.workers > 0 || row.resourceType === building.resourceType
       || def.workResources?.includes(row.resourceType)
       || resourceMatchesBoost(def.boost, row.resourceType));
+  if (universalDropoff && activeResources.length === 0) return null;
   return {
     buildingId: building.id,
     radius: def.boost ? 280 : 0,
@@ -1277,8 +1317,7 @@ function updateWorkers(world, dt) {
         const resourceType = worker.job.resourceType;
         const delivered = carriedAmount(worker);
         const side = world.sides[worker.side];
-        side.resources[resourceType] += delivered;
-        side.incomeSample[resourceType] += delivered;
+        creditResource(side, resourceType, delivered);
         resetDelivery(worker);
 
         const source = findTarget(world, worker.job.targetId);
@@ -1334,19 +1373,23 @@ function updateWorkers(world, dt) {
       );
       const produced = GATHER_RATES[resourceType] * (profile?.multiplier || 1) * dt;
       const side = world.sides[worker.side];
-      side.resources[resourceType] += produced;
-      side.incomeSample[resourceType] += produced;
+      creditResource(side, resourceType, produced);
     }
   }
 }
 
 function updateIncomeTelemetry(world, dt) {
   for (const side of world.sides) {
+    normalizeEconomyLedgers(side);
     side.incomeSampleTime += dt;
-    if (side.incomeSampleTime < 0.75) continue;
+    if (side.incomeSampleTime < INCOME_SAMPLE_SECONDS) continue;
+    const retention = Math.exp(-side.incomeSampleTime / INCOME_SMOOTHING_SECONDS);
     for (const resourceType of RESOURCE_KEYS) {
-      side.incomePerHour[resourceType] = side.incomeSample[resourceType]
+      const sampledPerHour = side.incomeSample[resourceType]
         / side.incomeSampleTime * 3600;
+      side.incomePerHour[resourceType] = side.incomePerHour[resourceType] * retention
+        + sampledPerHour * (1 - retention);
+      if (side.incomePerHour[resourceType] < 0.05) side.incomePerHour[resourceType] = 0;
       side.incomeSample[resourceType] = 0;
     }
     side.incomeSampleTime = 0;

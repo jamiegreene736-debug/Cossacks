@@ -163,6 +163,23 @@ test('campaigns saved before navigation versioning still restore', () => {
   assert.equal(restoreGameSnapshot(snapshot).world.navigationVersion, 0);
 });
 
+test('legacy campaign economy ledgers restore missing stone balances and telemetry', () => {
+  const world = createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
+  const snapshot = createGameSnapshot(
+    world, new Commander(world, 1), { x: 900, y: 1500, zoom: 1 },
+  );
+  delete snapshot.world.sides[0].resources.stone;
+  delete snapshot.world.sides[0].incomeSample.stone;
+  snapshot.world.sides[0].incomePerHour.stone = Number.NaN;
+  snapshot.world.sides[0].incomeSampleTime = Number.NaN;
+
+  const restoredSide = restoreGameSnapshot(snapshot).world.sides[0];
+  assert.equal(restoredSide.resources.stone, 0);
+  assert.equal(restoredSide.incomeSample.stone, 0);
+  assert.equal(restoredSide.incomePerHour.stone, 0);
+  assert.equal(restoredSide.incomeSampleTime, 0);
+});
+
 test('legacy campaign villagers receive the current explicit-combat balance on restore', () => {
   const world = createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
   const villager = spawnUnit(world, 0, 'villager', 900, 1500);
