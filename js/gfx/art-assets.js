@@ -127,6 +127,7 @@ const ART_URLS = Object.freeze({
   ottomanCastle: new URL('../../assets/buildings/ottoman-grand-artillery-castle.webp', import.meta.url).href,
   englishConstruction: new URL('../../assets/buildings/english-construction.webp', import.meta.url).href,
   englishFortifications: new URL('../../assets/buildings/english-fortifications.webp', import.meta.url).href,
+  fortificationMasonry: new URL('../../assets/buildings/fortification-masonry.webp', import.meta.url).href,
   englishGateClosed: new URL('../../assets/buildings/english-gate-closed.png', import.meta.url).href,
   englishFortificationConstruction: new URL('../../assets/buildings/english-fortification-construction.webp', import.meta.url).href,
   ottomanConstruction: new URL('../../assets/buildings/ottoman-construction.webp', import.meta.url).href,
