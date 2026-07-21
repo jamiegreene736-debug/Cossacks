@@ -127,9 +127,15 @@ test('the closed gate uses a substantial transparent production render', async (
 });
 
 test('curved walls use a substantial high-resolution masonry material', async () => {
-  const url = new URL('../assets/buildings/fortification-masonry.webp', import.meta.url);
-  const [metadata, header] = await Promise.all([stat(url), readFile(url)]);
-  assert.ok(metadata.size > 300_000, 'masonry texture should retain weathered source detail');
-  assert.equal(header.subarray(0, 4).toString('ascii'), 'RIFF');
-  assert.equal(header.subarray(8, 12).toString('ascii'), 'WEBP');
+  const sources = [
+    ['fortification-masonry.webp', 500_000],
+    ['fortification-walkway.webp', 450_000],
+  ];
+  for (const [file, minimumBytes] of sources) {
+    const url = new URL(`../assets/buildings/${file}`, import.meta.url);
+    const [metadata, header] = await Promise.all([stat(url), readFile(url)]);
+    assert.ok(metadata.size > minimumBytes, `${file} should retain weathered source detail`);
+    assert.equal(header.subarray(0, 4).toString('ascii'), 'RIFF');
+    assert.equal(header.subarray(8, 12).toString('ascii'), 'WEBP');
+  }
 });
