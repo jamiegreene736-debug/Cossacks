@@ -4487,6 +4487,15 @@ const BD_ENGLISH_BUILDING_ART = Object.freeze({
 });
 
 const BD_OTTOMAN_BUILDING_ART = Object.freeze({
+  town_center: { key: 'ottomanTownCenter' },
+  house: { key: 'ottomanHouse' },
+  mill: { key: 'ottomanMill' },
+  lumber_camp: { key: 'ottomanLumberCamp' },
+  mine: { key: 'ottomanMine' },
+  barracks: { key: 'ottomanBarracks' },
+  stable: { key: 'ottomanStable' },
+  foundry: { key: 'ottomanFoundry' },
+  tower: { key: 'ottomanTower' },
   castle: { key: 'ottomanCastle' },
 });
 
@@ -4497,6 +4506,25 @@ const BD_BUILDING_ART_BY_NATION = Object.freeze({
 
 export function getBuildingProductionArtSpec(nation, type) {
   return BD_BUILDING_ART_BY_NATION[nation]?.[type] || null;
+}
+
+const BD_ARCHITECTURE_SUPPORT_ART_BY_NATION = Object.freeze({
+  england: Object.freeze({
+    construction: 'englishConstruction',
+    fortifications: 'englishFortifications',
+    fortificationConstruction: 'englishFortificationConstruction',
+    gateClosed: 'englishGateClosed',
+  }),
+  ottoman: Object.freeze({
+    construction: 'ottomanConstruction',
+    fortifications: 'ottomanFortifications',
+    fortificationConstruction: 'ottomanFortificationConstruction',
+    gateClosed: 'ottomanGateClosed',
+  }),
+});
+
+export function getArchitectureProductionArtSpec(nation) {
+  return BD_ARCHITECTURE_SUPPORT_ART_BY_NATION[nation] || null;
 }
 
 // Production sprites previously used unrelated hard-coded heights. Since the
@@ -4639,14 +4667,14 @@ function bdFortificationArtView(building) {
   return { orientationIndex: diagonal ? 1 : 0, mirror: (angle < -0.27) !== rearView };
 }
 
-function bdDrawProductionFortification(g, building, image, alpha) {
+function bdDrawProductionFortification(g, building, image, closedImage, alpha) {
   const { orientationIndex, mirror } = bdFortificationArtView(building);
   const index = building.type === 'gate' ? 2 + orientationIndex : orientationIndex;
   const geometry = bdFortificationArtGeometry(building);
   if (building.type === 'gate' && building.gateOpen === false) {
-    const closed = getProductionArt('englishGateClosed');
-    if (closed) {
-      bdDrawHorizontalSheetCell(g, closed, orientationIndex, -geometry.artWidth / 2, geometry.top,
+    if (closedImage) {
+      bdDrawHorizontalSheetCell(g, closedImage, orientationIndex,
+        -geometry.artWidth / 2, geometry.top,
         geometry.artWidth, geometry.artWidth, alpha == null ? 1 : alpha, mirror);
       return;
     }
@@ -4655,7 +4683,13 @@ function bdDrawProductionFortification(g, building, image, alpha) {
     geometry.artWidth, geometry.artWidth, alpha == null ? 1 : alpha, mirror);
 }
 
-function bdDrawProductionFortificationConstruction(g, building, image, completedImage) {
+function bdDrawProductionFortificationConstruction(
+  g,
+  building,
+  image,
+  completedImage,
+  closedImage,
+) {
   const isGate = building.type === 'gate';
   const early = isGate ? 2 : 0;
   const late = early + 1;
@@ -4675,7 +4709,7 @@ function bdDrawProductionFortificationConstruction(g, building, image, completed
   // fortification during the final fifth, preventing a one-frame silhouette
   // swap when the building becomes complete.
   if (completedImage && finish > 0) {
-    bdDrawProductionFortification(g, building, completedImage, finish);
+    bdDrawProductionFortification(g, building, completedImage, closedImage, finish);
   }
 }
 
@@ -5473,10 +5507,14 @@ function drawFoundation(building, nation, worldTime) {
     return;
   }
   if (isFortificationType(building.type)) {
-    const constructionArt = getProductionArt('englishFortificationConstruction');
-    const completedArt = getProductionArt('englishFortifications');
+    const artSpec = getArchitectureProductionArtSpec(nation);
+    const constructionArt = artSpec ? getProductionArt(artSpec.fortificationConstruction) : null;
+    const completedArt = artSpec ? getProductionArt(artSpec.fortifications) : null;
+    const closedGateArt = artSpec ? getProductionArt(artSpec.gateClosed) : null;
     if (constructionArt && usesFixedFortificationFrameArt(building)) {
-      bdDrawProductionFortificationConstruction(g, building, constructionArt, completedArt);
+      bdDrawProductionFortificationConstruction(
+        g, building, constructionArt, completedArt, closedGateArt,
+      );
       return;
     }
     bdDrawFortificationFoundation(g, building);
@@ -5489,7 +5527,8 @@ function drawFoundation(building, nation, worldTime) {
     return;
   }
 
-  const constructionArt = nation === 'england' ? getProductionArt('englishConstruction') : null;
+  const artSpec = getArchitectureProductionArtSpec(nation);
+  const constructionArt = artSpec ? getProductionArt(artSpec.construction) : null;
   if (constructionArt) {
     const finish = sprite && p > 0.84 ? bdClamp((p - 0.84) / 0.16, 0, 1) : 0;
     bdDrawConstructionSheet(g, constructionArt, building, 1 - finish);
@@ -5740,10 +5779,12 @@ function drawCompleteBuilding(building, nation, worldTime, world = null) {
     return;
   }
   if (isFortificationType(building.type)) {
-    const productionArt = getProductionArt('englishFortifications');
+    const artSpec = getArchitectureProductionArtSpec(nation);
+    const productionArt = artSpec ? getProductionArt(artSpec.fortifications) : null;
+    const closedGateArt = artSpec ? getProductionArt(artSpec.gateClosed) : null;
     const renderProfile = getFortificationRenderProfile(building, world);
     if (productionArt && renderProfile.useProductionFrame) {
-      bdDrawProductionFortification(ctx, building, productionArt, 1);
+      bdDrawProductionFortification(ctx, building, productionArt, closedGateArt, 1);
       return;
     }
     const fortification = bdFortificationSprite(building, damageStage, renderProfile.joinedEnds);
@@ -5788,7 +5829,10 @@ function bdDrawFortificationJunctions(building, world) {
   // Connected wall sprites overlap their body and walk at the exact shared
   // endpoint, so adding another pier here would reintroduce a visible break.
   if (building.type === 'wall' && bdJoinedFortificationEnds(building, world).some(Boolean)) return;
-  if (getProductionArt('englishFortifications') && usesFixedFortificationFrameArt(building)) return;
+  const nation = world?.sides?.[building.side]?.nation;
+  const artSpec = getArchitectureProductionArtSpec(nation);
+  if (artSpec && getProductionArt(artSpec.fortifications)
+      && usesFixedFortificationFrameArt(building)) return;
   const neighbors = world.buildings.filter(candidate => candidate !== building
     && candidate.alive && candidate.complete && candidate.side === building.side
     && isFortificationType(candidate.type)

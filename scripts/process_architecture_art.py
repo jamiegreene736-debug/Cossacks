@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare generated architecture sheets for the production-art registry.
+"""Prepare generated architecture art for the production-art registry.
 
 The generator returns a pale checkerboard as RGB pixels.  This processor
 removes only neutral, bright pixels connected to a sheet edge, preserving the
@@ -15,6 +15,21 @@ from collections import deque
 from pathlib import Path
 
 from PIL import Image, ImageFilter
+
+
+BUILDING_SLUGS = frozenset(
+    {
+        "town-center",
+        "house",
+        "mill",
+        "lumber-camp",
+        "mine",
+        "barracks",
+        "stable",
+        "foundry",
+        "tower",
+    }
+)
 
 
 def is_exterior_checker(pixel: tuple[int, int, int]) -> bool:
@@ -63,29 +78,80 @@ def remove_exterior_checkerboard(source: Path) -> Image.Image:
     return output
 
 
-def write_sheet(source: Path, destination: Path) -> None:
+def write_art(source: Path, destination: Path, *, lossless: bool) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     image = remove_exterior_checkerboard(source)
-    image.save(destination, "WEBP", lossless=True, method=6, exact=True)
+    if lossless:
+        image.save(destination, "WEBP", lossless=True, method=6, exact=True)
+    else:
+        # Individual structures are displayed far below their authored source
+        # dimensions. A very-high-quality encode keeps carved stone and timber
+        # joints intact while avoiding multi-megabyte preload costs per sprite.
+        image.save(
+            destination,
+            "WEBP",
+            lossless=False,
+            quality=94,
+            alpha_quality=100,
+            method=6,
+            exact=True,
+        )
+
+
+def parse_building_art(value: str) -> tuple[str, Path]:
+    slug, separator, source = value.partition("=")
+    if not separator or slug not in BUILDING_SLUGS or not source:
+        valid = ", ".join(sorted(BUILDING_SLUGS))
+        raise argparse.ArgumentTypeError(
+            f"expected BUILDING=PATH where BUILDING is one of: {valid}"
+        )
+    return slug, Path(source)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--nation", choices=("england", "ottoman"), required=True)
     parser.add_argument("--fortifications", type=Path, required=True)
     parser.add_argument("--construction", type=Path, required=True)
     parser.add_argument("--fortification-construction", type=Path, required=True)
+    parser.add_argument("--gate-closed", type=Path)
+    parser.add_argument(
+        "--building-art",
+        action="append",
+        default=[],
+        type=parse_building_art,
+        metavar="BUILDING=PATH",
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    write_sheet(args.fortifications, args.output_dir / "english-fortifications.webp")
-    write_sheet(args.construction, args.output_dir / "english-construction.webp")
-    write_sheet(
-        args.fortification_construction,
-        args.output_dir / "english-fortification-construction.webp",
+    prefix = args.nation
+    write_art(
+        args.fortifications,
+        args.output_dir / f"{prefix}-fortifications.webp",
+        lossless=True,
     )
+    write_art(
+        args.construction,
+        args.output_dir / f"{prefix}-construction.webp",
+        lossless=True,
+    )
+    write_art(
+        args.fortification_construction,
+        args.output_dir / f"{prefix}-fortification-construction.webp",
+        lossless=True,
+    )
+    if args.gate_closed:
+        write_art(
+            args.gate_closed,
+            args.output_dir / f"{prefix}-gate-closed.webp",
+            lossless=True,
+        )
+    for slug, source in args.building_art:
+        write_art(source, args.output_dir / f"{prefix}-{slug}.webp", lossless=False)
 
 
 if __name__ == "__main__":
