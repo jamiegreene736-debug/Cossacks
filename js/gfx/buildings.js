@@ -5177,12 +5177,18 @@ const BD_BUILDING_PRESENTATION = Object.freeze({
   wall_stairs: { artWidthScale: 1.58, apronWidthScale: 0.94, apronDepthScale: 0.62 },
 });
 
-function getBuildingPresentation(type, def = BUILDING_TYPES[type]) {
+const BD_NATION_PRESENTATION_SCALE = Object.freeze({
+  hogwarts: 0.82,
+  starwars: 0.84,
+});
+
+function getBuildingPresentation(type, def = BUILDING_TYPES[type], nation = null) {
   if (!def) return null;
   const profile = BD_BUILDING_PRESENTATION[type] || {
     artWidthScale: 1.4, apronWidthScale: 0.76, apronDepthScale: 0.48,
   };
-  const visualScale = def.visualScale || 1;
+  const nationScale = BD_NATION_PRESENTATION_SCALE[nation] || 1;
+  const visualScale = Math.max(1, (def.visualScale || 1) * nationScale);
   const artWidth = def.w * profile.artWidthScale;
   return {
     visualScale,
@@ -6932,7 +6938,7 @@ function drawBuilding(building, world) {
   // from the origin would push the whole building down the board; this pivot
   // keeps foundations planted and sends the added mass upward into the roof,
   // tower and rampart where it belongs.
-  const presentation = getBuildingPresentation(building.type);
+  const presentation = getBuildingPresentation(building.type, BUILDING_TYPES[building.type], nation);
   const visualScale = presentation?.visualScale || 1;
   const visualGroundY = bdVisualGroundY(building);
   ctx.save();
@@ -6978,7 +6984,11 @@ function drawBuildingCollapse(destruction, worldTime) {
   const fade = progress < 0.58 ? 1 : 1 - (progress - 0.58) / 0.42;
 
   ctx.save();
-  const presentation = getBuildingPresentation(destruction.type);
+  const presentation = getBuildingPresentation(
+    destruction.type,
+    BUILDING_TYPES[destruction.type],
+    destruction.nation,
+  );
   const visualScale = presentation?.visualScale || 1;
   const visualGroundY = bdVisualGroundY(destruction);
   ctx.translate(destruction.x + shake,

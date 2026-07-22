@@ -65,6 +65,10 @@ test('both nations can train a woman villager who retains the shared worker role
   }
 });
 
+test('woman villagers keep the same world footprint as male villagers', () => {
+  assert.equal(UNIT_TYPES.woman_villager.radius, UNIT_TYPES.villager.radius);
+});
+
 test('a woman villager cannon direct hit instantly defeats every soldier type', () => {
   for (const type of ['musk', 'pike', 'cav', 'gun']) {
     const world = makeWorld();

@@ -54,6 +54,20 @@ test('displayed architecture remains decisively larger than human-scale units', 
   assert.ok(BUILDING_TYPES.wall.visualScale > BUILDING_TYPES.barracks.visualScale);
 });
 
+test('Hogwarts and StarWars buildings use a restrained themed presentation scale', () => {
+  for (const nation of ['hogwarts', 'starwars']) {
+    const townCenter = getBuildingPresentation('town_center', undefined, nation);
+    const castle = getBuildingPresentation('castle', undefined, nation);
+    const house = getBuildingPresentation('house', undefined, nation);
+    const defaultTownCenter = getBuildingPresentation('town_center');
+
+    assert.ok(townCenter.visualScale < defaultTownCenter.visualScale);
+    assert.ok(townCenter.displayArtWidth < defaultTownCenter.displayArtWidth);
+    assert.ok(townCenter.displayArtWidth > house.displayArtWidth * 2);
+    assert.ok(castle.displayArtWidth > townCenter.displayArtWidth);
+  }
+});
+
 test('production construction art advances continuously through four authored stages', () => {
   assert.deepEqual(bdConstructionArtFrame(-1), { from: 0, to: 1, mix: 0 });
   assert.deepEqual(bdConstructionArtFrame(1), { from: 3, to: 3, mix: 0 });
