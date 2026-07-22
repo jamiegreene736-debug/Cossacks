@@ -1767,6 +1767,50 @@ function drawEffects(ctx, world, alpha) {
       let vx = p.x - p.px, vy = p.y - p.py;
       if (vx === 0 && vy === 0) { vx = p.tx - p.sx; vy = p.ty - p.sy; }
       const r = ((Math.atan2(vy, vx) * ROT_K + 16.5) | 0) & ROT_MASK;
+      if (p.kind === 'arcane' || p.kind === 'spectral'
+          || p.kind === 'nightmare' || p.kind === 'cotton_candy') {
+        const distance = Math.max(1, Math.hypot(vx, vy));
+        const nx = vx / distance, ny = vy / distance;
+        const palette = {
+          arcane: ['#eefcff', '#5ab6ff'],
+          spectral: ['#e3ffff', '#62e3e8'],
+          nightmare: ['#ffb2a7', '#a31224'],
+          cotton_candy: ['#fff0fb', '#ff69c9'],
+        }[p.kind];
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = palette[1];
+        ctx.lineWidth = p.kind === 'cotton_candy' ? 6 : 3.6;
+        ctx.globalAlpha = 0.72;
+        ctx.beginPath();
+        ctx.moveTo(ix - nx * 26, iy - ny * 26);
+        ctx.lineTo(ix, iy);
+        ctx.stroke();
+        ctx.strokeStyle = palette[0];
+        ctx.lineWidth = p.kind === 'cotton_candy' ? 2.4 : 1.45;
+        ctx.globalAlpha = 0.94;
+        ctx.beginPath();
+        ctx.moveTo(ix - nx * 18, iy - ny * 18);
+        ctx.lineTo(ix, iy);
+        ctx.stroke();
+        ctx.fillStyle = palette[1];
+        ctx.globalAlpha = 0.58;
+        const radius = p.kind === 'cotton_candy' ? 8 : p.kind === 'spectral' ? 5.5 : 4.5;
+        ctx.beginPath(); ctx.arc(ix, iy, radius, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = palette[0];
+        ctx.globalAlpha = 0.94;
+        ctx.beginPath(); ctx.arc(ix - nx * 1.5, iy - ny * 1.5, radius * 0.42, 0, Math.PI * 2); ctx.fill();
+        if (p.kind === 'spectral') {
+          ctx.strokeStyle = '#9ff7ff';
+          ctx.globalAlpha = 0.68;
+          ctx.lineWidth = 1.1;
+          ctx.beginPath();
+          ctx.arc(ix - nx * 5, iy - ny * 5, 8, -1.2, 2.2);
+          ctx.stroke();
+        }
+        ctx.restore();
+        continue;
+      }
       if (p.kind === 'torch') {
         ctx.drawImage(tTex, r * tc, 0, tc, tc,
           ix - TORCH_D * 0.5, iy - TORCH_D * 0.5, TORCH_D, TORCH_D);

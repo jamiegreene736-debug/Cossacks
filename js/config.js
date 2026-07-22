@@ -134,6 +134,20 @@ export const NATIONS = {
     blurb: 'Villagers train 10% faster without changing troop strength.',
     mults: { villagerTrain: 0.9 },
   },
+  hogwarts: {
+    name: 'Hogwarts', adjective: 'Hogwarts', playable: false,
+    coat: '#243b68', trim: '#d9b84f', skin: '#d7ad8c', roof: '#313845',
+    headgear: 'wizard_hat',
+    blurb: 'An allied school of witchcraft and wizardry protected by ancient magic.',
+    mults: { villagerTrain: 0.92 },
+  },
+  nightmare_circus: {
+    name: 'Nightmare Circus', adjective: 'Nightmare Circus', playable: false,
+    coat: '#7f151d', trim: '#d6c7a5', skin: '#c9a184', roof: '#241e24',
+    headgear: 'clown',
+    blurb: 'A hostile carnival whose tents produce a curated legion of creepy clowns.',
+    mults: { villagerTrain: 0.88 },
+  },
 };
 
 // Distances are world pixels and times are seconds. Costs are deliberately
@@ -160,6 +174,27 @@ export const UNIT_TYPES = {
     meleeDmg: 2, meleeRate: 1.5, chase: 0,
     cost: { food: 75, wood: 25, gold: 15 }, trainTime: 8, pop: 1,
   },
+  wizard_worker: {
+    label: 'Wizards', short: 'Wizard', hp: 42, speed: 55, radius: 6,
+    worker: true, projectileKind: 'arcane',
+    range: 205, acquire: 0, reload: 4.8, dmg: 8, acc: 0.72,
+    meleeDmg: 3, meleeRate: 1.4, chase: 0,
+    cost: { food: 55, gold: 8 }, trainTime: 6, pop: 1,
+  },
+  witch_worker: {
+    label: 'Witches', short: 'Witch', hp: 40, speed: 56, radius: 6,
+    worker: true, projectileKind: 'arcane',
+    range: 210, acquire: 0, reload: 4.5, dmg: 8, acc: 0.75,
+    meleeDmg: 3, meleeRate: 1.4, chase: 0,
+    cost: { food: 55, gold: 8 }, trainTime: 6, pop: 1,
+  },
+  circus_worker: {
+    label: 'Circus Hands', short: 'Circus Hand', hp: 42, speed: 54, radius: 6,
+    worker: true,
+    range: 0, acquire: 0, reload: 0, dmg: 0, acc: 0,
+    meleeDmg: 3, meleeRate: 1.35, chase: 0,
+    cost: { food: 48 }, trainTime: 5.5, pop: 1,
+  },
   musk: {
     label: 'Musketeers', short: 'Musketeer', hp: 34, speed: 46, radius: 5,
     range: 190, acquire: 275, reload: 4.2, dmg: 11, acc: 0.4,
@@ -183,6 +218,55 @@ export const UNIT_TYPES = {
     range: 670, minRange: 105, acquire: 730, reload: 9.5, dmg: 48, acc: 1,
     meleeDmg: 2, meleeRate: 1.6, chase: 0, splash: 34,
     cost: { wood: 70, gold: 105 }, trainTime: 12, pop: 5,
+  },
+  wizard_duelist: {
+    label: 'Wizard Duelists', short: 'Wizard Duelist', hp: 42, speed: 48, radius: 6,
+    projectileKind: 'arcane', range: 250, acquire: 325, reload: 3.6, dmg: 13, acc: 0.86,
+    meleeDmg: 5, meleeRate: 1.2, chase: 0,
+    cost: { food: 34, gold: 28 }, trainTime: 3.8, pop: 1,
+  },
+  witch_duelist: {
+    label: 'Witch Duelists', short: 'Witch Duelist', hp: 46, speed: 50, radius: 6,
+    projectileKind: 'arcane', range: 225, acquire: 305, reload: 3.1, dmg: 11, acc: 0.9,
+    meleeDmg: 5, meleeRate: 1.15, chase: 0,
+    cost: { food: 32, gold: 26 }, trainTime: 3.5, pop: 1,
+  },
+  moaning_myrtle: {
+    label: 'Moaning Myrtles', short: 'Moaning Myrtle', hp: 58, speed: 70, radius: 7,
+    projectileKind: 'spectral', range: 330, acquire: 390, reload: 5.8, dmg: 19, acc: 0.96,
+    meleeDmg: 4, meleeRate: 1.3, chase: 0,
+    cost: { gold: 80 }, trainTime: 9, pop: 2,
+  },
+  pennywise: {
+    label: 'Pennywises', short: 'Pennywise', hp: 82, speed: 76, radius: 8,
+    range: 0, acquire: 355, reload: 0, dmg: 0, acc: 0,
+    meleeDmg: 17, meleeRate: 0.9, chase: 285,
+    cost: { food: 62, gold: 46 }, trainTime: 6, pop: 2,
+  },
+  art_clown: {
+    label: 'Art Clowns', short: 'Art the Clown', hp: 64, speed: 55, radius: 7,
+    range: 0, acquire: 260, reload: 0, dmg: 0, acc: 0,
+    meleeDmg: 14, meleeRate: 0.82, chase: 205,
+    cost: { food: 38, wood: 18 }, trainTime: 3.5, pop: 1,
+  },
+  twisty_clown: {
+    label: 'Twisty Clowns', short: 'Twisty', hp: 76, speed: 48, radius: 8,
+    range: 0, acquire: 250, reload: 0, dmg: 0, acc: 0,
+    meleeDmg: 20, meleeRate: 1.15, chase: 185,
+    cost: { food: 48, wood: 28 }, trainTime: 4.5, pop: 2,
+  },
+  captain_spaulding: {
+    label: 'Captain Spauldings', short: 'Captain Spaulding', hp: 46, speed: 45, radius: 7,
+    projectileKind: 'nightmare', range: 235, acquire: 310, reload: 4.4, dmg: 15, acc: 0.68,
+    meleeDmg: 5, meleeRate: 1.2, chase: 0,
+    cost: { food: 36, gold: 26 }, trainTime: 4.1, pop: 1,
+  },
+  killer_klown: {
+    label: 'Killer Klowns', short: 'Killer Klown', hp: 105, speed: 34, radius: 11,
+    projectileKind: 'cotton_candy', range: 560, minRange: 80, acquire: 625,
+    reload: 8.4, dmg: 42, acc: 1, splash: 28,
+    meleeDmg: 4, meleeRate: 1.5, chase: 0,
+    cost: { wood: 62, gold: 92 }, trainTime: 11, pop: 4,
   },
 };
 
@@ -247,6 +331,31 @@ export const BUILDING_TYPES = {
     attackKind: 'cannon', attack: 30, splash: 30, volley: 3,
     range: 590, reload: 8.5, hotkey: 'C',
   },
+  school: {
+    label: 'Great Hall School', description: 'A grand allied school where magical residents study together.',
+    w: 132, h: 92, radius: 70, visualScale: 1.34, hp: 2400, buildTime: 22,
+    cost: { wood: 260, stone: 420 }, hotkey: 'D',
+  },
+  pool: {
+    label: 'Enchanted Pool', description: 'A carved-stone bath and swimming pool for the allied settlement.',
+    w: 118, h: 88, radius: 64, visualScale: 1.25, hp: 1700, buildTime: 18,
+    cost: { wood: 140, stone: 260 }, hotkey: 'O',
+  },
+  beach: {
+    label: 'Black Lake Beach', description: 'A lakeside beach, dock and boathouse for peaceful recreation.',
+    w: 138, h: 96, radius: 74, visualScale: 1.25, hp: 1500, buildTime: 16,
+    cost: { wood: 180, stone: 80 }, hotkey: 'J',
+  },
+  park: {
+    label: 'World Park', description: 'A peaceful park whose regional design follows the selected world country.',
+    w: 156, h: 112, radius: 82, visualScale: 1.25, hp: 999999, buildTime: 13,
+    cost: { wood: 90, stone: 30 }, peacefulCivic: true, variants: 5, hotkey: 'P',
+  },
+  playground: {
+    label: 'Inclusive Playground', description: 'A protected civic playground where children remain non-combatants.',
+    w: 158, h: 116, radius: 84, visualScale: 1.25, hp: 999999, buildTime: 13,
+    cost: { wood: 110, stone: 20 }, peacefulCivic: true, hotkey: 'Y',
+  },
   wall: {
     label: 'Stone Wall', description: 'Heavy masonry that blocks troops and musket fire.',
     w: 88, h: 22, radius: 46, visualScale: 1.32, hp: 1250, buildTime: 7,
@@ -266,6 +375,40 @@ export const BUILDING_TYPES = {
     cost: { wood: 15, stone: 55 }, wallAttachment: true, hotkey: 'X',
   },
 };
+
+const DEFAULT_TRAINING_ROSTER = Object.freeze({
+  town_center: Object.freeze(['villager', 'woman_villager']),
+  barracks: Object.freeze(['musk', 'pike']),
+  stable: Object.freeze(['cav']),
+  foundry: Object.freeze(['gun']),
+  castle: Object.freeze(['musk', 'pike', 'cav', 'gun']),
+});
+
+export const NATION_TRAINING_ROSTERS = Object.freeze({
+  hogwarts: Object.freeze({
+    town_center: Object.freeze(['wizard_worker', 'witch_worker', 'moaning_myrtle']),
+    barracks: Object.freeze(['wizard_duelist', 'witch_duelist']),
+    stable: Object.freeze(['witch_duelist']),
+    foundry: Object.freeze(['moaning_myrtle']),
+    castle: Object.freeze(['wizard_duelist', 'witch_duelist', 'moaning_myrtle']),
+  }),
+  nightmare_circus: Object.freeze({
+    town_center: Object.freeze(['circus_worker']),
+    barracks: Object.freeze(['pennywise', 'art_clown', 'twisty_clown']),
+    stable: Object.freeze(['pennywise']),
+    foundry: Object.freeze(['captain_spaulding', 'killer_klown']),
+    castle: Object.freeze([
+      'pennywise', 'art_clown', 'twisty_clown', 'captain_spaulding', 'killer_klown',
+    ]),
+  }),
+});
+
+export function getTrainableUnitTypes(nation, buildingType) {
+  return NATION_TRAINING_ROSTERS[nation]?.[buildingType]
+    || DEFAULT_TRAINING_ROSTER[buildingType]
+    || BUILDING_TYPES[buildingType]?.trains
+    || [];
+}
 
 export const GATHER_RATES = { food: 8.5, wood: 7.5, gold: 5.8, stone: 5.2 };
 

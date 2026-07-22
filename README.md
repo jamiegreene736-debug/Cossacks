@@ -2,8 +2,9 @@
 
 A browser-based real-time strategy game about building an 18th-century
 settlement into an empire and fielding armies at *Cossacks* scale. A default
-skirmish is now a 2v2 town war: your settlement and an allied town grow against
-two rival towns, all racing for the enemy team's seats of power.
+skirmish is a 2v2 town war: England and its Hogwarts ally grow against the
+Ottoman Empire and the Nightmare Circus, all racing for the enemy team's seats
+of power.
 
 The game has no runtime dependencies or build step. Military troops, effects,
 sound, and the Ottoman settlement are generated procedurally with plain HTML,
@@ -18,6 +19,11 @@ share the same grounded palette and lighting.
 These preloaded sprites retain deterministic damage and depletion states
 without adding per-frame painting work. The British Town Center carries a
 live, cloth-animated Union flag above the cached architectural sprite.
+Hogwarts and the Nightmare Circus add dedicated lossless character sheets and
+complete isometric architecture sets. The allied opening district includes a
+free grand castle, Great Hall school, enchanted pool, Black Lake beach, house,
+regional World Park, and inclusive playground. Children are scenery residents
+of the protected playground only: they are never units, targets, or combatants.
 
 ## Play
 
@@ -33,7 +39,8 @@ npm start
 - Gather food, wood, gold, and stone from deposits across a 5,200 × 3,200 map,
   including denser woods and varied food sources.
 - Build houses, mills with attached renewable fields, lumber and mining camps, barracks,
-  stables, artillery foundries, defensive towers, and a late-game Grand Artillery Castle.
+  stables, artillery foundries, defensive towers, schools, pools, beaches,
+  regional parks, playgrounds, and a late-game Grand Artillery Castle.
 - Employ villagers directly at completed mills and economic camps, with exact
   assigned and live income-per-hour readouts for each resource.
 - Train villagers, women villagers, musketeers, pikemen, hussars, and cannon individually or in
@@ -49,6 +56,10 @@ npm start
   receive its ordinary damage instead.
 - Destroy both rival Town Centers while protecting your team's towns. A sudden
   rainbow breaks over the battlefield when your team wins.
+- Choose any of 195 countries for the World Park identity. The catalogue uses
+  the 193 UN member states and two permanent observer states; five detailed
+  regional park variants make that global layer practical without pretending
+  every real park is an individually simulated military building.
 
 The Ottoman or English opponent uses the same resource costs, construction,
 population, and training queues as the player. It develops a settlement and
@@ -65,12 +76,14 @@ a country, each new campaign requires one CPU difficulty choice:
 Difficulty changes CPU planning, production, defense, and attack pressure. It
 does not alter unit combat stats or give the CPU free resources.
 
-## Nations
+## Factions
 
 | Nation | Character |
 | --- | --- |
 | England | Disciplined redcoats reload 10% faster; fields produce 15% more food. |
 | Ottoman Empire | Cavalry moves 15% faster; villagers train 10% faster. |
+| Hogwarts | Allied wizards and witches gather, build, duel, and train Moaning Myrtle from the Town Center. |
+| Nightmare Circus | Enemy AI produces Pennywise, Art the Clown, Twisty, Captain Spaulding, and Killer Klowns. |
 
 ## Controls
 

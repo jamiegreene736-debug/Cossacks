@@ -2,9 +2,10 @@
 // owns movement/combat; this module owns settlement state and resource rules.
 
 import {
-  WORLD, NATIONS, UNIT_TYPES, BUILDING_TYPES, RESOURCE_KEYS,
+  WORLD, NATIONS, UNIT_TYPES, BUILDING_TYPES, RESOURCE_KEYS, getTrainableUnitTypes,
   STARTING_RESOURCES, GATHER_RATES, MAX_POPULATION,
 } from './config.js';
+import { countryParkVariant } from './countries.js';
 import { applyMoveOrder } from './formations.js';
 import {
   fortificationAxis, fortificationCorners, fortificationFrame,
@@ -121,6 +122,7 @@ export function createBuilding(side, type, x, y, complete = false, options = {})
     x, y, radius: def.radius, w: def.w, h: def.h,
     hp: complete ? def.hp : Math.max(1, def.hp * 0.08), maxHp: def.hp,
     alive: true, selected: false, complete,
+    peacefulCivic: Boolean(def.peacefulCivic),
     progress: complete ? 1 : 0.02,
     repairing: false, repairProgress: 0, repairStartHp: null,
     fireT: 0, aimAngle: 0,
@@ -128,6 +130,7 @@ export function createBuilding(side, type, x, y, complete = false, options = {})
     reload: Math.random() * (def.reload || 0),
     resourceType: def.resource || null,
     amount: def.amount || 0,
+    visualVariant: Number.isInteger(options.visualVariant) ? options.visualVariant : null,
   };
   if (def.fortification) {
     building.orientation = normalizeFortificationOrientation(options.orientation);
@@ -220,9 +223,33 @@ export function initializeEconomy(world) {
     world.buildings.push(tc);
     side.townCenterId = tc.id;
 
+    if (side.nation === 'hogwarts') {
+      const landmarks = [
+        ['house', -280, 280],
+        ['school', 15, 300],
+        ['castle', 340, 330],
+        ['pool', -160, 585],
+        ['beach', -400, 760],
+        ['park', 190, 650],
+        ['playground', 440, 750],
+      ];
+      for (const [type, dx, dy] of landmarks) {
+        const landmark = createBuilding(sideIndex, type, start.x + dx, start.y + dy, true, {
+          team: side.team,
+          visualVariant: type === 'park' ? countryParkVariant(world.worldCountry) : null,
+        });
+        world.buildings.push(landmark);
+        if (BUILDING_TYPES[type].popCap) {
+          side.popCap = Math.min(side.maxPopulation, side.popCap + BUILDING_TYPES[type].popCap);
+        }
+      }
+    }
+
     // This is intentionally free: the first frame contains only the Town
     // Center, then its first resident emerges. The player can never be stuck.
-    queueUnit(world, tc, 'villager', 1, { free: true, trainTime: 4 });
+    const firstWorker = getTrainableUnitTypes(side.nation, 'town_center')
+      .find(unitType => UNIT_TYPES[unitType]?.worker) || 'villager';
+    queueUnit(world, tc, firstWorker, 1, { free: true, trainTime: 4 });
   }
 }
 
@@ -820,7 +847,9 @@ function populationSpace(side, unitType) {
 export function queueUnit(world, building, unitType, count = 1, options = {}) {
   const def = UNIT_TYPES[unitType];
   const bDef = BUILDING_TYPES[building?.type];
-  if (!building?.alive || !building.complete || !def || !bDef?.trains?.includes(unitType)) {
+  const nation = world.sides[building?.side]?.nation;
+  if (!building?.alive || !building.complete || !def || !bDef?.trains
+      || !getTrainableUnitTypes(nation, building.type).includes(unitType)) {
     return { ok: false, queued: 0, message: 'That unit cannot be trained here.' };
   }
   const side = world.sides[building.side];

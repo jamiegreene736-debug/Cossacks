@@ -6,8 +6,9 @@
 //  - Target acquisition is staggered (each unit re-scans every ~0.5s)
 //  - Collision separation only runs for units that moved this tick
 
-import { WORLD, NATIONS, UNIT_TYPES, normalizeCpuDifficulty,
+import { WORLD, NATIONS, UNIT_TYPES, BUILDING_TYPES, normalizeCpuDifficulty,
          PIKE_VS_CAV, CAV_CHARGE_BONUS, SQUARE_VS_CAV } from './config.js';
+import { normalizeWorldCountry } from './countries.js';
 import { sfx } from './audio.js';
 import { initializeEconomy, stepEconomy, onUnitKilled, onBuildingDestroyed } from './economy.js';
 import {
@@ -102,6 +103,7 @@ export function getUnitRuntimeStats(type) {
     meleeRate: base.meleeRate,
     chase: base.chase,
     radius: base.radius,
+    projectileKind: base.projectileKind || null,
   };
 }
 
@@ -144,8 +146,8 @@ function clampPos(u) {
 export function createWorld(opts) {
   const playerNation = opts?.playerNation || 'england';
   const enemyNation = opts?.enemyNation || (playerNation === 'england' ? 'ottoman' : 'england');
-  const allyNation = opts?.allyNation || playerNation;
-  const enemyAllyNation = opts?.enemyAllyNation || enemyNation;
+  const allyNation = opts?.allyNation || 'hogwarts';
+  const enemyAllyNation = opts?.enemyAllyNation || 'nightmare_circus';
   const defaultSides = [
     {
       nation: playerNation, team: 0, controller: 'human',
@@ -188,6 +190,7 @@ export function createWorld(opts) {
     sepGrid: new FlatGrid(20, WORLD.w, WORLD.h),
     tgtGrid: new FlatGrid(64, WORLD.w, WORLD.h),
     mode: sides.length >= 4 ? '2v2' : '1v1',
+    worldCountry: normalizeWorldCountry(opts?.worldCountry),
     sides,
   };
   world.spawnUnit = (side, type, x, y) => spawnUnit(world, side, type, x, y);
@@ -255,6 +258,7 @@ function maybeBreak(world, u) {
 
 export function damage(world, victim, amount, attacker) {
   if (!victim.alive) return false;
+  if (victim.entityKind === 'building' && BUILDING_TYPES[victim.type]?.peacefulCivic) return false;
   if (isPeaceTime(world) && isHostilePair(attacker, victim)) return false;
   victim.hp -= amount;
   if (victim.entityKind === 'building' && attacker?.alive && attacker.entityKind !== 'building'
@@ -377,6 +381,10 @@ function fireBlocked(world, u, t, d) {
 }
 
 function fireMusket(world, u, t, d, accMul = 1) {
+  if (u.projectileKind) {
+    fireSpecialBolt(world, u, t, d, accMul);
+    return;
+  }
   if (t.entityKind === 'building' && u.type !== 'villager') {
     launchBuildingTorch(world, u, t, u.dmg * (0.85 + Math.random() * 0.3), true);
     return;
@@ -392,6 +400,45 @@ function fireMusket(world, u, t, d, accMul = 1) {
   if (Math.random() < hitChance) {
     damage(world, t, u.dmg * (0.85 + Math.random() * 0.3), u);
   }
+}
+
+function fireSpecialBolt(world, u, target, distance, accMul = 1) {
+  u.reload = u.reloadTime * (0.9 + Math.random() * 0.2);
+  u.fireT = 0.32;
+  const nx = (target.x - u.x) / Math.max(1, distance);
+  const ny = (target.y - u.y) / Math.max(1, distance);
+  const muzzleX = u.x + nx * 10;
+  const muzzleY = u.y + ny * 10 - 13;
+  const hitChance = Math.min(0.98, Math.max(0.18,
+    accMul * u.acc * (1.08 - 0.42 * distance / Math.max(1, u.range))));
+  const hit = Math.random() < hitChance;
+  const scatter = hit ? 0 : 20 + distance * 0.08;
+  const angle = Math.random() * Math.PI * 2;
+  const tx = target.x + Math.cos(angle) * scatter;
+  const ty = target.y + Math.sin(angle) * scatter;
+  world.projectiles.push({
+    kind: u.projectileKind,
+    sx: muzzleX, sy: muzzleY, x: muzzleX, y: muzzleY, px: muzzleX, py: muzzleY,
+    tx, ty, t: 0, dur: Math.min(0.78, Math.max(0.22, distance / 520)), arc: 0,
+    dmg: u.dmg, splash: u.splash || 0, target, hit, attackerId: u.id,
+  });
+  flash(world, muzzleX, muzzleY, u.projectileKind === 'cotton_candy');
+}
+
+function impactSpecialBolt(world, projectile) {
+  const attacker = world.units.find(unit => unit.id === projectile.attackerId) || null;
+  flash(world, projectile.tx, projectile.ty - 3, projectile.kind === 'cotton_candy');
+  if (!projectile.hit) return;
+  if (projectile.target?.alive) damage(world, projectile.target, projectile.dmg, attacker);
+  if (projectile.splash <= 0) return;
+  world.tgtGrid.forEach(projectile.tx, projectile.ty, projectile.splash, index => {
+    const unit = world.active[index];
+    if (!unit?.alive || unit === projectile.target || areAlliedSides(world, unit.side, attacker?.side)) return;
+    const distance = Math.hypot(unit.x - projectile.tx, unit.y - projectile.ty);
+    if (distance <= projectile.splash) {
+      damage(world, unit, projectile.dmg * (1 - 0.65 * distance / projectile.splash), attacker);
+    }
+  });
 }
 
 export function launchBuildingTorch(world, u, building, amount, usesReload = false) {
@@ -616,7 +663,8 @@ function updateUnit(world, u, dt) {
       // remains cheap and lets idle soldiers finish an exposed settlement.
       if (!best) {
         for (const building of world.buildings) {
-          if (!building.alive || areAlliedSides(world, building.side, u.side)) continue;
+          if (!building.alive || BUILDING_TYPES[building.type]?.peacefulCivic
+              || areAlliedSides(world, building.side, u.side)) continue;
           const d = Math.hypot(building.x - u.x, building.y - u.y) - building.radius;
           if (d < bestD && d <= u.acquire) { bestD = d; best = building; }
         }
@@ -639,7 +687,9 @@ function updateUnit(world, u, dt) {
   // explicit-only militia behavior because their acquire radius is zero.
   const automaticEngagement = u.acquire > 0 && (isRanged || d <= u.chase);
   const shouldEngageTarget = Boolean(t && (u.orderTarget === t || automaticEngagement));
-  let destX = NaN, destY = NaN, stopAt = 5;
+  // Working residents must enter the economy module's 4.5px arrival band;
+  // the generic 5px formation stop left some deterministic field rows idle.
+  let destX = NaN, destY = NaN, stopAt = u.type === 'villager' && u.job ? 3.5 : 5;
 
   if (t && isRanged && d <= u.range && d >= u.minRange) {
     // Stand and shoot.
@@ -879,6 +929,9 @@ export function step(world, dt) {
     if (p.t >= p.dur) {
       if (p.kind === 'tower') impactTowerShot(world, p);
       else if (p.kind === 'torch') impactTorch(world, p);
+      else if (['arcane', 'spectral', 'nightmare', 'cotton_candy'].includes(p.kind)) {
+        impactSpecialBolt(world, p);
+      }
       else explodeShell(world, p);
       world.projectiles.splice(i, 1);
     }

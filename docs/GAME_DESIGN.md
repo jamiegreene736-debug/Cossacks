@@ -19,7 +19,23 @@ with light, historically flavored bonuses rather than opaque hard counters.
    population cap to a maximum of 1,200.
 5. The enemy follows the same economic progression, fortifies its settlement,
    and launches increasingly large attack waves.
-6. Destroying the enemy Town Center wins the skirmish; losing yours ends it.
+6. England and Hogwarts must destroy both Ottoman and Nightmare Circus Town
+   Centers; the allied team loses only after both friendly Town Centers fall.
+
+## Authored 2v2 scenario
+
+- Side 0 remains the human England settlement.
+- Side 2 is the Hogwarts ally. Its Town Center is a towering school castle and
+  its complete opening civic district is free. Wizards and witches share the
+  worker surface; Moaning Myrtle is trained from the Town Center as a spectral
+  ranged unit.
+- Side 1 remains the Ottoman opponent.
+- Side 3 is the Nightmare Circus opponent. Its AI uses five distinct clown
+  identities across melee, ranged, and artillery-like roles.
+- A 195-country catalogue selects the World Park identity. Five regional park
+  variants and one inclusive playground represent this non-military civic
+  layer. Civic sites cannot be damaged, and children are painted residents
+  rather than targetable entities.
 
 ## CPU difficulty plan
 
@@ -73,6 +89,11 @@ economy or entity interfaces introduced here.
 - Resource costs, population reservations, construction, and queues cannot go
   negative or exceed the cap.
 - England and the Ottoman Empire have distinct visuals and bonuses.
+- Hogwarts and Nightmare Circus use dedicated architecture and character art;
+  no fantasy unit falls back to a historical costume row.
+- The default four factions, free Hogwarts landmarks, Moaning Myrtle training,
+  clown-only rival production, 195-country catalogue, and protected civic
+  buildings survive save and resume.
 - Batch queues can grow the battle into hundreds or thousands of soldiers.
 - The enemy establishes a base and attacks rather than receiving an instant
   pre-deployed army.

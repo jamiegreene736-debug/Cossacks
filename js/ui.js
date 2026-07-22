@@ -2,8 +2,9 @@
 
 import {
   NATIONS, UNIT_TYPES, BUILDING_TYPES, RESOURCE_KEYS,
-  CPU_DIFFICULTIES, DEFAULT_CPU_DIFFICULTY,
+  CPU_DIFFICULTIES, DEFAULT_CPU_DIFFICULTY, getTrainableUnitTypes,
 } from './config.js';
+import { WORLD_COUNTRIES, WORLD_COUNTRY_BY_CODE, countryFlag } from './countries.js';
 import {
   formatCost, getBuildingEconomyStats, getEconomyBreakdown,
   getFieldAttachmentStatus, getGatherAssignmentStats, getRallyTarget,
@@ -15,6 +16,7 @@ const $ = id => document.getElementById(id);
 let callbacks = {};
 let selectedNation = 'england';
 let selectedDifficulty = null;
+let selectedWorldCountry = 'GB';
 let lastSelectionKey = '';
 let toastTimer = 0;
 let activePlacementType = null;
@@ -37,6 +39,7 @@ export function initMenu(menuCallbacks) {
 
   const select = $('sel-player-nation');
   for (const [key, nation] of Object.entries(NATIONS)) {
+    if (nation.playable === false) continue;
     const option = document.createElement('option');
     option.value = key;
     option.textContent = nation.name;
@@ -48,10 +51,29 @@ export function initMenu(menuCallbacks) {
     selectedNation = select.value;
     updateNationPreview();
   });
+  const countrySelect = $('sel-world-country');
+  for (const country of WORLD_COUNTRIES) {
+    const option = document.createElement('option');
+    option.value = country.code;
+    option.textContent = `${countryFlag(country.code)} ${country.name}`;
+    countrySelect.appendChild(option);
+  }
+  countrySelect.value = selectedWorldCountry;
+  countrySelect.addEventListener('change', () => {
+    selectedWorldCountry = countrySelect.value;
+  });
+  $('world-country-count').textContent = `${WORLD_COUNTRIES.length} countries represented`;
   $('btn-start').addEventListener('click', () => {
     if (!selectedDifficulty) return;
     const enemyNation = selectedNation === 'england' ? 'ottoman' : 'england';
-    menuCallbacks.onStart({ playerNation: selectedNation, enemyNation, difficulty: selectedDifficulty });
+    menuCallbacks.onStart({
+      playerNation: selectedNation,
+      enemyNation,
+      allyNation: 'hogwarts',
+      enemyAllyNation: 'nightmare_circus',
+      worldCountry: selectedWorldCountry,
+      difficulty: selectedDifficulty,
+    });
   });
   $('btn-load-save').addEventListener('click', () => menuCallbacks.onLoad?.());
   $('btn-delete-save').addEventListener('click', () => menuCallbacks.onDelete?.());
@@ -69,6 +91,7 @@ function selectDifficulty(difficulty) {
   nationStep.classList.remove('locked');
   nationStep.setAttribute('aria-disabled', 'false');
   $('sel-player-nation').disabled = false;
+  $('sel-world-country').disabled = false;
   $('btn-start').disabled = false;
   $('preview-difficulty').textContent = CPU_DIFFICULTIES[difficulty].name.toLowerCase();
 }
@@ -123,13 +146,18 @@ export function showBattleHud(world) {
   for (const id of ['hud-top', 'time-controls', 'panel', 'minimap', 'hint-bar']) $(id).classList.remove('hidden');
   $('hud-player-nation').textContent = NATIONS[world.sides[0].nation].name;
   const ally = world.sides.find((_side, sideIndex) => sideIndex !== 0 && isPlayerTeam(world, sideIndex));
-  const rivalCount = world.sides.filter((_side, sideIndex) => !isPlayerTeam(world, sideIndex)).length;
-  $('hud-enemy-nation').textContent = `${NATIONS[world.sides[1].nation].name} ×${rivalCount}`;
+  const rivals = world.sides
+    .filter((_side, sideIndex) => !isPlayerTeam(world, sideIndex))
+    .map(side => NATIONS[side.nation].name);
+  $('hud-enemy-nation').textContent = rivals.join(' + ');
   const difficulty = CPU_DIFFICULTIES[world.difficulty] || CPU_DIFFICULTIES[DEFAULT_CPU_DIFFICULTY];
   $('hud-enemy-role').textContent = `${difficulty.name} 2v2 CPU team`;
   $('player-crest').textContent = NATIONS[world.sides[0].nation].name[0];
   $('player-crest').style.background = NATIONS[world.sides[0].nation].coat;
   if (ally) $('hud-player-nation').textContent += ` + ${NATIONS[ally.nation].name}`;
+  const country = WORLD_COUNTRY_BY_CODE[world.worldCountry];
+  $('hud-world-country').textContent = country
+    ? `${countryFlag(country.code)} World Park: ${country.name}` : 'World Park';
   $('enemy-crest').textContent = NATIONS[world.sides[1].nation].name[0];
   $('enemy-crest').style.background = NATIONS[world.sides[1].nation].coat;
   lastSelectionKey = '';
@@ -196,10 +224,18 @@ export function setSavedCampaign(summary) {
     return;
   }
   $('btn-load-save').disabled = false;
-  const player = NATIONS[summary.nation];
-  const enemy = NATIONS[summary.enemyNation];
+  const playerNations = [summary.nation, ...(summary.allyNations || [])];
+  const enemyNations = summary.enemyNations?.length
+    ? summary.enemyNations
+    : [summary.enemyNation];
+  const playerLabel = playerNations
+    .map(nation => NATIONS[nation]?.name || 'Unknown realm')
+    .join(' + ');
+  const enemyLabel = enemyNations
+    .map(nation => NATIONS[nation]?.name || 'Unknown rival')
+    .join(' + ');
   const difficulty = CPU_DIFFICULTIES[summary.difficulty] || CPU_DIFFICULTIES[DEFAULT_CPU_DIFFICULTY];
-  $('saved-game-title').textContent = `${player?.name || 'Unknown realm'} vs ${enemy?.name || 'Unknown rival'}`;
+  $('saved-game-title').textContent = `${playerLabel} vs ${enemyLabel}`;
   const date = new Date(summary.savedAt);
   $('saved-game-date').textContent = date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
   $('saved-game-date').dateTime = date.toISOString();
@@ -325,7 +361,8 @@ function renderSelection(world, selection) {
     const economy = getBuildingEconomyStats(world, building);
     title.textContent = def.label;
     info.textContent = building.complete ? def.description : `Under construction — ${Math.floor(building.progress * 100)}%`;
-    const rally = building.complete && def.trains?.length ? rallyDescription(world, building) : '';
+    const trainable = getTrainableUnitTypes(world.sides[building.side].nation, building.type);
+    const rally = building.complete && trainable.length ? rallyDescription(world, building) : '';
     const status = economy
       ? `${Math.ceil(building.hp).toLocaleString()} / ${building.maxHp.toLocaleString()} integrity · ${economy.workers} assigned · ${formatHourly(economy.projectedPerHour)} projected`
       : `${Math.ceil(building.hp).toLocaleString()} / ${building.maxHp.toLocaleString()} integrity`;
@@ -362,7 +399,7 @@ function renderSelection(world, selection) {
         meta: open ? 'Bar the passage' : 'Clear the passage',
       });
     }
-    for (const unitType of def.trains || []) {
+    for (const unitType of trainable) {
       const counts = UNIT_TYPES[unitType].worker ? [1, 5] : [1, 5, 20];
       for (const count of counts) addCommand(grid, {
         action: 'train', type: unitType, count,
@@ -506,6 +543,10 @@ function multiplyCost(cost, count) {
 function unitIcon(type) {
   return {
     villager: '⚒', woman_villager: '⚒◉', musk: '♟', pike: '†', cav: '♞', gun: '◉',
+    wizard_worker: '⚒✦', witch_worker: '⚒✧', circus_worker: '⚒☠',
+    wizard_duelist: '✦', witch_duelist: '✧', moaning_myrtle: '◌',
+    pennywise: '●', art_clown: '◐', twisty_clown: '♣',
+    captain_spaulding: '※', killer_klown: '◎',
   }[type] || '•';
 }
 
@@ -513,6 +554,7 @@ function buildingIcon(type) {
   return {
     house: '⌂', farm: '≋', mill: '✣', lumber_camp: '♣', mine: '◆',
     barracks: '⚔', stable: '♞', foundry: '◉', tower: '♜', castle: '♛',
+    school: '⌘', pool: '≈', beach: '≋', park: '♧', playground: '☆',
     wall: '▥', gate: '∩', wall_stairs: '▰',
   }[type] || '▦';
 }

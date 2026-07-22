@@ -31,7 +31,10 @@ test('a 2v2 skirmish starts with one Town Center per side and no units', () => {
   assert.equal(townCenters.length, 4);
   assert.deepEqual(townCenters.map(building => building.side), [0, 1, 2, 3]);
   assert.deepEqual(world.sides.map(side => side.team), [0, 1, 0, 1]);
-  assert.ok(townCenters.every(townCenter => townCenter.queue[0].type === 'villager'));
+  assert.deepEqual(townCenters.map(townCenter => townCenter.queue[0].type), [
+    'villager', 'villager', 'wizard_worker', 'circus_worker',
+  ]);
+  assert.ok(world.buildings.some(building => building.side === 2 && building.type === 'castle'));
   assert.ok(world.sides.every(side => side.population === 0));
 });
 

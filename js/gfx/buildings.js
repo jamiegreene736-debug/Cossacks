@@ -5013,6 +5013,7 @@ function bdResetCaches() {
 const BD_VARIANTS = {
   town_center: 1, tower: 2, castle: 2, farm: 1, house: 8,
   mill: 2, lumber_camp: 2, mine: 2, barracks: 2, stable: 2, foundry: 2,
+  school: 1, pool: 1, beach: 1, park: 5, playground: 1,
   wall: 3, gate: 3, wall_stairs: 3,
 };
 
@@ -5020,7 +5021,8 @@ const BD_PAINTERS = {
   town_center: bdPaintTownCenter, house: bdPaintHouse, mill: bdPaintMill,
   lumber_camp: bdPaintLumberCamp, mine: bdPaintMine, barracks: bdPaintBarracks,
   stable: bdPaintStable, foundry: bdPaintFoundry, tower: bdPaintTower,
-  castle: bdPaintCastle,
+  castle: bdPaintCastle, school: bdPaintBarracks, pool: bdPaintMill,
+  beach: bdPaintLumberCamp, park: bdPaintHouse, playground: bdPaintHouse,
 };
 
 const BD_ENGLISH_BUILDING_ART = Object.freeze({
@@ -5049,12 +5051,42 @@ const BD_OTTOMAN_BUILDING_ART = Object.freeze({
   castle: { key: 'ottomanCastle' },
 });
 
+const BD_HOGWARTS_BUILDING_ART = Object.freeze({
+  town_center: { key: 'hogwartsTownCenter' },
+  house: { key: 'hogwartsHouse' }, mill: { key: 'hogwartsMill' },
+  lumber_camp: { key: 'hogwartsLumberCamp' }, mine: { key: 'hogwartsMine' },
+  barracks: { key: 'hogwartsBarracks' }, stable: { key: 'hogwartsStable' },
+  foundry: { key: 'hogwartsFoundry' }, tower: { key: 'hogwartsTower' },
+  castle: { key: 'hogwartsCastle' }, school: { key: 'hogwartsGreatHall' },
+  pool: { key: 'hogwartsPool' }, beach: { key: 'hogwartsBeach' },
+});
+
+const BD_CIRCUS_BUILDING_ART = Object.freeze({
+  town_center: { key: 'circusTownCenter' }, house: { key: 'circusHouse' },
+  mill: { key: 'circusHouse' }, lumber_camp: { key: 'circusHouse' },
+  mine: { key: 'circusFoundry' }, barracks: { key: 'circusBarracks' },
+  stable: { key: 'circusBarracks' }, foundry: { key: 'circusFoundry' },
+  tower: { key: 'circusFoundry' }, castle: { key: 'circusCastle' },
+});
+
+const BD_WORLD_PARK_ART = Object.freeze([
+  { key: 'parkEnglish' }, { key: 'parkEastAsian' }, { key: 'parkTropical' },
+  { key: 'parkOasis' }, { key: 'parkAlpine' },
+]);
+
 const BD_BUILDING_ART_BY_NATION = Object.freeze({
   england: BD_ENGLISH_BUILDING_ART,
   ottoman: BD_OTTOMAN_BUILDING_ART,
+  hogwarts: BD_HOGWARTS_BUILDING_ART,
+  nightmare_circus: BD_CIRCUS_BUILDING_ART,
 });
 
-export function getBuildingProductionArtSpec(nation, type) {
+export function getBuildingProductionArtSpec(nation, type, variant = 0) {
+  if (type === 'park') return BD_WORLD_PARK_ART[variant % BD_WORLD_PARK_ART.length];
+  if (type === 'playground') return { key: 'worldPlayground' };
+  if (type === 'school' || type === 'pool' || type === 'beach') {
+    return BD_HOGWARTS_BUILDING_ART[type];
+  }
   return BD_BUILDING_ART_BY_NATION[nation]?.[type] || null;
 }
 
@@ -5070,6 +5102,14 @@ const BD_ARCHITECTURE_SUPPORT_ART_BY_NATION = Object.freeze({
     fortifications: 'ottomanFortifications',
     fortificationConstruction: 'ottomanFortificationConstruction',
     gateClosed: 'ottomanGateClosed',
+  }),
+  hogwarts: Object.freeze({
+    construction: 'englishConstruction', fortifications: 'englishFortifications',
+    fortificationConstruction: 'englishFortificationConstruction', gateClosed: 'englishGateClosed',
+  }),
+  nightmare_circus: Object.freeze({
+    construction: 'ottomanConstruction', fortifications: 'ottomanFortifications',
+    fortificationConstruction: 'ottomanFortificationConstruction', gateClosed: 'ottomanGateClosed',
   }),
 });
 
@@ -5093,6 +5133,11 @@ const BD_BUILDING_PRESENTATION = Object.freeze({
   foundry: { artWidthScale: 1.40, apronWidthScale: 0.92, apronDepthScale: 0.60 },
   tower: { artWidthScale: 1.36, apronWidthScale: 0.80, apronDepthScale: 0.56 },
   castle: { artWidthScale: 1.58, apronWidthScale: 0.80, apronDepthScale: 0.58 },
+  school: { artWidthScale: 1.48, apronWidthScale: 0.88, apronDepthScale: 0.58 },
+  pool: { artWidthScale: 1.48, apronWidthScale: 0.92, apronDepthScale: 0.62 },
+  beach: { artWidthScale: 1.50, apronWidthScale: 0.94, apronDepthScale: 0.64 },
+  park: { artWidthScale: 1.44, apronWidthScale: 0.96, apronDepthScale: 0.66 },
+  playground: { artWidthScale: 1.44, apronWidthScale: 0.96, apronDepthScale: 0.66 },
   wall_stairs: { artWidthScale: 1.58, apronWidthScale: 0.94, apronDepthScale: 0.62 },
 });
 
@@ -5498,7 +5543,7 @@ function bdProductionBuildingSprite(type, def, image, side, damageStage, seed) {
 }
 
 function bdBuildingSprite(type, def, side, nation, natRoof, variant, damageStage, animFrame) {
-  const art = getBuildingProductionArtSpec(nation, type);
+  const art = getBuildingProductionArtSpec(nation, type, variant);
   const image = art ? getProductionArt(art.key) : null;
   const frame = type === 'mill' && !image ? (animFrame || 0) : 0;
   const damage = damageStage || 0;
@@ -6042,7 +6087,9 @@ function bdConstructionSprite(building, nation, worldTime) {
 
   const nat = NATIONS[nation] || NATIONS.england;
   const variants = BD_VARIANTS[building.type] || 1;
-  const variant = ((building.id % variants) + variants) % variants;
+  const variant = Number.isInteger(building.visualVariant)
+    ? ((building.visualVariant % variants) + variants) % variants
+    : ((building.id % variants) + variants) % variants;
   const animFrame = building.type === 'mill'
     ? Math.floor(((worldTime || 0) * 0.18 + building.id * 0.17) * BD_MILL_FRAMES) % BD_MILL_FRAMES
     : 0;
@@ -6613,7 +6660,9 @@ function drawCompleteBuilding(building, nation, worldTime, world = null) {
 
   const nat = NATIONS[nation];
   const variants = BD_VARIANTS[building.type] || 1;
-  const variant = ((building.id % variants) + variants) % variants;
+  const variant = Number.isInteger(building.visualVariant)
+    ? ((building.visualVariant % variants) + variants) % variants
+    : ((building.id % variants) + variants) % variants;
   const animFrame = building.type === 'mill'
     ? Math.floor(((worldTime || 0) * 0.42 + building.id * 0.17) * BD_MILL_FRAMES) % BD_MILL_FRAMES
     : 0;
