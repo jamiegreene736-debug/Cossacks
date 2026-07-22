@@ -1,6 +1,6 @@
 // Terrain: modelled diorama board — material field, parcels, hedgerows,
 // road, stream, foliage. Baked once into frustum-culled tiles.
-import { WORLD } from '../config.js';
+import { TEAM_START_SLOTS, WORLD } from '../config.js';
 import { getProductionArt } from './art-assets.js';
 let terrainCanvas = null;
 // ===========================================================================
@@ -16,29 +16,28 @@ let terrainCanvas = null;
 //      function buildTerrain()     (rewritten)
 //      function drawTree(g,x,y,r)  (rewritten, signature-compatible)
 //
-//  MEMORY REASONING (WORLD is 5200 x 3200 = 16.64 Mpx — note this is NOT the
-//  4200 x 2600 the art brief assumed; every figure below is the real one):
-//    * 1.5:1 bake = 37.44 Mpx * 4 B = 149.8 MB, held as 32 tile canvases of
-//      650 x 800 world px (+2 device px bleed). The extra density is required
+//  MEMORY REASONING (WORLD is 6600 x 4200 = 27.72 Mpx):
+//    * 1.5:1 bake = 62.37 Mpx * 4 B = 249.5 MB, held as 50 tile canvases of
+//      660 x 840 world px (+2 device px bleed). The extra density is required
 //      because the camera can magnify the terrain well beyond 1:1 while the
 //      photographic trees and buildings retain substantially more source
 //      detail. A 1:1 ground bake is visibly soft beside those assets.
 //      Tiling means a) Skia samples only the texels actually on screen, and
-//      b) no single allocation is huge. 5200/650 = 8 and 3200/800 = 4 divide
+//      b) no single allocation is huge. 6600/660 = 10 and 4200/840 = 5 divide
 //      exactly, so there are no partial edge tiles.
-//    * Expected steady state: 38.76 Mpx resident = 155.0 MB
-//      (32 tiles = 37.72 Mpx, plus the 1300 x 800 composite = 1.04 Mpx).
-//    * Expected transient peak: 76.20 Mpx = 304.8 MB, during slicing, when
+//    * Expected steady state: 64.10 Mpx resident = 256.4 MB
+//      (50 tiles = 62.37 Mpx, plus the 1650 x 1050 composite = 1.73 Mpx).
+//    * Expected transient peak: 126.47 Mpx = 505.9 MB, during slicing, when
 //      the full-size scratch and the finished tiles are both live. The
 //      scratch is released (width = height = 1) immediately afterwards, and
-//      the peak occurs BEFORE startBattle() allocates decalCanvas (66.6 MB)
+//      the peak occurs BEFORE startBattle() allocates decalCanvas (110.9 MB)
 //      and the two sprite atlases — so the peaks never coincide.
 //      The 0.25:1 composite is built before the tiles so its halving chain
 //      does not stack on top of that peak.
 //    * Chrome's budget is ~268 Mpx total canvas area; this remains well below
 //      that pixel budget. decalCanvas is allocated only after the full-size
 //      terrain scratch has been released.
-//    * terrainCanvas is retained as that 1300 x 800 (0.25:1) composite. It
+//    * terrainCanvas is retained as that 1650 x 1050 (0.25:1) composite. It
 //      feeds the existing minimap bake in startBattle() unchanged, and is a
 //      safe whole-world fallback blit.
 //    * TERRAIN_SCALE is the single knob for the degradation ladder. It is
@@ -53,8 +52,8 @@ let terrainCanvas = null;
 // ---------------------------------------------------------------------------
 
 const TERRAIN_SCALE = 1.5;      // texels per world pixel. Degradation knob.
-const TILE_W = 650;             // world px — 5200 / 650 = 8 columns exactly
-const TILE_H = 800;             // world px — 3200 / 800 = 4 rows    exactly
+const TILE_W = 660;             // world px — 6600 / 660 = 10 columns exactly
+const TILE_H = 840;             // world px — 4200 / 840 = 5 rows    exactly
 const TILE_BLEED = 2;           // device px of overlap, kills seam hairlines
 
 let terrainTiles = null;        // [{c, wx, wy, ww, wh}] frustum-culled blits
@@ -136,9 +135,17 @@ const FLOWERS    = ['#D9D2B0', '#C9A6B4', '#E0C878', '#BFC7D2', '#D8B9A0'];
 // Calm zones: the two settlement footprints and the contested centre. Painterly
 // density yields to placement legibility where the player actually builds.
 const CALM_ZONES = [
-  { x: 660, y: 1600, r: 820 },
-  { x: 4540, y: 1600, r: 820 },
-  { x: 2600, y: 1600, r: 700 },
+  ...TEAM_START_SLOTS.player.map(slot => ({
+    x: slot.x,
+    y: WORLD.h * slot.y,
+    r: slot.x < 1000 ? 880 : 760,
+  })),
+  ...TEAM_START_SLOTS.rival.map(slot => ({
+    x: slot.x,
+    y: WORLD.h * slot.y,
+    r: slot.x > WORLD.w - 1000 ? 880 : 760,
+  })),
+  { x: WORLD.w / 2, y: WORLD.h / 2, r: 780 },
 ];
 
 // ---------------------------------------------------------------------------
@@ -1317,7 +1324,7 @@ function polylineYAt(pts, x) {
 
 // The road is routed to CROSS the stream at a ford. A road that never meets
 // the water has no reason to bend, and the crossing is the single clearest
-// landmark on an otherwise open 5200x3200 field. The stream must therefore be
+// landmark on an otherwise open 6600x4200 field. The stream must therefore be
 // built first and passed in.
 function buildRoadPath(stream) {
   const fordX = WORLD.w * rnd(0.44, 0.58);
@@ -2925,7 +2932,7 @@ function makeGrainTile(size, seed, contrast) {
   const d = img.data;
   // Both octaves use lattice-wrapped noise so the tile is EXACTLY seamless.
   // This matters more than it looks: the tile is repeated across the whole
-  // 5200x3200 board under an 'overlay' blend, so any discontinuity at the
+  // 6600x4200 board under an 'overlay' blend, so any discontinuity at the
   // wrap reads as a regular grid over the entire diorama — precisely the
   // "generated" tell L11 exists to remove.
   // Frequencies are chosen so size * f is a whole number of lattice cells:
@@ -3096,8 +3103,9 @@ function sliceTerrain(big, bigW, bigH, S) {
 
   // Tile boundaries are derived by ROUNDING CUMULATIVE WORLD COORDINATES, not
   // by multiplying a pre-rounded tile size by the column index. With
-  // TERRAIN_SCALE = 0.75, round(650 * 0.75) = 488, and 8 * 488 = 3904 device
-  // px against a bigW of round(5200 * 0.75) = 3900 — so the last column's
+  // TERRAIN_SCALE = 1.5, round(660 * 1.5) = 990, and 10 * 990 = 9900 device
+  // px against a bigW of round(6600 * 1.5) = 9900, but fractional future
+  // scales would otherwise clamp the last column's
   // source rect gets clamped short while its declared world width does not,
   // leaving an ~8 world px strip of raw BOARD_EDGE fill INSIDE the right and
   // bottom map edges. Deriving each boundary independently makes the columns

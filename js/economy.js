@@ -4,6 +4,7 @@
 import {
   WORLD, NATIONS, UNIT_TYPES, BUILDING_TYPES, RESOURCE_KEYS, getTrainableUnitTypes,
   STARTING_RESOURCES, GATHER_RATES, MAX_POPULATION, canNationBuildBuilding,
+  defaultStartPositionForSide,
 } from './config.js';
 import { countryParkVariant } from './countries.js';
 import { applyMoveOrder } from './formations.js';
@@ -163,25 +164,10 @@ function addResourceCluster(world, type, x, y, amount, radius) {
   return node;
 }
 
-function fallbackStartPosition(sideIndex) {
-  const rival = sideIndex % 2 === 1;
-  const slot = Math.floor(sideIndex / 2);
-  const playerStarts = [{ x: 720, y: 0.36 }, { x: 720, y: 0.66 }, { x: 1500, y: 0.82 }];
-  const rivalStarts = [
-    { x: WORLD.w - 720, y: 0.34 },
-    { x: WORLD.w - 720, y: 0.66 },
-    { x: WORLD.w - 1500, y: 0.82 },
-  ];
-  const start = (rival ? rivalStarts : playerStarts)[slot] || {
-    x: rival ? WORLD.w - 720 : 720,
-    y: Math.min(0.86, 0.22 + slot * 0.16),
-  };
-  return { x: start.x, y: WORLD.h * start.y };
-}
-
 function seedMapResources(world) {
   for (let sideIndex = 0; sideIndex < world.sides.length; sideIndex++) {
-    const start = world.sides[sideIndex].startPosition || fallbackStartPosition(sideIndex);
+    const start = world.sides[sideIndex].startPosition
+      || defaultStartPositionForSide(world.sides, sideIndex);
     const dir = sideFrontDirection(world, sideIndex);
     addResourceCluster(world, 'food', start.x + dir * 245, start.y - 205, 5600, 48);
     addResourceCluster(world, 'food', start.x + dir * 175, start.y + 245, 4200, 42);
@@ -226,7 +212,7 @@ export function initializeEconomy(world) {
     side.maxPopulation = MAX_POPULATION;
     side.unitsCreated = 0;
     side.buildingsLost = 0;
-    const start = side.startPosition || fallbackStartPosition(sideIndex);
+    const start = side.startPosition || defaultStartPositionForSide(world.sides, sideIndex);
     const tc = createBuilding(sideIndex, 'town_center', start.x, start.y, true, {
       team: side.team,
     });
