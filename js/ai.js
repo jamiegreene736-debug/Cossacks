@@ -10,6 +10,9 @@ import {
   getMillFieldSlots, placeBuilding, queueUnit, setRallyPoint, unitsOf,
 } from './economy.js';
 import { isPeaceTime } from './truce.js';
+import {
+  hostileUnits, nearestHostileTownCenter, sideFrontDirection,
+} from './teams.js';
 
 const MILITARY_TYPES = new Set(['musk', 'pike', 'cav', 'gun']);
 
@@ -140,7 +143,7 @@ export class Commander {
       }
       return false;
     }
-    const dir = this.side === 0 ? 1 : -1;
+    const dir = sideFrontDirection(this.world, this.side);
     const plans = {
       house: [[20, -185], [20, 185], [125, -205], [125, 205], [245, -260], [245, 275]],
       mill: [[145, -325]],
@@ -195,7 +198,8 @@ export class Commander {
         const count = unitType === 'gun' ? 1 : unitType === 'cav' ? 2 : 3;
         queueUnit(world, building, unitType, count);
       }
-      setRallyPoint(building, WORLD.w / 2 + (this.side === 0 ? -420 : 420), WORLD.h / 2);
+      const dir = sideFrontDirection(world, this.side);
+      setRallyPoint(building, WORLD.w / 2 - dir * 420, WORLD.h / 2);
     }
   }
 
@@ -203,7 +207,7 @@ export class Commander {
     const world = this.world;
     const tc = getTownCenter(world, this.side);
     if (!tc) return;
-    const enemyUnits = unitsOf(world, 1 - this.side);
+    const enemyUnits = hostileUnits(world, this.side);
     const defenders = unitsOf(world, this.side).filter(unit => MILITARY_TYPES.has(unit.type));
     const nearbyEnemy = enemyUnits.find(unit => (
       Math.hypot(unit.x - tc.x, unit.y - tc.y) < this.profile.defenseRadius
@@ -229,10 +233,10 @@ export class Commander {
       Math.max(minimumWave, Math.floor(ready.length * this.profile.waveFraction)),
     );
     const wave = ready.slice(0, waveSize);
-    const enemyTc = getTownCenter(world, 1 - this.side);
+    const center = centroid(wave);
+    const enemyTc = nearestHostileTownCenter(world, this.side, center.x, center.y);
     if (!enemyTc) return;
     for (const unit of wave) this.committed.add(unit.id);
-    const center = centroid(wave);
     // Dress the wave into a broad line before the final attack order. The
     // brief staging move produces the Cossacks-like wall of troops.
     const stageX = center.x + (enemyTc.x - center.x) * 0.22;
@@ -242,7 +246,9 @@ export class Commander {
     }
     this.attackTimer = world.time < 300
       ? this.profile.earlyAttackInterval : this.profile.lateAttackInterval;
-    world.events.push({ side: 0, text: 'Enemy formations are marching on your settlement!', tone: 'danger' });
+    if (world.sides[this.side]?.team !== world.sides[0]?.team) {
+      world.events.push({ side: 0, text: 'Enemy formations are marching on our towns!', tone: 'danger' });
+    }
   }
 }
 

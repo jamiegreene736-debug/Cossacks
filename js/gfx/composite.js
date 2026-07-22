@@ -1,6 +1,7 @@
 // Frame composition: haze, grade, vignette, selection, HUD marks, minimap.
 import { WORLD, BUILDING_TYPES } from '../config.js';
 import { shouldRenderUnitHealthBar } from '../render-performance.js';
+import { isPlayerTeam, sideFrontDirection } from '../teams.js';
 let camera = { x: 0, y: 0, zoom: 1 };
 let cw = 0, ch = 0, dpr = 1;
 let mmCanvas = null, mmCtx = null, mmTerrain = null;
@@ -106,8 +107,8 @@ const C_UI = {
 
 // Side identity. These exact values are shared with the sprite base rims so
 // the field and the minimap finally agree on what "blue" and "red" mean.
-const C_SIDE_RIM = ['#3E78B8', '#B8483E'];
-const C_SIDE_RIM_LIT = ['#6FA3DC', '#DC7A6F'];
+const C_SIDE_RIM = ['#3E78B8', '#B8483E', '#4FAE8B', '#C67A2F'];
+const C_SIDE_RIM_LIT = ['#6FA3DC', '#DC7A6F', '#7CD9B4', '#E5A35F'];
 // Minimap plot colours: dim (sparse) -> lit (dense mass).
 const C_MM_SIDE_DIM = [[54, 104, 166], [166, 60, 52]];
 const C_MM_SIDE_LIT = [[142, 194, 246], [246, 152, 132]];
@@ -2028,7 +2029,7 @@ function drawMinimap(world) {
     let gy = (u.y * ky) | 0; if (gy < 0) gy = 0; else if (gy >= DH) gy = DH - 1;
     // cavalry counts double: the fast-moving flank threat has to read
     const wgt = u.type === 'cav' ? 2 : u.type === 'gun' ? 3 : 1;
-    if (u.side === 0) d0[gy * DW + gx] += wgt;
+    if (isPlayerTeam(world, u.side)) d0[gy * DW + gx] += wgt;
     else d1[gy * DW + gx] += wgt;
   }
 
@@ -2084,7 +2085,7 @@ function drawMinimap(world) {
     const type = bd.type;
     const big = type === 'town_center';
     const sz = big ? 7.5 : type === 'tower' ? 4.5 : type === 'farm' ? 5 : 4.5;
-    const fill = bd.side === 0 ? C_SIDE_RIM_LIT[0] : C_SIDE_RIM_LIT[1];
+    const fill = C_SIDE_RIM_LIT[bd.side] || C_SIDE_RIM_LIT[1];
 
     // dark seat: every glyph gets one, so all of them read on any tone
     g.fillStyle = 'rgba(12,14,9,0.82)';
@@ -2109,7 +2110,7 @@ function drawMinimap(world) {
     } else if (type === 'tower') {
       // chevron pointing across the map at the opposing base, so a defended
       // approach is legible as an arc of arrowheads rather than a row of dots
-      const dir = bd.side === 0 ? 1 : -1;
+      const dir = sideFrontDirection(world, bd.side);
       g.beginPath();
       g.moveTo(bx + dir * sz * 0.70, by);
       g.lineTo(bx - dir * sz * 0.42, by - sz * 0.62);

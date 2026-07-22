@@ -98,6 +98,7 @@ test('campaign saves retain difficulty while legacy saves preserve original Hard
 
   delete snapshot.world.difficulty;
   delete snapshot.commander.difficulty;
+  delete snapshot.commanders;
   delete snapshot.summary.difficulty;
   const legacy = restoreGameSnapshot(snapshot);
   assert.equal(legacy.world.difficulty, 'hard');

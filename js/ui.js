@@ -9,6 +9,7 @@ import {
   getFieldAttachmentStatus, getGatherAssignmentStats, getRallyTarget,
 } from './economy.js';
 import { formatPeaceTime, isPeaceTime } from './truce.js';
+import { isPlayerTeam, playerTeam } from './teams.js';
 
 const $ = id => document.getElementById(id);
 let callbacks = {};
@@ -121,11 +122,14 @@ export function showBattleHud(world) {
   hidePauseMenu();
   for (const id of ['hud-top', 'time-controls', 'panel', 'minimap', 'hint-bar']) $(id).classList.remove('hidden');
   $('hud-player-nation').textContent = NATIONS[world.sides[0].nation].name;
-  $('hud-enemy-nation').textContent = NATIONS[world.sides[1].nation].name;
+  const ally = world.sides.find((_side, sideIndex) => sideIndex !== 0 && isPlayerTeam(world, sideIndex));
+  const rivalCount = world.sides.filter((_side, sideIndex) => !isPlayerTeam(world, sideIndex)).length;
+  $('hud-enemy-nation').textContent = `${NATIONS[world.sides[1].nation].name} ×${rivalCount}`;
   const difficulty = CPU_DIFFICULTIES[world.difficulty] || CPU_DIFFICULTIES[DEFAULT_CPU_DIFFICULTY];
-  $('hud-enemy-role').textContent = `${difficulty.name} CPU realm`;
+  $('hud-enemy-role').textContent = `${difficulty.name} 2v2 CPU team`;
   $('player-crest').textContent = NATIONS[world.sides[0].nation].name[0];
   $('player-crest').style.background = NATIONS[world.sides[0].nation].coat;
+  if (ally) $('hud-player-nation').textContent += ` + ${NATIONS[ally.nation].name}`;
   $('enemy-crest').textContent = NATIONS[world.sides[1].nation].name[0];
   $('enemy-crest').style.background = NATIONS[world.sides[1].nation].coat;
   lastSelectionKey = '';
@@ -218,6 +222,21 @@ function countMilitary(world, side) {
   return count;
 }
 
+function countTeamMilitary(world, wantPlayerTeam) {
+  let count = 0;
+  for (const unit of world.units) {
+    if (!unit.alive || unit.type === 'villager') continue;
+    if (isPlayerTeam(world, unit.side) === wantPlayerTeam) count++;
+  }
+  return count;
+}
+
+function sumTeam(world, wantPlayerTeam, key) {
+  return world.sides.reduce((sum, side, sideIndex) => (
+    isPlayerTeam(world, sideIndex) === wantPlayerTeam ? sum + (side[key] || 0) : sum
+  ), 0);
+}
+
 function formatHourly(value) {
   const amount = Math.max(0, Number(value) || 0);
   if (amount >= 1_000_000) return `+${(amount / 1_000_000).toFixed(amount >= 10_000_000 ? 0 : 1)}m/hr`;
@@ -231,8 +250,8 @@ export function updateHud(world, selection) {
   if (now - hudTime < 200) return;
   hudTime = now;
   const player = world.sides[0];
-  $('hud-player-count').textContent = countMilitary(world, 0).toLocaleString();
-  $('hud-enemy-count').textContent = countMilitary(world, 1).toLocaleString();
+  $('hud-player-count').textContent = countTeamMilitary(world, true).toLocaleString();
+  $('hud-enemy-count').textContent = countTeamMilitary(world, false).toLocaleString();
   for (const key of RESOURCE_KEYS) {
     $(`res-${key}`).textContent = Math.floor(player.resources[key]).toLocaleString();
     const rate = $(`rate-${key}`);
@@ -642,26 +661,29 @@ export function toast(message, tone = '') {
 }
 
 export function showEnd(world) {
-  const victory = world.winner === 0;
-  $('end-title').textContent = victory ? 'Empire Ascendant' : world.winner === 1 ? 'The Realm Has Fallen' : 'Mutual Ruin';
+  const victory = world.winner === playerTeam(world);
+  $('end-title').textContent = victory ? 'Rainbow Over the Empire' : world.winner === -2 ? 'Mutual Ruin' : 'The Realm Has Fallen';
   $('end-verdict').textContent = victory
-    ? 'The rival seat of power lies in ruins. Your banners command the field.'
-    : 'Your Town Center has fallen. Rebuild the plan and return stronger.';
+    ? 'Both rival towns are broken. Your allied settlements command the field beneath a sudden rainbow.'
+    : 'Your team Town Centers have fallen. Rebuild the plan and return stronger.';
   const player = world.sides[0];
-  const enemy = world.sides[1];
   const seconds = world.time | 0;
   $('end-stats').innerHTML = `
     <span>Campaign length</span><b>${(seconds / 60) | 0}m ${String(seconds % 60).padStart(2, '0')}s</b>
     <span>Your units raised</span><b>${player.unitsCreated.toLocaleString()}</b>
-    <span>Enemy units defeated</span><b>${player.kills.toLocaleString()}</b>
-    <span>Your losses</span><b>${player.losses.toLocaleString()}</b>
-    <span>Rival units raised</span><b>${enemy.unitsCreated.toLocaleString()}</b>`;
-  $('overlay-end').classList.remove('hidden');
+    <span>Allied team units raised</span><b>${sumTeam(world, true, 'unitsCreated').toLocaleString()}</b>
+    <span>Enemy units defeated</span><b>${sumTeam(world, true, 'kills').toLocaleString()}</b>
+    <span>Allied team losses</span><b>${sumTeam(world, true, 'losses').toLocaleString()}</b>
+    <span>Rival team units raised</span><b>${sumTeam(world, false, 'unitsCreated').toLocaleString()}</b>`;
+  const overlay = $('overlay-end');
+  overlay.classList.toggle('victory', victory);
+  overlay.classList.remove('hidden');
 }
 
 export function showStartMenu() {
   for (const id of ['hud-top', 'time-controls', 'panel', 'minimap', 'hint-bar', 'placement-tip']) $(id).classList.add('hidden');
   $('overlay-end').classList.add('hidden');
+  $('overlay-end').classList.remove('victory');
   hidePauseMenu();
   $('overlay-start').classList.remove('hidden');
 }

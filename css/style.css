@@ -415,6 +415,38 @@ button, select { font: inherit; }
 .how-to li::marker { color: #b4a05b; }
 .how-to b { color: #d2c7a7; font-weight: normal; }
 .end-card { max-width: 560px; }
+#overlay-end.victory {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(234,223,185,.10), transparent 32%),
+    linear-gradient(rgba(5,8,5,.34), rgba(6,8,5,.62)),
+    transparent;
+}
+#overlay-end.victory::before {
+  content: ""; position: absolute; left: 5vw; right: 5vw; top: 4vh; height: min(58vh, 560px);
+  pointer-events: none; opacity: .95; z-index: 0;
+  background:
+    radial-gradient(ellipse at 50% 102%,
+      transparent 40%,
+      rgba(228,61,67,.82) 40.8%,
+      rgba(228,61,67,.82) 43.2%,
+      rgba(237,145,51,.82) 43.6%,
+      rgba(237,145,51,.82) 46%,
+      rgba(238,219,76,.82) 46.4%,
+      rgba(238,219,76,.82) 48.8%,
+      rgba(88,190,99,.78) 49.2%,
+      rgba(88,190,99,.78) 51.6%,
+      rgba(63,144,219,.76) 52%,
+      rgba(63,144,219,.76) 54.4%,
+      rgba(130,86,202,.74) 54.8%,
+      rgba(130,86,202,.74) 57.2%,
+      transparent 58%);
+  filter: drop-shadow(0 12px 28px rgba(244,225,126,.22));
+}
+#overlay-end.victory .end-card {
+  position: relative; z-index: 1;
+  background: linear-gradient(145deg, rgba(49,53,37,.90), rgba(27,31,22,.92) 70%);
+  box-shadow: 0 24px 78px rgba(0,0,0,.62), inset 0 0 42px rgba(235,221,142,.08);
+}
 #end-stats {
   display: grid; grid-template-columns: 1fr auto; gap: 7px 25px; max-width: 380px;
   margin: 19px auto; padding: 14px; text-align: left; background: rgba(15,18,12,.45); border: 1px solid #4e4b35;

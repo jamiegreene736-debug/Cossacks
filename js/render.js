@@ -33,6 +33,7 @@ import {
   screenVectorToWorld, stepCameraZoom, turnView as nextViewRotation,
   viewMirrorsHorizontalFacing, worldViewDepth,
 } from './camera.js';
+import { playerTeam } from './teams.js';
 import { setBuildingRefs, bdResetCaches, drawResourceNode, drawFarm,
          drawFarmForeground, drawFoundation, drawCompleteBuilding, drawBuilding,
          drawBuildingCollapse } from './gfx/buildings.js';
@@ -45,7 +46,7 @@ const SCALE = 4; // sprite atlas oversampling — 4 keeps figures crisp at 2.4x 
 
 // Reserved side colours. These appear nowhere else in the world, so side
 // identity survives even a mirror matchup (England vs England).
-const SIDE_RIM = ['#3E78B8', '#B8483E'];
+const SIDE_RIM = ['#3E78B8', '#B8483E', '#4FAE8B', '#C67A2F'];
 const PRODUCTION_WORKER = Object.freeze({
   w: 38, h: 44, ax: 19, ay: 36.5, sourceW: 384, sourceH: 448,
 });
@@ -62,6 +63,113 @@ let decalCanvas = null, decalCtx = null;
 let mmTerrain = null;
 let sprites = null; // sprites[side][type] = {frames: [dir][frame], w,h,ax,ay}
 const buildingSortBuf = [];
+let victoryRainbowKey = '';
+let victoryRainbowStartedAt = 0;
+
+function drawVictoryRainbow(world) {
+  const active = world?.state === 'ended' && world.winner === playerTeam(world);
+  if (!active) {
+    victoryRainbowKey = '';
+    victoryRainbowStartedAt = 0;
+    return;
+  }
+  const key = `${world.winner}:${Math.round(world.time * 10)}`;
+  if (victoryRainbowKey !== key) {
+    victoryRainbowKey = key;
+    victoryRainbowStartedAt = performance.now();
+  }
+  const age = (performance.now() - victoryRainbowStartedAt) / 1000;
+  const appear = Math.min(1, age / 0.38);
+  const ease = 1 - Math.pow(1 - appear, 3);
+  const shimmer = 0.5 + Math.sin(age * 4.7) * 0.5;
+  const cx = cw * 0.50;
+  const cy = ch * 1.10;
+  const baseRadius = Math.max(cw * 0.42, Math.min(cw * 0.78, ch * 0.96));
+  const bands = [
+    ['#e74d4d', 0],
+    ['#f28b2f', 1],
+    ['#f4d553', 2],
+    ['#6dcf67', 3],
+    ['#54a8f0', 4],
+    ['#7057d8', 5],
+  ];
+
+  ctx.save();
+  ctx.globalAlpha = 0.18 * ease;
+  ctx.globalCompositeOperation = 'lighter';
+  const sky = ctx.createLinearGradient(0, 0, 0, ch);
+  sky.addColorStop(0, 'rgba(107,153,211,0.30)');
+  sky.addColorStop(0.42, 'rgba(255,234,174,0.18)');
+  sky.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, cw, ch);
+
+  ctx.lineCap = 'round';
+  ctx.shadowColor = 'rgba(255,255,255,0.55)';
+  ctx.shadowBlur = 18 + shimmer * 10;
+  for (const [color, index] of bands) {
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = (0.72 - index * 0.035) * ease;
+    ctx.lineWidth = Math.max(10, Math.min(26, cw * 0.014));
+    ctx.beginPath();
+    ctx.arc(cx, cy, baseRadius - index * ctx.lineWidth * 1.08, Math.PI + 0.05, Math.PI * 2 - 0.05);
+    ctx.stroke();
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 0.56 * ease;
+  ctx.strokeStyle = 'rgba(255,247,214,0.62)';
+  ctx.lineWidth = 1.3;
+  for (let i = 0; i < 18; i++) {
+    const a = Math.PI + 0.18 + i / 17 * (Math.PI - 0.36);
+    const r0 = baseRadius * 0.60;
+    const r1 = baseRadius * (0.92 + 0.04 * Math.sin(age * 2 + i));
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
+    ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+    ctx.stroke();
+  }
+
+  const cloud = (x, y, scale) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    ctx.globalAlpha = 0.86 * ease;
+    ctx.fillStyle = 'rgba(255,248,223,0.90)';
+    ctx.strokeStyle = 'rgba(181,197,213,0.42)';
+    ctx.lineWidth = 1.2;
+    for (const [px, py, rx, ry] of [
+      [-42, 10, 34, 19], [-18, -3, 37, 25], [18, -8, 42, 28], [50, 7, 34, 19],
+      [3, 12, 68, 22],
+    ]) {
+      ctx.beginPath();
+      ctx.ellipse(px, py, rx, ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+  };
+  cloud(cx - baseRadius * 0.97, cy - 16, Math.max(0.62, Math.min(1.1, cw / 1450)));
+  cloud(cx + baseRadius * 0.97, cy - 16, Math.max(0.62, Math.min(1.1, cw / 1450)));
+
+  ctx.globalAlpha = 0.74 * ease;
+  for (let i = 0; i < 34; i++) {
+    const a = Math.PI + 0.10 + ((i * 0.618) % 1) * (Math.PI - 0.20);
+    const r = baseRadius * (0.58 + ((i * 37) % 31) / 100);
+    const x = cx + Math.cos(a) * r;
+    const y = cy + Math.sin(a) * r + Math.sin(age * 3 + i) * 6;
+    const size = 1.6 + ((i * 11) % 5) * 0.38;
+    ctx.fillStyle = i % 3 === 0 ? '#fff7ce' : i % 3 === 1 ? '#cbeeff' : '#ffe2f1';
+    ctx.beginPath();
+    ctx.moveTo(x, y - size * 2);
+    ctx.lineTo(x + size, y);
+    ctx.lineTo(x, y + size * 2);
+    ctx.lineTo(x - size, y);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
 
 function drawThrowingTorch(unit, x, y, visualFacing = unit.facing) {
   if (!(unit.torchT > 0)) return;
@@ -77,7 +185,7 @@ function drawThrowingTorch(unit, x, y, visualFacing = unit.facing) {
   const headY = handY - 7;
   ctx.save();
   ctx.lineCap = 'round';
-  ctx.strokeStyle = unit.side === 0 ? '#873936' : '#2D6B68';
+  ctx.strokeStyle = SIDE_RIM[unit.side] || '#873936';
   ctx.lineWidth = 3.2;
   ctx.beginPath(); ctx.moveTo(shoulderX, shoulderY); ctx.lineTo(handX, handY); ctx.stroke();
   ctx.strokeStyle = '#8B5A2B';
@@ -178,10 +286,7 @@ export function startBattle(world) {
   for (const decal of world.decals || []) paintDecal(decal);
   buildParticleTextures();
   resetEffectFields();   // so a rematch does not inherit last game's powder
-  sprites = [
-    buildNationSprites(world.sides[0].nation, 0),
-    buildNationSprites(world.sides[1].nation, 1),
-  ];
+  sprites = world.sides.map((side, sideIndex) => buildNationSprites(side.nation, sideIndex));
   mmTerrain = buildMinimapTerrain(mmCanvas.width, mmCanvas.height);
   setCompositeRefs({ mmTerrain });
   setCompositeTrampleLayer(getTrampleCanvas());
@@ -1048,6 +1153,7 @@ export function draw(
   drawLightingPass(ctx, cw, ch, dpr);
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawVictoryRainbow(world);
   drawDragRect(ctx, dragRect);
 
   drawMinimap(world);

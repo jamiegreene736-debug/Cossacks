@@ -1,7 +1,7 @@
 // Entry point: wires up modules and runs the fixed-timestep game loop.
 
 import { SIM_STEP, BUILDING_TYPES } from './config.js';
-import { createWorld, spawnUnit, step } from './sim.js';
+import { createWorld, damage, spawnUnit, step } from './sim.js';
 import { Commander } from './ai.js';
 import { initRender, startBattle as startBattleRender, draw,
          camera, clampCamera, rotateView, zoomView } from './render.js';
@@ -26,7 +26,7 @@ import { applyAttackOrder, applyMoveOrder } from './formations.js';
 import { OPENING_PEACE_SECONDS } from './truce.js';
 
 let world = null;
-let commander = null;
+let commanders = [];
 let endShown = false;
 
 const canvas = document.getElementById('game');
@@ -103,7 +103,7 @@ ui.bindControls({
   onAgain: () => {
     sfx.stopBattle();
     world = null;
-    commander = null;
+    commanders = [];
     resetForBattle();
     ui.showStartMenu();
     refreshSavedCampaign();
@@ -112,9 +112,9 @@ ui.bindControls({
 refreshSavedCampaign();
 
 function saveActiveCampaignForPageExit() {
-  if (!world || !commander) return false;
+  if (!world || !commanders.length) return false;
   try {
-    saveCampaign(world, commander, camera);
+    saveCampaign(world, commanders, camera);
     return true;
   } catch (error) {
     console.error('The active campaign could not be auto-saved before page exit.', error);
@@ -125,7 +125,7 @@ function saveActiveCampaignForPageExit() {
 function exitActiveCampaignForPageExit() {
   void sfx.shutdown();
   world = null;
-  commander = null;
+  commanders = [];
   resetForBattle();
   ui.showStartMenu();
   refreshSavedCampaign();
@@ -141,7 +141,10 @@ async function startBattle(opts) {
   sfx.ensure();
   await productionArtReady;
   world = createWorld(opts);
-  commander = new Commander(world, 1, world.difficulty);
+  commanders = world.sides
+    .map((_side, sideIndex) => sideIndex)
+    .filter(sideIndex => sideIndex !== 0)
+    .map(sideIndex => new Commander(world, sideIndex, world.difficulty));
   resetForBattle();
   startBattleRender(world);
   setupLocalBuildingFirePreview(world);
@@ -154,6 +157,8 @@ async function startBattle(opts) {
   setupLocalVillagerCarryPreview(world);
   setupLocalWomanVillagerPreview(world);
   setupLocalOpeningTrucePreview(world);
+  setupLocalSettlementVarietyPreview(world);
+  setupLocalVictoryRainbowPreview(world);
   ui.showBattleHud(world);
   ui.setPauseLabel(false);
   ui.setSpeedLabel(1);
@@ -185,6 +190,93 @@ function setupLocalOpeningTrucePreview(activeWorld) {
   camera.x = 2495;
   camera.y = 1500;
   camera.zoom = 1.2;
+  clampCamera();
+}
+
+function setupLocalVictoryRainbowPreview(activeWorld) {
+  const debugName = new URLSearchParams(window.location.search).get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'victory-rainbow') return;
+  const playerTeam = activeWorld.sides[0]?.team;
+  const rivalTownCenters = activeWorld.buildings.filter(building => (
+    building.alive
+      && building.type === 'town_center'
+      && activeWorld.sides[building.side]?.team !== playerTeam
+  ));
+  for (const townCenter of rivalTownCenters) {
+    damage(activeWorld, townCenter, townCenter.maxHp + 1, null);
+  }
+  activeWorld.checkT = 0;
+  step(activeWorld, SIM_STEP);
+  camera.x = 2600;
+  camera.y = 1600;
+  camera.zoom = 0.56;
+  clampCamera();
+}
+
+function setupLocalSettlementVarietyPreview(activeWorld) {
+  const debugName = new URLSearchParams(window.location.search).get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'settlement-variety') return;
+
+  activeWorld.sides[0].nation = 'england';
+  activeWorld.sides[1].nation = 'ottoman';
+  const previewBounds = { left: 1350, right: 3900, top: 780, bottom: 2760 };
+  activeWorld.resources = activeWorld.resources.filter(resource => (
+    resource.x < previewBounds.left || resource.x > previewBounds.right
+    || resource.y < previewBounds.top || resource.y > previewBounds.bottom
+  ));
+  activeWorld.buildings = activeWorld.buildings.filter(building => (
+    building.x < previewBounds.left || building.x > previewBounds.right
+    || building.y < previewBounds.top || building.y > previewBounds.bottom
+  ));
+
+  for (let index = 0; index < 8; index++) {
+    const column = index % 4;
+    const row = Math.floor(index / 4);
+    const house = createBuilding(0, 'house', 1660 + column * 260, 1180 + row * 245, true);
+    house.id = 210000 + index;
+    activeWorld.buildings.push(house);
+  }
+  for (let index = 0; index < 8; index++) {
+    const column = index % 4;
+    const row = Math.floor(index / 4);
+    const house = createBuilding(1, 'house', 1660 + column * 260, 1840 + row * 245, true);
+    house.id = 210100 + index;
+    activeWorld.buildings.push(house);
+  }
+
+  const deposits = [
+    ['wood', 2950, 1040, 19000, 86],
+    ['wood', 3340, 1310, 16000, 72],
+    ['wood', 3020, 2160, 19000, 86],
+    ['wood', 3420, 2420, 16000, 72],
+    ['food', 2700, 1160, 6000, 50],
+    ['food', 3560, 1110, 4800, 46],
+    ['food', 2720, 1960, 6000, 50],
+    ['food', 3570, 2190, 4800, 46],
+  ];
+  deposits.forEach(([type, x, y, amount, radius], index) => {
+    activeWorld.resources.push({
+      id: 220000 + index,
+      entityKind: 'resource',
+      type,
+      resourceType: type,
+      x,
+      y,
+      amount,
+      maxAmount: amount,
+      radius,
+      alive: true,
+      seed: 1200 + index * 37.7,
+    });
+  });
+
+  camera.x = 2600;
+  camera.y = 1690;
+  camera.zoom = 0.72;
   clampCamera();
 }
 
@@ -660,15 +752,15 @@ function refreshSavedCampaign() {
 }
 
 function saveCurrentCampaign(exitToMap = false) {
-  if (!world || !commander || world.state !== 'paused') return;
+  if (!world || !commanders.length || world.state !== 'paused') return;
   try {
-    const summary = saveCampaign(world, commander, camera);
+    const summary = saveCampaign(world, commanders, camera);
     refreshSavedCampaign();
     ui.setPauseSaveStatus(`Campaign saved at ${new Date(summary.savedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.`);
     if (exitToMap) {
       sfx.stopBattle();
       world = null;
-      commander = null;
+      commanders = [];
       resetForBattle();
       ui.showStartMenu();
       ui.toast('Campaign saved. Resume it from the map table.', 'good');
@@ -690,7 +782,7 @@ async function resumeSavedCampaign() {
     }
     const restored = restoreGameSnapshot(snapshot);
     world = restored.world;
-    commander = restored.commander;
+    commanders = restored.commanders || (restored.commander ? [restored.commander] : []);
     resetForBattle();
     startBattleRender(world);
     camera.x = restored.camera?.x ?? camera.x;
@@ -755,6 +847,12 @@ function resetFrameMetrics(now = performance.now()) {
   delete canvas.dataset.frameMetrics;
 }
 
+function markEndOverlay() {
+  const overlay = document.getElementById('overlay-end');
+  if (!overlay || !world) return;
+  overlay.classList.toggle('victory', world.winner === world.sides[0]?.team);
+}
+
 function recordFrameMetrics(interval, stageTimes) {
   frameMetrics.frames++;
   frameMetrics.intervalTotal += interval;
@@ -796,7 +894,7 @@ function frame(now) {
     let steps = 0;
     while (acc >= SIM_STEP && steps < 5) {
       step(world, SIM_STEP);
-      commander.update(SIM_STEP);
+      for (const commander of commanders) commander.update(SIM_STEP);
       acc -= SIM_STEP;
       steps++;
     }
@@ -838,6 +936,7 @@ function frame(now) {
   if (world.state === 'ended' && !endShown) {
     endShown = true;
     ui.showEnd(world);
+    markEndOverlay();
   }
 }
 
@@ -849,7 +948,7 @@ window.__tick = (secs = 1) => {
   const n = Math.round(secs / SIM_STEP);
   for (let i = 0; i < n; i++) {
     step(world, SIM_STEP);
-    commander.update(SIM_STEP);
+    for (const commander of commanders) commander.update(SIM_STEP);
   }
   draw(
     world, 1, null, getPlacementPreview(), getResourceHoverTarget(), getMovePreview(),
@@ -859,8 +958,9 @@ window.__tick = (secs = 1) => {
   if (world.state === 'ended' && !endShown) {
     endShown = true;
     ui.showEnd(world);
+    markEndOverlay();
   }
-  return `t=${world.time.toFixed(1)}s  ${world.sides[0].alive} vs ${world.sides[1].alive}`;
+  return `t=${world.time.toFixed(1)}s  ${world.sides.map(side => side.alive).join(' / ')}`;
 };
 
 // Console/debug hook: park the camera for reproducible screenshots.
@@ -873,6 +973,33 @@ window.__view = (x, y, zoom, rotation = camera.rotation) => {
     getResourceHoverKind(),
   );
   return `cam=(${camera.x | 0},${camera.y | 0}) zoom=${camera.zoom} rotation=${camera.rotation}`;
+};
+
+// Console/debug hook: trigger the normal team-victory path for rainbow QA.
+window.__debugWin = () => {
+  if (!world) return null;
+  const playerTeam = world.sides[0]?.team;
+  const rivalTownCenters = world.buildings.filter(building => (
+    building.alive
+      && building.type === 'town_center'
+      && world.sides[building.side]?.team !== playerTeam
+  ));
+  for (const townCenter of rivalTownCenters) {
+    damage(world, townCenter, townCenter.maxHp + 1, null);
+  }
+  world.checkT = 0;
+  step(world, SIM_STEP);
+  draw(
+    world, 1, null, getPlacementPreview(), getResourceHoverTarget(), getMovePreview(),
+    getResourceHoverKind(),
+  );
+  ui.updateHud(world, getSelection());
+  if (world.state === 'ended' && !endShown) {
+    endShown = true;
+    ui.showEnd(world);
+    markEndOverlay();
+  }
+  return window.__state();
 };
 
 // Lightweight diagnostics used by the local browser checks and useful when

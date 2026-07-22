@@ -23,12 +23,16 @@ function advance(world, seconds) {
   for (let i = 0; i < ticks; i++) step(world, 1 / 30);
 }
 
-test('a skirmish starts with exactly one Town Center per side and no units', () => {
+test('a 2v2 skirmish starts with one Town Center per side and no units', () => {
   const world = makeWorld();
+  const townCenters = world.buildings.filter(building => building.type === 'town_center');
+  assert.equal(world.mode, '2v2');
   assert.equal(world.units.length, 0);
-  assert.deepEqual(world.buildings.map(building => building.type), ['town_center', 'town_center']);
-  assert.equal(world.buildings[0].queue[0].type, 'villager');
-  assert.equal(world.sides[0].population, 0);
+  assert.equal(townCenters.length, 4);
+  assert.deepEqual(townCenters.map(building => building.side), [0, 1, 2, 3]);
+  assert.deepEqual(world.sides.map(side => side.team), [0, 1, 0, 1]);
+  assert.ok(townCenters.every(townCenter => townCenter.queue[0].type === 'villager'));
+  assert.ok(world.sides.every(side => side.population === 0));
 });
 
 test('the free first villager emerges and regular training spends resources', () => {
@@ -283,7 +287,7 @@ test('an attached field always delivers food to its mill and resumes farming', (
   const world = makeWorld();
   advance(world, 4.1);
   const worker = world.units.find(unit => unit.side === 0);
-  const mill = createBuilding(0, 'mill', 980, 1600, true);
+  const mill = createBuilding(0, 'mill', 1150, 1600, true);
   const slot = getMillFieldSlots(mill)[0];
   const field = createBuilding(0, 'farm', slot.x, slot.y, true, slot);
   world.buildings.push(mill, field);
@@ -463,7 +467,7 @@ test('fields require a completed mill, snap to its plots, and store the parent l
   assert.equal(validatePlacement(world, 0, 'farm', 900, 1500).ok, false);
   assert.match(validatePlacement(world, 0, 'farm', 900, 1500).message, /Mill first/);
 
-  const mill = createBuilding(0, 'mill', 980, 1600, true);
+  const mill = createBuilding(0, 'mill', 1150, 1600, true);
   world.buildings.push(mill);
   const requested = { x: mill.x + 12, y: mill.y - 145 };
   const preview = validatePlacement(world, 0, 'farm', requested.x, requested.y);
@@ -533,7 +537,7 @@ test('construction validates collisions, consumes costs, and expands population 
   const world = makeWorld();
   advance(world, 4.1);
   const worker = world.units.find(unit => unit.side === 0);
-  assert.equal(validatePlacement(world, 0, 'house', 660, 1600).ok, false);
+  assert.equal(validatePlacement(world, 0, 'house', 660, 1152).ok, false);
   const result = placeBuilding(world, 0, 'house', 835, 1765, [worker]);
   assert.equal(result.ok, true);
   assert.equal(world.sides[0].resources.wood, 250);
@@ -562,10 +566,10 @@ test('bulk queues reserve population and can produce Cossacks-scale regiments', 
 
 test('mass-unit combat stepping remains stable with more than one thousand soldiers', () => {
   const world = makeWorld();
-  world.buildings[0].queue.length = 0;
-  world.buildings[1].queue.length = 0;
-  world.sides[0].queuedPopulation = 0;
-  world.sides[1].queuedPopulation = 0;
+  for (const building of world.buildings.filter(candidate => candidate.type === 'town_center')) {
+    building.queue.length = 0;
+  }
+  for (const side of world.sides) side.queuedPopulation = 0;
   for (let i = 0; i < 520; i++) {
     spawnUnit(world, 0, i % 5 === 0 ? 'pike' : 'musk', 1800 + (i % 26) * 12, 900 + ((i / 26) | 0) * 14);
     spawnUnit(world, 1, i % 6 === 0 ? 'cav' : 'musk', 3100 - (i % 26) * 12, 900 + ((i / 26) | 0) * 14);
@@ -576,12 +580,18 @@ test('mass-unit combat stepping remains stable with more than one thousand soldi
   assert.ok(world.units.every(unit => Number.isFinite(unit.x) && Number.isFinite(unit.y)));
 });
 
-test('destroying a Town Center decides the match', () => {
+test('destroying both rival Town Centers decides the 2v2 match', () => {
   const world = makeWorld();
-  const enemyTownCenter = world.buildings.find(building => building.side === 1);
-  damage(world, enemyTownCenter, enemyTownCenter.maxHp + 1, null);
+  const firstRivalTownCenter = world.buildings.find(building => building.side === 1);
+  const secondRivalTownCenter = world.buildings.find(building => building.side === 3);
+  damage(world, firstRivalTownCenter, firstRivalTownCenter.maxHp + 1, null);
   step(world, 1 / 30);
   // Victory checks are intentionally staggered to avoid per-tick scans.
+  advance(world, 1.1);
+  assert.equal(world.state, 'running');
+  assert.equal(world.winner, -1);
+
+  damage(world, secondRivalTownCenter, secondRivalTownCenter.maxHp + 1, null);
   advance(world, 1.1);
   assert.equal(world.state, 'ended');
   assert.equal(world.winner, 0);

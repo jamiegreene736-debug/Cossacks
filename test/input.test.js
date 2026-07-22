@@ -165,7 +165,7 @@ test('production buildings retain the clicked resource or friendly building as t
   const world = makeWorld();
   const townCenter = world.buildings.find(building => building.side === 0);
   const forest = world.resources.find(resource => resource.resourceType === 'wood');
-  const mill = createBuilding(0, 'mill', 900, 1600, true);
+  const mill = createBuilding(0, 'mill', 1200, 1720, true);
   world.buildings.push(mill);
 
   const forestRally = setBuildingRallyAt(world, [townCenter], forest.x, forest.y);
@@ -190,7 +190,7 @@ test('a primary click gives a selected Town Center a resource or worksite rally'
   const world = makeWorld();
   const townCenter = world.buildings.find(building => building.side === 0);
   const berries = world.resources.find(resource => resource.resourceType === 'food');
-  const unfinishedWall = createBuilding(0, 'wall', 900, 1600, false, { orientation: 'horizontal' });
+  const unfinishedWall = createBuilding(0, 'wall', 1300, 1780, false, { orientation: 'horizontal' });
   world.buildings.push(unfinishedWall);
 
   const foodRally = setTownCenterPrimaryRallyAt(
