@@ -5,11 +5,13 @@ import {
   Soundscape,
   audioBusLevels,
   campaignTrackOrder,
+  commandSoundProfile,
   findNearestBuildingSiege,
   findNearestAudibleEntity,
   findNearestAudibleMatch,
   normalizeAudioSettings,
   pausedMusicMultiplier,
+  specialProjectileProfile,
   workerSoundKind,
 } from '../js/audio.js';
 
@@ -49,6 +51,24 @@ test('campaign track order starts with the player faction and retains three peac
   assert.deepEqual(campaignTrackOrder('england'), ['greenwich', 'lanterns', 'bosphorus']);
   assert.deepEqual(campaignTrackOrder('ottoman'), ['bosphorus', 'lanterns', 'greenwich']);
   assert.equal(new Set(campaignTrackOrder('england')).size, 3);
+});
+
+test('campaign track order can weave researched ally palettes into the score', () => {
+  assert.deepEqual(campaignTrackOrder('england', ['england', 'hogwarts', 'starwars', 'ottoman']), [
+    'greenwich', 'lanterns', 'greatHall', 'binarySuns', 'bosphorus',
+  ]);
+  assert.deepEqual(campaignTrackOrder('ottoman', ['ottoman', 'hogwarts']), [
+    'bosphorus', 'lanterns', 'greatHall', 'greenwich',
+  ]);
+});
+
+test('command and projectile profiles use physical layers instead of one beep', () => {
+  assert.deepEqual(Object.keys(commandSoundProfile('gather')).sort(), ['body', 'low', 'snap', 'volume']);
+  assert.ok(commandSoundProfile('attack').low < commandSoundProfile('select').low);
+  assert.equal(specialProjectileProfile('plasma').twang, true);
+  assert.equal(specialProjectileProfile('arcane').chime, true);
+  assert.equal(specialProjectileProfile('ion').heavy, true);
+  assert.ok(specialProjectileProfile('spectral').whisper);
 });
 
 test('pause music can duck smoothly or become fully silent', () => {

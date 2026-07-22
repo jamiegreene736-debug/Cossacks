@@ -1033,7 +1033,7 @@ function completeBuilding(world, building) {
       }
     }
   }
-  sfx.buildingComplete(building.type, building.x);
+  sfx.buildingComplete(building.type, building.x, world.sides[building.side]?.nation);
   world.events.push({ side: building.side, text: `${def.label} completed.`, tone: 'good' });
 }
 
@@ -1394,7 +1394,7 @@ function updateWorkers(world, dt) {
           if (repairer.state === 'work') repairer.state = 'idle';
         }
         const label = BUILDING_TYPES[target.type]?.label || 'Building';
-        sfx.buildingComplete(target.type, target.x);
+        sfx.buildingComplete(target.type, target.x, world.sides[target.side]?.nation);
         world.events.push({ side: target.side, text: `${label} repaired.`, tone: 'good' });
       }
       continue;
@@ -1497,7 +1497,7 @@ function spawnFromQueue(world, building, unitType) {
   const x = building.x + dir * visualExit + Math.cos(angle) * 18;
   const y = building.y + Math.sin(angle) * (building.radius + 14);
   const unit = world.spawnUnit(building.side, unitType, x, y);
-  sfx.unitReady(building.x);
+  sfx.unitReady(building.x, world.sides[building.side]?.nation, unitType);
   applyRallyOrder(world, building, unit);
   if (UNIT_TYPES[unitType].worker) {
     world.events.push({
