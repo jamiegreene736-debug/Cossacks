@@ -158,6 +158,8 @@ async function startBattle(opts) {
   setupLocalWomanVillagerPreview(world);
   setupLocalOpeningTrucePreview(world);
   setupLocalFantasyFactionPreview(world);
+  setupLocalEnglandHousePreview(world);
+  setupLocalThemedArchitecturePreview(world);
   setupLocalSettlementVarietyPreview(world);
   setupLocalVictoryRainbowPreview(world);
   ui.showBattleHud(world);
@@ -292,17 +294,14 @@ function setupLocalSettlementVarietyPreview(activeWorld) {
     || building.y < previewBounds.top || building.y > previewBounds.bottom
   ));
 
-  for (let index = 0; index < 8; index++) {
-    const column = index % 4;
-    const row = Math.floor(index / 4);
-    const house = createBuilding(0, 'house', 1660 + column * 260, 1180 + row * 245, true);
+  const englishHomes = ['house', 'english_cottage', 'english_townhouse', 'english_mansion', 'spooky_house'];
+  englishHomes.forEach((type, index) => {
+    const house = createBuilding(0, type, 1540 + index * 320, 1210 + (index % 2) * 110, true);
     house.id = 210000 + index;
     activeWorld.buildings.push(house);
-  }
-  for (let index = 0; index < 8; index++) {
-    const column = index % 4;
-    const row = Math.floor(index / 4);
-    const house = createBuilding(1, 'house', 1660 + column * 260, 1840 + row * 245, true);
+  });
+  for (let index = 0; index < 5; index++) {
+    const house = createBuilding(1, 'house', 1540 + index * 320, 1910 + (index % 2) * 110, true);
     house.id = 210100 + index;
     activeWorld.buildings.push(house);
   }
@@ -336,6 +335,90 @@ function setupLocalSettlementVarietyPreview(activeWorld) {
   camera.x = 2600;
   camera.y = 1690;
   camera.zoom = 0.72;
+  clampCamera();
+}
+
+function setupLocalEnglandHousePreview(activeWorld) {
+  const debugName = new URLSearchParams(window.location.search).get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'england-houses') return;
+
+  activeWorld.sides[0].nation = 'england';
+  const previewBounds = { left: 1120, right: 4040, top: 760, bottom: 2290 };
+  activeWorld.resources = activeWorld.resources.filter(resource => (
+    resource.x < previewBounds.left || resource.x > previewBounds.right
+    || resource.y < previewBounds.top || resource.y > previewBounds.bottom
+  ));
+  activeWorld.buildings = activeWorld.buildings.filter(building => (
+    building.x < previewBounds.left || building.x > previewBounds.right
+    || building.y < previewBounds.top || building.y > previewBounds.bottom
+  ));
+
+  const houses = [
+    ['house', 1420, 1270],
+    ['english_cottage', 1920, 1280],
+    ['english_townhouse', 2440, 1270],
+    ['english_mansion', 3020, 1300],
+    ['spooky_house', 3600, 1300],
+  ];
+  for (const [type, x, y] of houses) {
+    activeWorld.buildings.push(createBuilding(0, type, x, y, true));
+  }
+
+  const worker = spawnUnit(activeWorld, 0, 'villager', 2520, 1570);
+  worker.selected = true;
+  camera.x = 2520;
+  camera.y = 1390;
+  camera.zoom = 0.94;
+  clampCamera();
+}
+
+function setupLocalThemedArchitecturePreview(activeWorld) {
+  const debugName = new URLSearchParams(window.location.search).get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'themed-architecture') return;
+
+  const hogwartsSide = activeWorld.sides.findIndex(side => side.nation === 'hogwarts');
+  const starwarsSide = activeWorld.sides.findIndex(side => side.nation === 'starwars');
+  if (hogwartsSide < 0 || starwarsSide < 0) return;
+
+  activeWorld.time = OPENING_PEACE_SECONDS;
+  const previewBounds = { left: 1110, right: 4140, top: 720, bottom: 2560 };
+  activeWorld.resources = activeWorld.resources.filter(resource => (
+    resource.x < previewBounds.left || resource.x > previewBounds.right
+    || resource.y < previewBounds.top || resource.y > previewBounds.bottom
+  ));
+  activeWorld.buildings = activeWorld.buildings.filter(building => (
+    building.x < previewBounds.left || building.x > previewBounds.right
+    || building.y < previewBounds.top || building.y > previewBounds.bottom
+  ));
+
+  const hogwartsBuildings = [
+    ['town_center', 1350, 1050], ['house', 1710, 1050], ['mill', 2040, 1050],
+    ['lumber_camp', 2365, 1050], ['mine', 2690, 1050], ['barracks', 3040, 1050],
+    ['stable', 3400, 1050], ['foundry', 3740, 1050],
+    ['tower', 1450, 1470], ['castle', 1900, 1490], ['school', 2460, 1490],
+    ['pool', 3020, 1490], ['beach', 3560, 1490],
+  ];
+  for (const [type, x, y] of hogwartsBuildings) {
+    activeWorld.buildings.push(createBuilding(hogwartsSide, type, x, y, true));
+  }
+
+  const starwarsBuildings = [
+    ['town_center', 1340, 2060], ['house', 1685, 2060], ['mill', 2025, 2060],
+    ['lumber_camp', 2365, 2060], ['mine', 2705, 2060], ['barracks', 3060, 2060],
+    ['stable', 3425, 2060], ['foundry', 3785, 2060],
+    ['tower', 1760, 2390], ['castle', 2520, 2410],
+  ];
+  for (const [type, x, y] of starwarsBuildings) {
+    activeWorld.buildings.push(createBuilding(starwarsSide, type, x, y, true));
+  }
+
+  camera.x = 2540;
+  camera.y = 1840;
+  camera.zoom = 0.50;
   clampCamera();
 }
 

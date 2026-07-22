@@ -15,6 +15,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter
 
+from generate_high_detail_themed_architecture import generate_starwars_building
+
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILDING_DIR = ROOT / "assets" / "buildings"
@@ -429,7 +431,7 @@ def main() -> None:
     "barracks", "stable", "foundry", "tower", "castle",
   ]
   for index, slug in enumerate(slugs):
-    image = draw_building(slug, 1700 + index * 137)
+    image = generate_starwars_building(slug, 1700 + index * 137)
     image.save(BUILDING_DIR / f"starwars-{slug}.webp", "WEBP", lossless=True, method=6, exact=True)
   generate_units().save(UNIT_DIR / "starwars-citizens.webp", "WEBP", lossless=True, method=6, exact=True)
 

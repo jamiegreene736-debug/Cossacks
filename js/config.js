@@ -327,6 +327,30 @@ export const BUILDING_TYPES = {
     w: 62, h: 52, radius: 34, visualScale: 1.28, hp: 650, buildTime: 9,
     cost: { wood: 70 }, popCap: 40, hotkey: 'H',
   },
+  english_cottage: {
+    label: 'Country Cottage', description: '+40 population capacity. English housing choice.',
+    w: 66, h: 54, radius: 36, visualScale: 1.28, hp: 650, buildTime: 9,
+    cost: { wood: 70 }, popCap: 40, hotkey: 'V',
+    buildNations: ['england'], housingChoice: true,
+  },
+  english_townhouse: {
+    label: 'Brick Townhouse', description: '+40 population capacity. English housing choice.',
+    w: 76, h: 62, radius: 42, visualScale: 1.28, hp: 700, buildTime: 10,
+    cost: { wood: 80, stone: 10 }, popCap: 40, hotkey: 'R',
+    buildNations: ['england'], housingChoice: true,
+  },
+  english_mansion: {
+    label: 'Manor House', description: '+40 population capacity. English housing choice.',
+    w: 106, h: 84, radius: 58, visualScale: 1.26, hp: 850, buildTime: 12,
+    cost: { wood: 100, stone: 35 }, popCap: 40, hotkey: 'Q',
+    buildNations: ['england'], housingChoice: true,
+  },
+  spooky_house: {
+    label: 'Spooky House', description: '+40 population capacity. English gothic housing choice.',
+    w: 92, h: 78, radius: 52, visualScale: 1.28, hp: 760, buildTime: 11,
+    cost: { wood: 90, stone: 25 }, popCap: 40, hotkey: 'Z',
+    buildNations: ['england'], housingChoice: true,
+  },
   farm: {
     label: 'Field', description: 'A cultivated plot attached to a completed Mill. Villagers work within its crop rows.',
     w: 108, h: 82, radius: 52, visualScale: 1, hp: 420, buildTime: 7,
@@ -421,6 +445,13 @@ export const BUILDING_TYPES = {
     cost: { wood: 15, stone: 55 }, wallAttachment: true, hotkey: 'X',
   },
 };
+
+export function canNationBuildBuilding(nation, buildingType) {
+  const def = BUILDING_TYPES[buildingType];
+  if (!def) return false;
+  if (!def.buildNations) return true;
+  return def.buildNations.includes(nation);
+}
 
 const DEFAULT_TRAINING_ROSTER = Object.freeze({
   town_center: Object.freeze(['villager', 'woman_villager']),
