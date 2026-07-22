@@ -186,7 +186,7 @@ test('each nation has detailed woman worker poses and a complete cannon sequence
 });
 
 test('fantasy factions use dedicated complete character sheets instead of historical rows', async () => {
-  const expectedRows = { hogwarts: 3, nightmare_circus: 5 };
+  const expectedRows = { hogwarts: 3, starwars: 6, nightmare_circus: 5 };
   for (const [nation, spec] of Object.entries(FACTION_CHARACTER_ART_SPECS)) {
     assert.equal(spec.columns, 4);
     assert.equal(spec.rows, expectedRows[nation]);

@@ -107,8 +107,8 @@ const C_UI = {
 
 // Side identity. These exact values are shared with the sprite base rims so
 // the field and the minimap finally agree on what "blue" and "red" mean.
-const C_SIDE_RIM = ['#3E78B8', '#B8483E', '#4FAE8B', '#C67A2F'];
-const C_SIDE_RIM_LIT = ['#6FA3DC', '#DC7A6F', '#7CD9B4', '#E5A35F'];
+const C_SIDE_RIM = ['#3E78B8', '#B8483E', '#4FAE8B', '#C67A2F', '#7365D6'];
+const C_SIDE_RIM_LIT = ['#6FA3DC', '#DC7A6F', '#7CD9B4', '#E5A35F', '#A39BFF'];
 // Minimap plot colours: dim (sparse) -> lit (dense mass).
 const C_MM_SIDE_DIM = [[54, 104, 166], [166, 60, 52]];
 const C_MM_SIDE_LIT = [[142, 194, 246], [246, 152, 132]];

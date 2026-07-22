@@ -1768,7 +1768,8 @@ function drawEffects(ctx, world, alpha) {
       if (vx === 0 && vy === 0) { vx = p.tx - p.sx; vy = p.ty - p.sy; }
       const r = ((Math.atan2(vy, vx) * ROT_K + 16.5) | 0) & ROT_MASK;
       if (p.kind === 'arcane' || p.kind === 'spectral'
-          || p.kind === 'nightmare' || p.kind === 'cotton_candy') {
+          || p.kind === 'nightmare' || p.kind === 'cotton_candy'
+          || p.kind === 'plasma' || p.kind === 'ion') {
         const distance = Math.max(1, Math.hypot(vx, vy));
         const nx = vx / distance, ny = vy / distance;
         const palette = {
@@ -1776,18 +1777,20 @@ function drawEffects(ctx, world, alpha) {
           spectral: ['#e3ffff', '#62e3e8'],
           nightmare: ['#ffb2a7', '#a31224'],
           cotton_candy: ['#fff0fb', '#ff69c9'],
+          plasma: ['#e9fbff', '#44c8ff'],
+          ion: ['#f5ffff', '#7b8cff'],
         }[p.kind];
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         ctx.strokeStyle = palette[1];
-        ctx.lineWidth = p.kind === 'cotton_candy' ? 6 : 3.6;
+        ctx.lineWidth = p.kind === 'cotton_candy' ? 6 : p.kind === 'ion' ? 5 : 3.6;
         ctx.globalAlpha = 0.72;
         ctx.beginPath();
         ctx.moveTo(ix - nx * 26, iy - ny * 26);
         ctx.lineTo(ix, iy);
         ctx.stroke();
         ctx.strokeStyle = palette[0];
-        ctx.lineWidth = p.kind === 'cotton_candy' ? 2.4 : 1.45;
+        ctx.lineWidth = p.kind === 'cotton_candy' ? 2.4 : p.kind === 'ion' ? 1.9 : 1.45;
         ctx.globalAlpha = 0.94;
         ctx.beginPath();
         ctx.moveTo(ix - nx * 18, iy - ny * 18);
@@ -1795,7 +1798,8 @@ function drawEffects(ctx, world, alpha) {
         ctx.stroke();
         ctx.fillStyle = palette[1];
         ctx.globalAlpha = 0.58;
-        const radius = p.kind === 'cotton_candy' ? 8 : p.kind === 'spectral' ? 5.5 : 4.5;
+        const radius = p.kind === 'cotton_candy' ? 8 : p.kind === 'ion' ? 6.5
+          : p.kind === 'spectral' ? 5.5 : 4.5;
         ctx.beginPath(); ctx.arc(ix, iy, radius, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = palette[0];
         ctx.globalAlpha = 0.94;

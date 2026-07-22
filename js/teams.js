@@ -1,6 +1,6 @@
-// Team helpers for 2v2 skirmishes. Side ids remain stable for old 1v1 code:
-// side 0 is the player, side 1 is the first rival, side 2 is the ally, and
-// side 3 is the second rival.
+// Team helpers for multi-town skirmishes. Side ids remain stable for old 1v1
+// and 2v2 code: side 0 is the player, side 1 is the first rival, side 2 is the
+// first ally, side 3 is the second rival, and later even sides are extra allies.
 
 export const PLAYER_SIDE = 0;
 export const PLAYER_TEAM = 0;
@@ -9,7 +9,7 @@ export const RIVAL_TEAM = 1;
 export function sideTeam(world, sideIndex) {
   const side = world?.sides?.[sideIndex];
   if (Number.isInteger(side?.team)) return side.team;
-  return sideIndex === PLAYER_SIDE ? PLAYER_TEAM : RIVAL_TEAM;
+  return Number.isInteger(sideIndex) && sideIndex % 2 === 0 ? PLAYER_TEAM : RIVAL_TEAM;
 }
 
 export function entityTeam(world, entity) {

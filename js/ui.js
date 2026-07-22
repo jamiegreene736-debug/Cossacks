@@ -69,7 +69,7 @@ export function initMenu(menuCallbacks) {
     menuCallbacks.onStart({
       playerNation: selectedNation,
       enemyNation,
-      allyNation: 'hogwarts',
+      allyNations: selectedNation === 'england' ? ['hogwarts', 'starwars'] : ['hogwarts'],
       enemyAllyNation: 'nightmare_circus',
       worldCountry: selectedWorldCountry,
       difficulty: selectedDifficulty,
@@ -144,17 +144,19 @@ export function showBattleHud(world) {
   $('overlay-end').classList.add('hidden');
   hidePauseMenu();
   for (const id of ['hud-top', 'time-controls', 'panel', 'minimap', 'hint-bar']) $(id).classList.remove('hidden');
-  $('hud-player-nation').textContent = NATIONS[world.sides[0].nation].name;
-  const ally = world.sides.find((_side, sideIndex) => sideIndex !== 0 && isPlayerTeam(world, sideIndex));
+  const playerAllies = world.sides
+    .filter((_side, sideIndex) => sideIndex !== 0 && isPlayerTeam(world, sideIndex))
+    .map(side => NATIONS[side.nation].name);
+  const playerNames = [NATIONS[world.sides[0].nation].name, ...playerAllies];
+  $('hud-player-nation').textContent = playerNames.join(' + ');
   const rivals = world.sides
     .filter((_side, sideIndex) => !isPlayerTeam(world, sideIndex))
     .map(side => NATIONS[side.nation].name);
   $('hud-enemy-nation').textContent = rivals.join(' + ');
   const difficulty = CPU_DIFFICULTIES[world.difficulty] || CPU_DIFFICULTIES[DEFAULT_CPU_DIFFICULTY];
-  $('hud-enemy-role').textContent = `${difficulty.name} 2v2 CPU team`;
+  $('hud-enemy-role').textContent = `${difficulty.name} CPU rival team`;
   $('player-crest').textContent = NATIONS[world.sides[0].nation].name[0];
   $('player-crest').style.background = NATIONS[world.sides[0].nation].coat;
-  if (ally) $('hud-player-nation').textContent += ` + ${NATIONS[ally.nation].name}`;
   const country = WORLD_COUNTRY_BY_CODE[world.worldCountry];
   $('hud-world-country').textContent = country
     ? `${countryFlag(country.code)} World Park: ${country.name}` : 'World Park';
@@ -544,9 +546,12 @@ function unitIcon(type) {
   return {
     villager: '⚒', woman_villager: '⚒◉', musk: '♟', pike: '†', cav: '♞', gun: '◉',
     wizard_worker: '⚒✦', witch_worker: '⚒✧', circus_worker: '⚒☠',
+    starwars_mechanic: '⚒◇', starwars_robed_villager: '⚒◈',
     wizard_duelist: '✦', witch_duelist: '✧', moaning_myrtle: '◌',
     pennywise: '●', art_clown: '◐', twisty_clown: '♣',
     captain_spaulding: '※', killer_klown: '◎',
+    starwars_sentinel: '◇', starwars_blade_guard: '◈',
+    starwars_skiff_rider: '⬦', starwars_pulse_cannon: '◉◇',
   }[type] || '•';
 }
 
