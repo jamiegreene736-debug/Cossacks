@@ -23,18 +23,19 @@ function advance(world, seconds) {
   for (let i = 0; i < ticks; i++) step(world, 1 / 30);
 }
 
-test('a 2v2 skirmish starts with one Town Center per side and no units', () => {
+test('an allied England start has Hogwarts and StarWars beside the player', () => {
   const world = makeWorld();
   const townCenters = world.buildings.filter(building => building.type === 'town_center');
-  assert.equal(world.mode, '2v2');
+  assert.equal(world.mode, 'allied');
   assert.equal(world.units.length, 0);
-  assert.equal(townCenters.length, 4);
-  assert.deepEqual(townCenters.map(building => building.side), [0, 1, 2, 3]);
-  assert.deepEqual(world.sides.map(side => side.team), [0, 1, 0, 1]);
+  assert.equal(townCenters.length, 5);
+  assert.deepEqual(townCenters.map(building => building.side), [0, 1, 2, 3, 4]);
+  assert.deepEqual(world.sides.map(side => side.team), [0, 1, 0, 1, 0]);
   assert.deepEqual(townCenters.map(townCenter => townCenter.queue[0].type), [
-    'villager', 'villager', 'wizard_worker', 'circus_worker',
+    'villager', 'villager', 'wizard_worker', 'circus_worker', 'starwars_mechanic',
   ]);
   assert.ok(world.buildings.some(building => building.side === 2 && building.type === 'castle'));
+  assert.ok(world.buildings.some(building => building.side === 4 && building.type === 'castle'));
   assert.ok(world.sides.every(side => side.population === 0));
 });
 
@@ -583,7 +584,7 @@ test('mass-unit combat stepping remains stable with more than one thousand soldi
   assert.ok(world.units.every(unit => Number.isFinite(unit.x) && Number.isFinite(unit.y)));
 });
 
-test('destroying both rival Town Centers decides the 2v2 match', () => {
+test('destroying both rival Town Centers decides the allied match', () => {
   const world = makeWorld();
   const firstRivalTownCenter = world.buildings.find(building => building.side === 1);
   const secondRivalTownCenter = world.buildings.find(building => building.side === 3);

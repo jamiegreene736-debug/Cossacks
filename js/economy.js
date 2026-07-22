@@ -163,12 +163,25 @@ function addResourceCluster(world, type, x, y, amount, radius) {
   return node;
 }
 
+function fallbackStartPosition(sideIndex) {
+  const rival = sideIndex % 2 === 1;
+  const slot = Math.floor(sideIndex / 2);
+  const playerStarts = [{ x: 720, y: 0.36 }, { x: 720, y: 0.66 }, { x: 1500, y: 0.82 }];
+  const rivalStarts = [
+    { x: WORLD.w - 720, y: 0.34 },
+    { x: WORLD.w - 720, y: 0.66 },
+    { x: WORLD.w - 1500, y: 0.82 },
+  ];
+  const start = (rival ? rivalStarts : playerStarts)[slot] || {
+    x: rival ? WORLD.w - 720 : 720,
+    y: Math.min(0.86, 0.22 + slot * 0.16),
+  };
+  return { x: start.x, y: WORLD.h * start.y };
+}
+
 function seedMapResources(world) {
   for (let sideIndex = 0; sideIndex < world.sides.length; sideIndex++) {
-    const start = world.sides[sideIndex].startPosition || {
-      x: sideIndex === 0 ? 720 : WORLD.w - 720,
-      y: WORLD.h / 2,
-    };
+    const start = world.sides[sideIndex].startPosition || fallbackStartPosition(sideIndex);
     const dir = sideFrontDirection(world, sideIndex);
     addResourceCluster(world, 'food', start.x + dir * 245, start.y - 205, 5600, 48);
     addResourceCluster(world, 'food', start.x + dir * 175, start.y + 245, 4200, 42);
@@ -213,10 +226,7 @@ export function initializeEconomy(world) {
     side.maxPopulation = MAX_POPULATION;
     side.unitsCreated = 0;
     side.buildingsLost = 0;
-    const start = side.startPosition || {
-      x: sideIndex === 0 ? 660 : WORLD.w - 660,
-      y: WORLD.h / 2,
-    };
+    const start = side.startPosition || fallbackStartPosition(sideIndex);
     const tc = createBuilding(sideIndex, 'town_center', start.x, start.y, true, {
       team: side.team,
     });
@@ -237,6 +247,28 @@ export function initializeEconomy(world) {
         const landmark = createBuilding(sideIndex, type, start.x + dx, start.y + dy, true, {
           team: side.team,
           visualVariant: type === 'park' ? countryParkVariant(world.worldCountry) : null,
+        });
+        world.buildings.push(landmark);
+        if (BUILDING_TYPES[type].popCap) {
+          side.popCap = Math.min(side.maxPopulation, side.popCap + BUILDING_TYPES[type].popCap);
+        }
+      }
+    }
+    if (side.nation === 'starwars') {
+      const landmarks = [
+        ['house', -255, -180],
+        ['mill', 210, -240],
+        ['lumber_camp', -330, 25],
+        ['mine', 315, 45],
+        ['barracks', -185, 250],
+        ['stable', 120, 275],
+        ['foundry', 360, 270],
+        ['tower', -450, -80],
+        ['castle', 95, -470],
+      ];
+      for (const [type, dx, dy] of landmarks) {
+        const landmark = createBuilding(sideIndex, type, start.x + dx, start.y + dy, true, {
+          team: side.team,
         });
         world.buildings.push(landmark);
         if (BUILDING_TYPES[type].popCap) {
@@ -1537,7 +1569,7 @@ function updateTowers(world, dt) {
 function nearestEnemyUnitsInRange(world, building, range, limit) {
   const targets = [];
   for (const unit of world.units) {
-    if (!unit.alive || unit.side === building.side) continue;
+    if (!unit.alive || !areHostileSides(world, building.side, unit.side)) continue;
     const distance = Math.hypot(unit.x - building.x, unit.y - building.y);
     if (distance > range) continue;
     targets.push({ unit, distance });

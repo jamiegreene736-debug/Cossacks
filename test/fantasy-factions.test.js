@@ -19,7 +19,7 @@ import { OPENING_PEACE_SECONDS } from '../js/truce.js';
 function factionWorld(worldCountry = 'GB') {
   return createWorld({
     playerNation: 'england', enemyNation: 'ottoman',
-    allyNation: 'hogwarts', enemyAllyNation: 'nightmare_circus', worldCountry,
+    allyNations: ['hogwarts', 'starwars'], enemyAllyNation: 'nightmare_circus', worldCountry,
   });
 }
 
@@ -39,12 +39,13 @@ test('the world catalogue represents 193 UN members and two observer states exac
   assert.equal(countryParkVariant('CH'), 4, 'Switzerland uses the alpine garden family');
 });
 
-test('the authored 2v2 story launches England and Hogwarts against both enemy realms', () => {
+test('the authored allied story launches England, Hogwarts, and StarWars against both enemy realms', () => {
   const world = factionWorld('JP');
   assert.deepEqual(world.sides.map(side => side.nation), [
-    'england', 'ottoman', 'hogwarts', 'nightmare_circus',
+    'england', 'ottoman', 'hogwarts', 'nightmare_circus', 'starwars',
   ]);
-  assert.deepEqual(world.sides.map(side => side.team), [0, 1, 0, 1]);
+  assert.deepEqual(world.sides.map(side => side.team), [0, 1, 0, 1, 0]);
+  assert.equal(world.mode, 'allied');
   assert.equal(world.worldCountry, 'JP');
 
   const alliedTypes = world.buildings
@@ -55,6 +56,15 @@ test('the authored 2v2 story launches England and Hogwarts against both enemy re
   ]));
   assert.ok(world.buildings.filter(building => building.side === 2).every(building => building.complete));
   assert.equal(world.sides[2].resources.stone, 120, 'the allied castle and civic district are free');
+
+  const starWarsTypes = world.buildings
+    .filter(building => building.side === 4)
+    .map(building => building.type);
+  assert.deepEqual(new Set(starWarsTypes), new Set([
+    'town_center', 'house', 'mill', 'lumber_camp', 'mine',
+    'barracks', 'stable', 'foundry', 'tower', 'castle',
+  ]));
+  assert.ok(world.buildings.filter(building => building.side === 4).every(building => building.complete));
 });
 
 test('Hogwarts trains wizards, witches, and Moaning Myrtle from faction buildings', () => {
@@ -73,6 +83,43 @@ test('Hogwarts trains wizards, witches, and Moaning Myrtle from faction building
     'wizard_worker', 'witch_worker', 'moaning_myrtle',
   ]);
   assert.equal(queueUnit(world, townCenter, 'pennywise', 1, { free: true }).ok, false);
+});
+
+test('StarWars trains detailed villagers and galactic defenders from faction buildings', () => {
+  const world = factionWorld();
+  const townCenter = world.buildings.find(building => building.side === 4 && building.type === 'town_center');
+  townCenter.queue.length = 0;
+  world.sides[4].queuedPopulation = 0;
+  world.sides[4].resources = { food: 1000, wood: 1000, gold: 1000, stone: 1000 };
+  const worker = queueUnit(world, townCenter, 'starwars_robed_villager', 1, { trainTime: 0.01 });
+  assert.equal(worker.ok, true);
+  stepEconomy(world, 0.02);
+  const villager = world.units.find(unit => unit.side === 4 && unit.unitType === 'starwars_robed_villager');
+  assert.ok(villager);
+  assert.equal(villager.type, 'villager');
+  assert.equal(villager.projectileKind, 'plasma');
+  assert.deepEqual(getTrainableUnitTypes('starwars', 'town_center'), [
+    'starwars_mechanic', 'starwars_robed_villager',
+  ]);
+  assert.deepEqual(getTrainableUnitTypes('starwars', 'castle'), [
+    'starwars_sentinel', 'starwars_blade_guard', 'starwars_skiff_rider',
+    'starwars_pulse_cannon',
+  ]);
+  assert.equal(queueUnit(world, townCenter, 'moaning_myrtle', 1, { free: true }).ok, false);
+});
+
+test('allied StarWars defenses do not target England or Hogwarts units', () => {
+  const world = factionWorld();
+  world.time = OPENING_PEACE_SECONDS;
+  const castle = world.buildings.find(building => building.side === 4 && building.type === 'castle');
+  castle.reload = 0;
+  const englishWorker = spawnUnit(world, 0, 'villager', castle.x - 55, castle.y - 35);
+  const hogwartsWorker = spawnUnit(world, 2, 'wizard_worker', castle.x + 45, castle.y + 20);
+  for (let tick = 0; tick < 120; tick++) step(world, 1 / 30);
+
+  assert.equal(englishWorker.hp, englishWorker.maxHp);
+  assert.equal(hogwartsWorker.hp, hogwartsWorker.maxHp);
+  assert.equal(world.projectiles.some(projectile => projectile.kind === 'castle'), false);
 });
 
 test('Nightmare Circus AI production rotates through its five hostile clown identities', () => {
@@ -100,12 +147,16 @@ test('magic attacks travel visibly while protected parks and children cannot be 
   const world = factionWorld();
   world.time = OPENING_PEACE_SECONDS;
   const wizard = spawnUnit(world, 2, 'wizard_duelist', 900, 1500);
+  const sentinel = spawnUnit(world, 4, 'starwars_sentinel', 910, 1630);
   const clown = spawnUnit(world, 3, 'captain_spaulding', 1080, 1500);
   wizard.reload = 0;
+  sentinel.reload = 0;
   clown.acquire = 0;
   applyAttackOrder([wizard], clown);
+  applyAttackOrder([sentinel], clown);
   step(world, 1 / 30);
   assert.ok(world.projectiles.some(projectile => projectile.kind === 'arcane'));
+  assert.ok(world.projectiles.some(projectile => projectile.kind === 'plasma'));
 
   const playground = world.buildings.find(building => building.type === 'playground');
   const integrity = playground.hp;
@@ -123,6 +174,16 @@ test('fantasy architecture is backed by substantial high-detail production asset
     ['hogwarts', 'beach', 'hogwartsBeach', 'hogwarts-beach.webp'],
     ['nightmare_circus', 'town_center', 'circusTownCenter', 'circus-town-center.webp'],
     ['nightmare_circus', 'castle', 'circusCastle', 'circus-castle.webp'],
+    ['starwars', 'town_center', 'starwarsTownCenter', 'starwars-town-center.webp'],
+    ['starwars', 'house', 'starwarsHouse', 'starwars-house.webp'],
+    ['starwars', 'mill', 'starwarsMill', 'starwars-mill.webp'],
+    ['starwars', 'lumber_camp', 'starwarsLumberCamp', 'starwars-lumber-camp.webp'],
+    ['starwars', 'mine', 'starwarsMine', 'starwars-mine.webp'],
+    ['starwars', 'barracks', 'starwarsBarracks', 'starwars-barracks.webp'],
+    ['starwars', 'stable', 'starwarsStable', 'starwars-stable.webp'],
+    ['starwars', 'foundry', 'starwarsFoundry', 'starwars-foundry.webp'],
+    ['starwars', 'tower', 'starwarsTower', 'starwars-tower.webp'],
+    ['starwars', 'castle', 'starwarsCastle', 'starwars-castle.webp'],
   ];
   for (const [nation, type, key, filename] of fixtures) {
     assert.deepEqual(getBuildingProductionArtSpec(nation, type), { key });
@@ -135,13 +196,17 @@ test('world-country identity and fantasy units survive save and resume', () => {
   const world = factionWorld('OM');
   const myrtle = spawnUnit(world, 2, 'moaning_myrtle', 800, 1800);
   const pennywise = spawnUnit(world, 3, 'pennywise', 4200, 1800);
-  const snapshot = createGameSnapshot(world, [new Commander(world, 1), new Commander(world, 2), new Commander(world, 3)], {
+  const sentinel = spawnUnit(world, 4, 'starwars_sentinel', 820, 1960);
+  const snapshot = createGameSnapshot(world, [
+    new Commander(world, 1), new Commander(world, 2), new Commander(world, 3), new Commander(world, 4),
+  ], {
     x: 2600, y: 1600, zoom: 0.8,
   });
-  assert.deepEqual(snapshot.summary.allyNations, ['hogwarts']);
+  assert.deepEqual(snapshot.summary.allyNations, ['hogwarts', 'starwars']);
   assert.deepEqual(snapshot.summary.enemyNations, ['ottoman', 'nightmare_circus']);
   const restored = restoreGameSnapshot(snapshot).world;
   assert.equal(restored.worldCountry, 'OM');
   assert.equal(restored.units.find(unit => unit.id === myrtle.id).unitType, 'moaning_myrtle');
   assert.equal(restored.units.find(unit => unit.id === pennywise.id).unitType, 'pennywise');
+  assert.equal(restored.units.find(unit => unit.id === sentinel.id).unitType, 'starwars_sentinel');
 });

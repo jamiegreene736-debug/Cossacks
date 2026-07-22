@@ -32,8 +32,8 @@ const MOUNT_SUN = {
 };
 
 // Faction colour. Baked in, never ambiguous, never occluded.
-const MOUNT_SIDE_RIM = ['#3E78B8', '#B8483E', '#4FAE8B', '#C67A2F'];
-const MOUNT_SIDE_LIT = ['#6FA3DC', '#DC7A6F', '#7CD9B4', '#E5A35F'];
+const MOUNT_SIDE_RIM = ['#3E78B8', '#B8483E', '#4FAE8B', '#C67A2F', '#7365D6'];
+const MOUNT_SIDE_LIT = ['#6FA3DC', '#DC7A6F', '#7CD9B4', '#E5A35F', '#A39BFF'];
 
 // Ground contact line inside both sprite boxes (sprite units, y down).
 const MOUNT_GY = 23.4;

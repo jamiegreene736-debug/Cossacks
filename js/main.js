@@ -189,17 +189,23 @@ function setupLocalFantasyFactionPreview(activeWorld) {
   activeWorld.time = OPENING_PEACE_SECONDS;
 
   const hogwartsTypes = ['wizard_duelist', 'witch_duelist', 'moaning_myrtle'];
+  const starwarsTypes = [
+    'starwars_sentinel', 'starwars_blade_guard', 'starwars_skiff_rider', 'starwars_pulse_cannon',
+  ];
   const circusTypes = [
     'pennywise', 'art_clown', 'twisty_clown', 'captain_spaulding', 'killer_klown',
   ];
   const hogwartsUnits = hogwartsTypes.map((type, index) => (
-    spawnUnit(activeWorld, 2, type, 2350, 1320 + index * 150)
+    spawnUnit(activeWorld, 2, type, 2250, 1260 + index * 145)
+  ));
+  const starwarsUnits = starwarsTypes.map((type, index) => (
+    spawnUnit(activeWorld, 4, type, 2385, 1110 + index * 125)
   ));
   const circusUnits = circusTypes.map((type, index) => (
     spawnUnit(activeWorld, 3, type, 2710, 1130 + index * 140)
   ));
 
-  for (const unit of [...hogwartsUnits, ...circusUnits]) {
+  for (const unit of [...hogwartsUnits, ...starwarsUnits, ...circusUnits]) {
     unit.maxHp = Math.max(unit.maxHp, 420);
     unit.hp = unit.maxHp;
     unit.reload = 0;
@@ -209,8 +215,12 @@ function setupLocalFantasyFactionPreview(activeWorld) {
   hogwartsUnits.forEach((unit, index) => {
     applyAttackOrder([unit], circusUnits[index % circusUnits.length]);
   });
+  starwarsUnits.forEach((unit, index) => {
+    applyAttackOrder([unit], circusUnits[(index + 1) % circusUnits.length]);
+  });
   circusUnits.forEach((unit, index) => {
-    applyAttackOrder([unit], hogwartsUnits[index % hogwartsUnits.length]);
+    const allied = index % 2 ? starwarsUnits : hogwartsUnits;
+    applyAttackOrder([unit], allied[index % allied.length]);
   });
 
   camera.x = 2540;

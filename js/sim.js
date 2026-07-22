@@ -129,7 +129,7 @@ function makeUnit(side, nationKey, type, x, y, team = null) {
     navigationGoalX: NaN, navigationGoalY: NaN, navigationVersion: 0,
     target: null, acquireT: Math.random() * 0.5,
     formation: 'line',
-    facing: side === 0 || side === 2 ? 1 : -1,
+    facing: team === RIVAL_TEAM ? -1 : 1,
     moving: false, animT: Math.random() * 10, walkPhaseOffset: 0,
     fireT: 0, torchT: 0,
     fleeYDrift: 0,
@@ -143,35 +143,73 @@ function clampPos(u) {
   if (u.y < 30) u.y = 30; else if (u.y > WORLD.h - 30) u.y = WORLD.h - 30;
 }
 
+function normalizeAllyNations(opts, playerNation) {
+  const requested = Array.isArray(opts?.allyNations)
+    ? opts.allyNations
+    : opts?.allyNation ? [opts.allyNation]
+      : playerNation === 'england' ? ['hogwarts', 'starwars'] : ['hogwarts'];
+  const allies = requested.filter(nation => NATIONS[nation]);
+  return allies.length ? [...new Set(allies)] : ['hogwarts'];
+}
+
+function startPositionForSlot(team, slot) {
+  const playerStarts = [
+    { x: 660, y: 0.36 },
+    { x: 660, y: 0.66 },
+    { x: 1500, y: 0.82 },
+  ];
+  const rivalStarts = [
+    { x: WORLD.w - 660, y: 0.34 },
+    { x: WORLD.w - 660, y: 0.66 },
+    { x: WORLD.w - 1500, y: 0.82 },
+  ];
+  const starts = team === RIVAL_TEAM ? rivalStarts : playerStarts;
+  const start = starts[slot] || {
+    x: team === RIVAL_TEAM ? WORLD.w - 660 : 660,
+    y: Math.min(0.86, 0.22 + slot * 0.16),
+  };
+  return { x: start.x, y: WORLD.h * start.y };
+}
+
+function legacyTeamForSideIndex(sideIndex) {
+  return sideIndex % 2 === 0 ? 0 : RIVAL_TEAM;
+}
+
 export function createWorld(opts) {
   const playerNation = opts?.playerNation || 'england';
   const enemyNation = opts?.enemyNation || (playerNation === 'england' ? 'ottoman' : 'england');
-  const allyNation = opts?.allyNation || 'hogwarts';
+  const allyNations = normalizeAllyNations(opts, playerNation);
   const enemyAllyNation = opts?.enemyAllyNation || 'nightmare_circus';
+  const extraAllies = allyNations.slice(1);
   const defaultSides = [
     {
       nation: playerNation, team: 0, controller: 'human',
-      label: 'Your town', startPosition: { x: 660, y: WORLD.h * 0.36 },
+      label: 'Your town', startPosition: startPositionForSlot(0, 0),
     },
     {
       nation: enemyNation, team: RIVAL_TEAM, controller: 'ai',
-      label: 'Rival town', startPosition: { x: WORLD.w - 660, y: WORLD.h * 0.36 },
+      label: 'Rival town', startPosition: startPositionForSlot(RIVAL_TEAM, 0),
     },
     {
-      nation: allyNation, team: 0, controller: 'ai',
-      label: 'Allied town', startPosition: { x: 660, y: WORLD.h * 0.66 },
+      nation: allyNations[0], team: 0, controller: 'ai',
+      label: 'Allied town', startPosition: startPositionForSlot(0, 1),
     },
     {
       nation: enemyAllyNation, team: RIVAL_TEAM, controller: 'ai',
-      label: 'Rival ally', startPosition: { x: WORLD.w - 660, y: WORLD.h * 0.66 },
+      label: 'Rival ally', startPosition: startPositionForSlot(RIVAL_TEAM, 1),
     },
+    ...extraAllies.map((nation, index) => ({
+      nation, team: 0, controller: 'ai',
+      label: 'Allied town', startPosition: startPositionForSlot(0, index + 2),
+    })),
   ];
   const sides = Array.isArray(opts?.sides) && opts.sides.length >= 2
     ? opts.sides.map((side, sideIndex) => ({
       ...defaultSides[Math.min(sideIndex, defaultSides.length - 1)],
       ...side,
       nation: NATIONS[side?.nation] ? side.nation : defaultSides[Math.min(sideIndex, defaultSides.length - 1)].nation,
-      team: Number.isInteger(side?.team) ? side.team : sideIndex === 0 || sideIndex === 2 ? 0 : RIVAL_TEAM,
+      team: Number.isInteger(side?.team) ? side.team
+        : defaultSides[sideIndex]?.team ?? legacyTeamForSideIndex(sideIndex),
       controller: sideIndex === 0 ? 'human' : side?.controller || 'ai',
       start: 0,
       alive: 0,
@@ -189,7 +227,7 @@ export function createWorld(opts) {
     navigationVersion: 0,
     sepGrid: new FlatGrid(20, WORLD.w, WORLD.h),
     tgtGrid: new FlatGrid(64, WORLD.w, WORLD.h),
-    mode: sides.length >= 4 ? '2v2' : '1v1',
+    mode: sides.length > 4 ? 'allied' : sides.length >= 4 ? '2v2' : '1v1',
     worldCountry: normalizeWorldCountry(opts?.worldCountry),
     sides,
   };
@@ -929,7 +967,7 @@ export function step(world, dt) {
     if (p.t >= p.dur) {
       if (p.kind === 'tower') impactTowerShot(world, p);
       else if (p.kind === 'torch') impactTorch(world, p);
-      else if (['arcane', 'spectral', 'nightmare', 'cotton_candy'].includes(p.kind)) {
+      else if (['arcane', 'spectral', 'nightmare', 'cotton_candy', 'plasma', 'ion'].includes(p.kind)) {
         impactSpecialBolt(world, p);
       }
       else explodeShell(world, p);

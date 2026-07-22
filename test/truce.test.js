@@ -8,6 +8,7 @@ import {
   getVillagerAttackTargetAt, issuePrimaryUnitCommand, issueVillagerAttack,
 } from '../js/input.js';
 import { createWorld, damage, spawnUnit, step } from '../js/sim.js';
+import { areAlliedSides, areHostileSides } from '../js/teams.js';
 import {
   formatPeaceTime, isPeaceTime, OPENING_PEACE_SECONDS, peaceTimeRemaining,
 } from '../js/truce.js';
@@ -34,6 +35,13 @@ test('the opening peace counts down from exactly ten simulation minutes', () => 
   world.time = OPENING_PEACE_SECONDS;
   assert.equal(isPeaceTime(world), false);
   assert.equal(formatPeaceTime(world), '0:00');
+});
+
+test('legacy even-side fallback keeps the extra ally on the player team', () => {
+  const world = { sides: [{}, {}, {}, {}, {}] };
+
+  assert.equal(areAlliedSides(world, 0, 4), true);
+  assert.equal(areHostileSides(world, 4, 1), true);
 });
 
 test('hostile orders, acquisition, projectiles, and damage are disarmed during peace', () => {

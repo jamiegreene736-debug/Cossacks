@@ -141,6 +141,13 @@ export const NATIONS = {
     blurb: 'An allied school of witchcraft and wizardry protected by ancient magic.',
     mults: { villagerTrain: 0.92 },
   },
+  starwars: {
+    name: 'StarWars', adjective: 'StarWars', playable: false,
+    coat: '#233d63', trim: '#66d9ff', skin: '#d9aa82', roof: '#5b6473',
+    headgear: 'visor',
+    blurb: 'An allied galactic frontier town of moisture engineers, robed travelers, and luminous defenders.',
+    mults: { villagerTrain: 0.94 },
+  },
   nightmare_circus: {
     name: 'Nightmare Circus', adjective: 'Nightmare Circus', playable: false,
     coat: '#7f151d', trim: '#d6c7a5', skin: '#c9a184', roof: '#241e24',
@@ -194,6 +201,20 @@ export const UNIT_TYPES = {
     range: 0, acquire: 0, reload: 0, dmg: 0, acc: 0,
     meleeDmg: 3, meleeRate: 1.35, chase: 0,
     cost: { food: 48 }, trainTime: 5.5, pop: 1,
+  },
+  starwars_mechanic: {
+    label: 'StarWars Mechanics', short: 'Mechanic', hp: 43, speed: 55, radius: 6,
+    worker: true, projectileKind: 'plasma',
+    range: 185, acquire: 0, reload: 5.2, dmg: 7, acc: 0.64,
+    meleeDmg: 3, meleeRate: 1.35, chase: 0,
+    cost: { food: 52, gold: 4 }, trainTime: 5.8, pop: 1,
+  },
+  starwars_robed_villager: {
+    label: 'StarWars Villagers', short: 'Robed Villager', hp: 40, speed: 56, radius: 6,
+    worker: true, projectileKind: 'plasma',
+    range: 195, acquire: 0, reload: 5.0, dmg: 7, acc: 0.68,
+    meleeDmg: 3, meleeRate: 1.35, chase: 0,
+    cost: { food: 54, gold: 5 }, trainTime: 6, pop: 1,
   },
   musk: {
     label: 'Musketeers', short: 'Musketeer', hp: 34, speed: 46, radius: 5,
@@ -267,6 +288,31 @@ export const UNIT_TYPES = {
     reload: 8.4, dmg: 42, acc: 1, splash: 28,
     meleeDmg: 4, meleeRate: 1.5, chase: 0,
     cost: { wood: 62, gold: 92 }, trainTime: 11, pop: 4,
+  },
+  starwars_sentinel: {
+    label: 'StarWars Sentinels', short: 'Sentinel', hp: 42, speed: 50, radius: 6,
+    projectileKind: 'plasma', range: 255, acquire: 330, reload: 3.4, dmg: 12, acc: 0.82,
+    meleeDmg: 5, meleeRate: 1.15, chase: 0,
+    cost: { food: 34, gold: 24 }, trainTime: 3.8, pop: 1,
+  },
+  starwars_blade_guard: {
+    label: 'StarWars Blade Guards', short: 'Blade Guard', hp: 62, speed: 60, radius: 7,
+    range: 0, acquire: 260, reload: 0, dmg: 0, acc: 0,
+    meleeDmg: 17, meleeRate: 0.92, chase: 220,
+    cost: { food: 38, gold: 30 }, trainTime: 4.2, pop: 1,
+  },
+  starwars_skiff_rider: {
+    label: 'StarWars Skiff Riders', short: 'Skiff Rider', hp: 72, speed: 112, radius: 8,
+    projectileKind: 'plasma', range: 190, acquire: 310, reload: 4.2, dmg: 10, acc: 0.7,
+    meleeDmg: 8, meleeRate: 1.05, chase: 250,
+    cost: { food: 58, gold: 48 }, trainTime: 5.6, pop: 2,
+  },
+  starwars_pulse_cannon: {
+    label: 'StarWars Pulse Cannons', short: 'Pulse Cannon', hp: 98, speed: 31, radius: 11,
+    projectileKind: 'ion', range: 610, minRange: 95, acquire: 690,
+    reload: 8.8, dmg: 44, acc: 1, splash: 30,
+    meleeDmg: 3, meleeRate: 1.5, chase: 0,
+    cost: { wood: 72, gold: 110 }, trainTime: 11.5, pop: 5,
   },
 };
 
@@ -391,6 +437,16 @@ export const NATION_TRAINING_ROSTERS = Object.freeze({
     stable: Object.freeze(['witch_duelist']),
     foundry: Object.freeze(['moaning_myrtle']),
     castle: Object.freeze(['wizard_duelist', 'witch_duelist', 'moaning_myrtle']),
+  }),
+  starwars: Object.freeze({
+    town_center: Object.freeze(['starwars_mechanic', 'starwars_robed_villager']),
+    barracks: Object.freeze(['starwars_sentinel', 'starwars_blade_guard']),
+    stable: Object.freeze(['starwars_skiff_rider']),
+    foundry: Object.freeze(['starwars_pulse_cannon']),
+    castle: Object.freeze([
+      'starwars_sentinel', 'starwars_blade_guard', 'starwars_skiff_rider',
+      'starwars_pulse_cannon',
+    ]),
   }),
   nightmare_circus: Object.freeze({
     town_center: Object.freeze(['circus_worker']),

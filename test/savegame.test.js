@@ -57,13 +57,14 @@ test('a campaign round trip preserves economy, AI, camera and entity references'
   commander.resourceCursor = 11;
   const alliedCommander = new Commander(world, 2);
   const secondRivalCommander = new Commander(world, 3);
+  const starWarsCommander = new Commander(world, 4);
 
   const gate = createBuilding(0, 'gate', 920, 1380, true, {
     orientation: 'horizontal', gateOpen: false,
   });
   world.buildings.push(gate);
   const encoded = encodeSnapshot(createGameSnapshot(
-    world, [commander, alliedCommander, secondRivalCommander],
+    world, [commander, alliedCommander, secondRivalCommander, starWarsCommander],
     { x: 777, y: 888, zoom: 1.4, rotation: Math.PI }, 123456,
   ));
   const restored = restoreGameSnapshot(decodeSnapshot(encoded));
@@ -85,9 +86,9 @@ test('a campaign round trip preserves economy, AI, camera and entity references'
   assert.equal(restored.commander.committed.has(defender.id), true);
   assert.deepEqual(restored.commander.planCursor, { house: 4 });
   assert.equal(restored.commander.resourceCursor, 11);
-  assert.equal(restored.world.mode, '2v2');
-  assert.deepEqual(restored.world.sides.map(side => side.team), [0, 1, 0, 1]);
-  assert.deepEqual(restored.commanders.map(savedCommander => savedCommander.side), [1, 2, 3]);
+  assert.equal(restored.world.mode, 'allied');
+  assert.deepEqual(restored.world.sides.map(side => side.team), [0, 1, 0, 1, 0]);
+  assert.deepEqual(restored.commanders.map(savedCommander => savedCommander.side), [1, 2, 3, 4]);
   assert.deepEqual(restoredMillWorker.job, {
     kind: 'gather', targetId: field.id, phase: 'deliver', resourceType: 'food',
     dropoffId: mill.id, carriedAmount: 10,

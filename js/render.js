@@ -47,7 +47,7 @@ const SCALE = 4; // sprite atlas oversampling — 4 keeps figures crisp at 2.4x 
 
 // Reserved side colours. These appear nowhere else in the world, so side
 // identity survives even a mirror matchup (England vs England).
-const SIDE_RIM = ['#3E78B8', '#B8483E', '#4FAE8B', '#C67A2F'];
+const SIDE_RIM = ['#3E78B8', '#B8483E', '#4FAE8B', '#C67A2F', '#7365D6'];
 const PRODUCTION_WORKER = Object.freeze({
   w: 38, h: 44, ax: 19, ay: 36.5, sourceW: 384, sourceH: 448,
 });
@@ -538,9 +538,10 @@ function buildFactionCharacterDefs(nationKey, side, nat) {
   for (const [unitType, sourceRow] of Object.entries(spec.unitRows)) {
     const worker = Boolean(UNIT_TYPES[unitType]?.worker);
     const isGhost = unitType === 'moaning_myrtle';
-    const isHeavy = unitType === 'killer_klown';
-    const w = isHeavy ? 76 : isGhost ? 68 : 58;
-    const h = isHeavy ? 66 : isGhost ? 64 : 62;
+    const isHeavy = unitType === 'killer_klown' || unitType === 'starwars_pulse_cannon';
+    const isMounted = unitType === 'starwars_skiff_rider';
+    const w = isHeavy ? 78 : isMounted ? 72 : isGhost ? 68 : 58;
+    const h = isHeavy ? 66 : isMounted ? 62 : isGhost ? 64 : 62;
     const sourceFrames = worker
       ? [0, 1, 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 0, 1, 2, 3, 1, 1, 1, 1, 1, 1, 1, 1]
       : [0, 1, 1, 1, 1, 1, 1, 2];

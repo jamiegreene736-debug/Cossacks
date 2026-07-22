@@ -19,7 +19,7 @@ export function formatPeaceTime(world) {
 }
 
 export function isHostilePair(attacker, target) {
-  const fallbackTeam = side => (side === 0 || side === 2 ? 0 : 1);
+  const fallbackTeam = side => (Number.isInteger(side) && side % 2 === 0 ? 0 : 1);
   const attackerTeam = Number.isInteger(attacker?.team) ? attacker.team : fallbackTeam(attacker?.side);
   const targetTeam = Number.isInteger(target?.team) ? target.team : fallbackTeam(target?.side);
   return Number.isInteger(attacker?.side)

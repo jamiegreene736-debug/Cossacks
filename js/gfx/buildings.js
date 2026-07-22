@@ -86,6 +86,7 @@ const BD_SIDE = [
   { rim: '#B8483E', lit: '#DC7A6F' },   // side 1 — oxide red
   { rim: '#4FAE8B', lit: '#7CD9B4' },   // side 2 — allied green
   { rim: '#C67A2F', lit: '#E5A35F' },   // side 3 — rival ochre
+  { rim: '#7365D6', lit: '#A39BFF' },   // side 4 — allied violet
 ];
 
 // Board palette, from terrain.js. PALETTE LAW: nothing painted onto the ground
@@ -2571,7 +2572,7 @@ function bdPaintHouse(g, o) {
 
   bdChimney(g, G.bw * 0.62, G.yE + 2, estate || mansion ? 8.5 : 7.5, G.h * (mansion ? 0.44 : 0.38));
   if (estate || mansion) bdChimney(g, -G.bw * 0.52, G.yE + 5, 7.2, G.h * 0.34);
-  bdRidgePennant(g, -G.rr * 0.5, G.yR - 1, o.side, o.side === 0 || o.side === 2 ? 1 : -1);
+  bdRidgePennant(g, -G.rr * 0.5, G.yR - 1, o.side, o.side % 2 === 0 ? 1 : -1);
 
   // A woodpile and a water butt against the wall — lived-in, and they break
   // the rectangle of the footprint
@@ -5061,6 +5062,15 @@ const BD_HOGWARTS_BUILDING_ART = Object.freeze({
   pool: { key: 'hogwartsPool' }, beach: { key: 'hogwartsBeach' },
 });
 
+const BD_STARWARS_BUILDING_ART = Object.freeze({
+  town_center: { key: 'starwarsTownCenter' },
+  house: { key: 'starwarsHouse' }, mill: { key: 'starwarsMill' },
+  lumber_camp: { key: 'starwarsLumberCamp' }, mine: { key: 'starwarsMine' },
+  barracks: { key: 'starwarsBarracks' }, stable: { key: 'starwarsStable' },
+  foundry: { key: 'starwarsFoundry' }, tower: { key: 'starwarsTower' },
+  castle: { key: 'starwarsCastle' },
+});
+
 const BD_CIRCUS_BUILDING_ART = Object.freeze({
   town_center: { key: 'circusTownCenter' }, house: { key: 'circusHouse' },
   mill: { key: 'circusHouse' }, lumber_camp: { key: 'circusHouse' },
@@ -5078,6 +5088,7 @@ const BD_BUILDING_ART_BY_NATION = Object.freeze({
   england: BD_ENGLISH_BUILDING_ART,
   ottoman: BD_OTTOMAN_BUILDING_ART,
   hogwarts: BD_HOGWARTS_BUILDING_ART,
+  starwars: BD_STARWARS_BUILDING_ART,
   nightmare_circus: BD_CIRCUS_BUILDING_ART,
 });
 
@@ -5104,6 +5115,10 @@ const BD_ARCHITECTURE_SUPPORT_ART_BY_NATION = Object.freeze({
     gateClosed: 'ottomanGateClosed',
   }),
   hogwarts: Object.freeze({
+    construction: 'englishConstruction', fortifications: 'englishFortifications',
+    fortificationConstruction: 'englishFortificationConstruction', gateClosed: 'englishGateClosed',
+  }),
+  starwars: Object.freeze({
     construction: 'englishConstruction', fortifications: 'englishFortifications',
     fortificationConstruction: 'englishFortificationConstruction', gateClosed: 'englishGateClosed',
   }),
