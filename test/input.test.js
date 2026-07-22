@@ -9,7 +9,7 @@ import {
   findPlayerSelectableEntityAt, getVillagerAttackTargetAt, getVillagerRepairTargetAt,
   isOpenGroundMoveTarget,
   isSecondaryPointerEvent, issuePrimaryUnitCommand, issueVillagerAttack,
-  issueVillagerGroundMove, setBuildingRallyAt, setTownCenterPrimaryRallyAt,
+  issueVillagerGroundMove, setBuildingRallyAt, setControlledSide, setTownCenterPrimaryRallyAt,
 } from '../js/input.js';
 import { createBuilding } from '../js/economy.js';
 
@@ -164,6 +164,7 @@ test('Mac secondary clicks accept both trackpad button 2 and Control-click', () 
 });
 
 test('allied buildings are selectable inspection targets without granting allied unit control', () => {
+  setControlledSide(0);
   const world = createWorld({
     playerNation: 'england',
     enemyNation: 'ottoman',
@@ -181,6 +182,36 @@ test('allied buildings are selectable inspection targets without granting allied
   assert.equal(canPlayerSelectEntity(world, enemyTownCenter), false);
   assert.equal(findPlayerSelectableEntityAt(world, hogwartsCastle.x, hogwartsCastle.y), hogwartsCastle);
   assert.equal(findPlayerSelectableEntityAt(world, enemyTownCenter.x, enemyTownCenter.y), null);
+});
+
+test('controlled side can switch for a guest ally or enemy player', () => {
+  const world = createWorld({
+    playerNation: 'england',
+    enemyNation: 'ottoman',
+    allyNations: ['hogwarts', 'starwars'],
+    enemyAllyNation: 'nightmare_circus',
+  });
+  const englandTownCenter = world.buildings.find(building => building.side === 0 && building.type === 'town_center');
+  const hogwartsTownCenter = world.buildings.find(building => building.side === 2 && building.type === 'town_center');
+  const ottomanTownCenter = world.buildings.find(building => building.side === 1 && building.type === 'town_center');
+  const hogwartsWorker = spawnUnit(world, 2, 'wizard_worker', hogwartsTownCenter.x + 140, hogwartsTownCenter.y);
+  const ottomanWorker = spawnUnit(world, 1, 'villager', ottomanTownCenter.x - 140, ottomanTownCenter.y);
+  const open = findOpenPoint(world);
+
+  try {
+    setControlledSide(2);
+    assert.equal(canPlayerSelectEntity(world, hogwartsWorker), true);
+    assert.equal(canPlayerSelectEntity(world, englandTownCenter), true, 'same-team buildings remain inspectable');
+    assert.equal(canPlayerSelectEntity(world, ottomanWorker), false);
+    assert.equal(issuePrimaryUnitCommand(world, [hogwartsWorker], open.x, open.y), true);
+    assert.equal(hogwartsWorker.orderX, open.x);
+
+    setControlledSide(1);
+    assert.equal(canPlayerSelectEntity(world, ottomanWorker), true);
+    assert.equal(canPlayerSelectEntity(world, hogwartsWorker), false);
+  } finally {
+    setControlledSide(0);
+  }
 });
 
 test('production buildings retain the clicked resource or friendly building as their rally target', () => {

@@ -357,6 +357,40 @@ button, select { font: inherit; }
 .world-country-picker small { grid-column: 2; color: #807960; font: 9px Arial, sans-serif; text-align: left; }
 .scenario-preview { margin: 0 0 12px; color: #a69b7b; font: 10.5px/1.35 Arial, sans-serif; }
 .scenario-preview b { color: #d7c58b; }
+.multiplayer-card {
+  margin: 0 0 12px; padding: 12px 14px; text-align: left;
+  background: rgba(13,17,12,.68); border: 1px solid #4e4b35; border-radius: 3px;
+}
+.multiplayer-heading {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-bottom: 9px;
+}
+.multiplayer-heading span { display: flex; flex-direction: column; gap: 2px; }
+.multiplayer-heading b { color: #e8ddbc; font-size: 15px; }
+#multiplayer-status { color: #b9c88d; font: 700 10px Arial, sans-serif; text-align: right; }
+.multiplayer-role, .multiplayer-actions {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px;
+}
+.multiplayer-role label {
+  display: flex; align-items: center; gap: 5px; color: #c8bea0;
+  font: 700 10px Arial, sans-serif; text-transform: uppercase; letter-spacing: .7px;
+}
+.multiplayer-role input { accent-color: #b7a56d; }
+.multiplayer-actions button {
+  padding: 7px 10px; color: #eee4c8; background: linear-gradient(#42422e, #292b1e);
+  border: 1px solid #6a6347; border-radius: 3px; cursor: pointer; font: 700 10px Arial, sans-serif;
+}
+.multiplayer-actions button:hover { border-color: #ad995d; background: #4b482f; }
+.multiplayer-field {
+  display: grid; gap: 4px; margin-top: 7px; color: #a99f82;
+  font: 700 9px Arial, sans-serif; letter-spacing: .8px; text-transform: uppercase;
+}
+.multiplayer-field textarea {
+  width: 100%; min-height: 42px; resize: vertical; padding: 7px 8px;
+  color: #eee6cd; background: #10140d; border: 1px solid #59553b; border-radius: 3px;
+  font: 10px/1.25 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  user-select: text; -webkit-user-select: text;
+}
 #nation-preview {
   display: grid; grid-template-columns: 54px 1fr 42px 1fr; align-items: center; gap: 13px;
   margin: 17px 0; padding: 13px 17px; text-align: left;

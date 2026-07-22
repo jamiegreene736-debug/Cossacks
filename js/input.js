@@ -27,6 +27,7 @@ let getWorld = () => null;
 let callbacks = {};
 let selection = [];
 let currentFormation = 'line';
+let controlledSide = 0;
 let placement = null;
 let wallDrag = null;
 let primaryTownCenterRallyArmed = false;
@@ -216,6 +217,15 @@ export function initInput(canvas, minimap, worldGetter, cbs) {
   window.addEventListener('blur', () => keys.clear());
 }
 
+export function setControlledSide(sideIndex = 0) {
+  controlledSide = Number.isInteger(sideIndex) && sideIndex >= 0 ? sideIndex : 0;
+  setSelection([]);
+}
+
+export function getControlledSide() {
+  return controlledSide;
+}
+
 function minimapJump(event) {
   const minimap = document.getElementById('minimap');
   const rect = minimap.getBoundingClientRect();
@@ -230,8 +240,10 @@ function minimapJump(event) {
 
 export function canPlayerSelectEntity(world, entity) {
   if (!world || !entity?.alive) return false;
-  if (entity.side === 0) return true;
-  return entity.entityKind === 'building' && isPlayerTeam(world, entity.side);
+  if (entity.side === controlledSide) return true;
+  const controlledTeam = world.sides[controlledSide]?.team;
+  return entity.entityKind === 'building' && controlledTeam !== undefined
+    && world.sides[entity.side]?.team === controlledTeam;
 }
 
 export function findPlayerSelectableEntityAt(world, x, y) {
@@ -245,7 +257,7 @@ function setSelection(entities) {
   selection = entities.filter(entity => canPlayerSelectEntity(world, entity));
   for (const entity of selection) entity.selected = true;
   primaryTownCenterRallyArmed = selection.length === 1
-    && selection[0].side === 0
+    && selection[0].side === controlledSide
     && selection[0].type === 'town_center';
   callbacks.onSelection?.(selection);
   updateResourceHover(mouseX, mouseY);
@@ -257,6 +269,13 @@ export function getSelection() {
 }
 
 export function clearSelection() { setSelection([]); }
+
+export function selectEntitiesById(world, ids = []) {
+  const wanted = new Set(ids);
+  const entities = [...(world?.units || []), ...(world?.buildings || [])]
+    .filter(entity => wanted.has(entity.id));
+  setSelection(entities);
+}
 
 function finishSelect(additive) {
   const world = getWorld();
@@ -282,7 +301,7 @@ function finishSelect(additive) {
   } else {
     const left = Math.min(start.x, end.x), right = Math.max(start.x, end.x);
     const top = Math.min(start.y, end.y), bottom = Math.max(start.y, end.y);
-    picked = world.units.filter(unit => unit.alive && unit.side === 0
+    picked = world.units.filter(unit => unit.alive && unit.side === controlledSide
       && unit.x >= left && unit.x <= right && unit.y >= top && unit.y <= bottom);
   }
   if (additive) picked = getSelection().concat(picked.filter(entity => !entity.selected));
@@ -292,7 +311,7 @@ function finishSelect(additive) {
 export function selectAll() {
   const world = getWorld();
   if (!world) return;
-  setSelection(world.units.filter(unit => unit.alive && unit.side === 0 && unit.type !== 'villager'));
+  setSelection(world.units.filter(unit => unit.alive && unit.side === controlledSide && unit.type !== 'villager'));
 }
 
 function issueOrder(screenX, screenY) {
@@ -303,12 +322,12 @@ function issueOrder(screenX, screenY) {
   const units = selected.filter(entity => entity.entityKind !== 'building');
   const workers = units.filter(unit => unit.type === 'villager');
   const selectedBuildings = selected.filter(entity => entity.entityKind === 'building'
-    && entity.side === 0);
+    && entity.side === controlledSide);
 
   const enemy = findEntityAt(world, point.x, point.y, 1);
   if (enemy && attackUnits(world, units, enemy)) return;
 
-  const ownEntity = findEntityAt(world, point.x, point.y, 0);
+  const ownEntity = findEntityAt(world, point.x, point.y, controlledSide);
   if (assignVillagersToConstruction(world, workers, ownEntity)) {
     world.flags.push({ x: ownEntity.x, y: ownEntity.y, life: 1.2, max: 1.2 });
     callbacks.onOrder?.('build');
@@ -408,6 +427,13 @@ function announceBuildingRally(world, selectedBuildings, point, rally) {
     'good',
   );
   callbacks.onOrder?.('rally');
+  callbacks.onPlayerCommand?.({
+    kind: 'rally',
+    side: selectedBuildings[0]?.side,
+    buildingIds: selectedBuildings.map(building => building.id),
+    x: point.x,
+    y: point.y,
+  });
 }
 
 function moveUnitsTo(world, units, x, y, formation) {
@@ -433,6 +459,14 @@ function moveUnitsTo(world, units, x, y, formation) {
     life: MOVE_FEEDBACK_LIFE, max: MOVE_FEEDBACK_LIFE,
   });
   callbacks.onOrder?.('move');
+  callbacks.onPlayerCommand?.({
+    kind: 'move',
+    side: units[0]?.side,
+    unitIds: units.map(unit => unit.id),
+    x,
+    y,
+    formation,
+  });
   return true;
 }
 
@@ -469,6 +503,12 @@ function attackUnits(world, units, target) {
     );
   }
   callbacks.onOrder?.('attack');
+  callbacks.onPlayerCommand?.({
+    kind: 'attack',
+    side: units[0]?.side,
+    unitIds: units.map(unit => unit.id),
+    targetId: target.id,
+  });
   return true;
 }
 
@@ -480,14 +520,16 @@ export function isOpenGroundMoveTarget(world, x, y) {
 }
 
 export function issueVillagerGroundMove(world, selected, x, y, formation = 'line') {
-  const units = selected.filter(entity => entity.alive && entity.side === 0
+  const side = selected.find(entity => entity?.alive && entity.entityKind !== 'building')?.side ?? controlledSide;
+  const units = selected.filter(entity => entity.alive && entity.side === side
     && entity.entityKind !== 'building');
   if (!units.some(unit => unit.type === 'villager') || !isOpenGroundMoveTarget(world, x, y)) return false;
   return moveUnitsTo(world, units, x, y, formation);
 }
 
 export function issuePrimaryUnitCommand(world, selected, x, y, formation = 'line') {
-  const units = selected.filter(entity => entity.alive && entity.side === 0
+  const side = selected.find(entity => entity?.alive && entity.entityKind !== 'building')?.side ?? controlledSide;
+  const units = selected.filter(entity => entity.alive && entity.side === side
     && entity.entityKind !== 'building');
   if (!world || units.length === 0) return false;
   const enemy = findEntityAt(world, x, y);
@@ -502,7 +544,7 @@ function hoverableWorkerTargetAt(screenX, screenY) {
   const workers = getSelection().filter(entity => entity.type === 'villager');
   if (!world || placement || workers.length === 0) return null;
   const point = screenToWorld(screenX, screenY);
-  const construction = findEntityAt(world, point.x, point.y, 0);
+  const construction = findEntityAt(world, point.x, point.y, controlledSide);
   if (construction?.entityKind === 'building' && !construction.complete) return construction;
   if (isRepairableBuilding(construction, workers[0].side)) return construction;
   const target = findResourceAt(world, point.x, point.y);
@@ -558,12 +600,12 @@ function updateResourceHover(screenX, screenY) {
   resourceHover = target;
   resourceHoverKind = attackTarget ? 'attack' : repair ? 'repair' : target ? 'work' : null;
   const selected = getSelection();
-  const hasMobileSelection = selected.some(entity => entity.alive && entity.side === 0
+  const hasMobileSelection = selected.some(entity => entity.alive && entity.side === controlledSide
     && entity.entityKind !== 'building');
   const point = !target && hasMobileSelection
     ? screenToWorld(screenX, screenY) : null;
   const enemy = point ? findEntityAt(getWorld(), point.x, point.y) : null;
-  const hostileEnemy = enemy && areHostileSides(getWorld(), 0, enemy.side) ? enemy : null;
+  const hostileEnemy = enemy && areHostileSides(getWorld(), controlledSide, enemy.side) ? enemy : null;
   movePreview = hostileEnemy
     ? { kind: 'attack', x: hostileEnemy.x, y: hostileEnemy.y, radius: hostileEnemy.radius }
     : point && isOpenGroundMoveTarget(getWorld(), point.x, point.y)
@@ -609,6 +651,12 @@ function gatherAt(screenX, screenY) {
     world.flags.push({ x: target.x, y: target.y, life: 1.2, max: 1.2 });
     callbacks.onToast?.(`${workers.length} villager${workers.length === 1 ? '' : 's'} continuing ${BUILDING_TYPES[target.type].label}.`, 'good');
     callbacks.onOrder?.('build');
+    callbacks.onPlayerCommand?.({
+      kind: 'assign-builders',
+      side: workers[0]?.side,
+      unitIds: workers.map(worker => worker.id),
+      targetId: target.id,
+    });
     callbacks.onSelection?.(getSelection());
     updateResourceHover(screenX, screenY);
     return true;
@@ -620,6 +668,12 @@ function gatherAt(screenX, screenY) {
     const label = BUILDING_TYPES[target.type].label;
     callbacks.onToast?.(`${workers.length} villager${workers.length === 1 ? '' : 's'} repairing ${label}.`, 'good');
     callbacks.onOrder?.('build');
+    callbacks.onPlayerCommand?.({
+      kind: 'repair',
+      side: workers[0]?.side,
+      unitIds: workers.map(worker => worker.id),
+      targetId: target.id,
+    });
     callbacks.onSelection?.(getSelection());
     updateResourceHover(screenX, screenY);
     return true;
@@ -634,14 +688,21 @@ function gatherAt(screenX, screenY) {
   const action = workplace ? `working at ${BUILDING_TYPES[target.type].label}` : `gathering ${label}`;
   callbacks.onToast?.(`${workers.length} villager${workers.length === 1 ? '' : 's'} ${action}.`, 'good');
   callbacks.onOrder?.('gather');
+  callbacks.onPlayerCommand?.({
+    kind: 'gather',
+    side: workers[0]?.side,
+    unitIds: workers.map(worker => worker.id),
+    targetId: target.id,
+  });
   callbacks.onSelection?.(getSelection());
   updateResourceHover(screenX, screenY);
   return true;
 }
 
 export function assignVillagersToConstruction(world, workers, target) {
+  const side = workers.find(worker => worker?.alive)?.side;
   return Boolean(world && target?.alive && target.entityKind === 'building' && !target.complete
-    && target.side === 0 && assignBuilders(world, workers, target));
+    && target.side === side && assignBuilders(world, workers, target));
 }
 
 export function assignVillagersToRepair(world, workers, target) {
@@ -776,6 +837,17 @@ function finishWallDrag(screenX, screenY) {
     return;
   }
   callbacks.onToast?.(result.message, 'good');
+  callbacks.onPlayerCommand?.({
+    kind: 'place-wall-run',
+    side: workers[0]?.side ?? controlledSide,
+    workerIds: workers.map(worker => worker.id),
+    startX: dragState.startX,
+    startY: dragState.startY,
+    endX: dragState.endX,
+    endY: dragState.endY,
+    orientation: placement.orientation,
+    pathPoints: dragState.points,
+  });
   cancelPlacement();
 }
 
@@ -806,6 +878,22 @@ function placeAt(screenX, screenY, keepPlacing) {
     return;
   }
   callbacks.onToast?.(result.message, 'good');
+  callbacks.onPlayerCommand?.({
+    kind: 'place-building',
+    side: workers[0]?.side ?? controlledSide,
+    workerIds: workers.map(worker => worker.id),
+    type: placement.type,
+    x: placement.x,
+    y: placement.y,
+    options: {
+      orientation: placement.orientation,
+      millId: placement.millId,
+      fieldSlot: placement.fieldSlot,
+      wallId: placement.wallId,
+      stairSide: placement.stairSide,
+      stairAlong: placement.stairAlong,
+    },
+  });
   if (!keepPlacing) cancelPlacement();
 }
 
