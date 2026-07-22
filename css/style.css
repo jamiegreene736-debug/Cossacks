@@ -130,8 +130,14 @@ button, select { font: inherit; }
 }
 #selection-card, #command-area, #objective-panel { padding: 13px 16px; min-width: 0; }
 #selection-card { border-right: 1px solid var(--line-soft); }
-#selection-card h2 { margin: 3px 0 4px; color: #e7ddbf; font-size: 19px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#sel-info { color: #c8bea0; font-size: 12.5px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#selection-card h2 {
+  margin: 3px 0 4px; color: #e7ddbf; font-size: 19px; line-height: 1.08;
+  white-space: normal; overflow-wrap: anywhere;
+}
+#sel-info {
+  color: #c8bea0; font-size: 12.5px; line-height: 1.3;
+  white-space: normal; overflow-wrap: anywhere;
+}
 #sel-detail { margin-top: 5px; color: #8f886f; font: 11px/1.25 Arial, sans-serif; }
 #formation-buttons { display: flex; gap: 5px; margin-top: 9px; }
 #formation-buttons button {

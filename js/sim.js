@@ -6,8 +6,10 @@
 //  - Target acquisition is staggered (each unit re-scans every ~0.5s)
 //  - Collision separation only runs for units that moved this tick
 
-import { WORLD, NATIONS, UNIT_TYPES, BUILDING_TYPES, normalizeCpuDifficulty,
-         PIKE_VS_CAV, CAV_CHARGE_BONUS, SQUARE_VS_CAV } from './config.js';
+import {
+  WORLD, NATIONS, UNIT_TYPES, BUILDING_TYPES, defaultStartPositionForSlot,
+  normalizeCpuDifficulty, PIKE_VS_CAV, CAV_CHARGE_BONUS, SQUARE_VS_CAV,
+} from './config.js';
 import { normalizeWorldCountry } from './countries.js';
 import { sfx } from './audio.js';
 import { initializeEconomy, stepEconomy, onUnitKilled, onBuildingDestroyed } from './economy.js';
@@ -152,25 +154,6 @@ function normalizeAllyNations(opts, playerNation) {
   return allies.length ? [...new Set(allies)] : ['hogwarts'];
 }
 
-function startPositionForSlot(team, slot) {
-  const playerStarts = [
-    { x: 660, y: 0.36 },
-    { x: 660, y: 0.66 },
-    { x: 1500, y: 0.82 },
-  ];
-  const rivalStarts = [
-    { x: WORLD.w - 660, y: 0.34 },
-    { x: WORLD.w - 660, y: 0.66 },
-    { x: WORLD.w - 1500, y: 0.82 },
-  ];
-  const starts = team === RIVAL_TEAM ? rivalStarts : playerStarts;
-  const start = starts[slot] || {
-    x: team === RIVAL_TEAM ? WORLD.w - 660 : 660,
-    y: Math.min(0.86, 0.22 + slot * 0.16),
-  };
-  return { x: start.x, y: WORLD.h * start.y };
-}
-
 function legacyTeamForSideIndex(sideIndex) {
   return sideIndex % 2 === 0 ? 0 : RIVAL_TEAM;
 }
@@ -184,23 +167,23 @@ export function createWorld(opts) {
   const defaultSides = [
     {
       nation: playerNation, team: 0, controller: 'human',
-      label: 'Your town', startPosition: startPositionForSlot(0, 0),
+      label: 'Your town', startPosition: defaultStartPositionForSlot(0, 0),
     },
     {
       nation: enemyNation, team: RIVAL_TEAM, controller: 'ai',
-      label: 'Rival town', startPosition: startPositionForSlot(RIVAL_TEAM, 0),
+      label: 'Rival town', startPosition: defaultStartPositionForSlot(RIVAL_TEAM, 0),
     },
     {
       nation: allyNations[0], team: 0, controller: 'ai',
-      label: 'Allied town', startPosition: startPositionForSlot(0, 1),
+      label: 'Allied town', startPosition: defaultStartPositionForSlot(0, 1),
     },
     {
       nation: enemyAllyNation, team: RIVAL_TEAM, controller: 'ai',
-      label: 'Rival ally', startPosition: startPositionForSlot(RIVAL_TEAM, 1),
+      label: 'Rival ally', startPosition: defaultStartPositionForSlot(RIVAL_TEAM, 1),
     },
     ...extraAllies.map((nation, index) => ({
       nation, team: 0, controller: 'ai',
-      label: 'Allied town', startPosition: startPositionForSlot(0, index + 2),
+      label: 'Allied town', startPosition: defaultStartPositionForSlot(0, index + 2),
     })),
   ];
   const sides = Array.isArray(opts?.sides) && opts.sides.length >= 2

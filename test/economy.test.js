@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { createWorld, damage, spawnUnit, step } from '../js/sim.js';
 import { Commander } from '../js/ai.js';
-import { BUILDING_TYPES } from '../js/config.js';
+import { BUILDING_TYPES, WORLD } from '../js/config.js';
 import { OPENING_PEACE_SECONDS } from '../js/truce.js';
 import {
   assignBuilders, assignGatherers, AUTO_BUILD_SEARCH_RADIUS,
@@ -26,11 +26,19 @@ function advance(world, seconds) {
 test('an allied England start has Hogwarts and StarWars beside the player', () => {
   const world = makeWorld();
   const townCenters = world.buildings.filter(building => building.type === 'town_center');
+  const townCenterBySide = side => townCenters.find(townCenter => townCenter.side === side);
   assert.equal(world.mode, 'allied');
+  assert.deepEqual(WORLD, { w: 6600, h: 4200 });
   assert.equal(world.units.length, 0);
   assert.equal(townCenters.length, 5);
   assert.deepEqual(townCenters.map(building => building.side), [0, 1, 2, 3, 4]);
   assert.deepEqual(world.sides.map(side => side.team), [0, 1, 0, 1, 0]);
+  for (const [a, b] of [[0, 2], [0, 4], [2, 4], [1, 3]]) {
+    assert.ok(
+      Math.hypot(townCenterBySide(a).x - townCenterBySide(b).x, townCenterBySide(a).y - townCenterBySide(b).y) > 1650,
+      `sides ${a} and ${b} should have distinct town starts`,
+    );
+  }
   assert.deepEqual(townCenters.map(townCenter => townCenter.queue[0].type), [
     'villager', 'villager', 'wizard_worker', 'circus_worker', 'starwars_mechanic',
   ]);

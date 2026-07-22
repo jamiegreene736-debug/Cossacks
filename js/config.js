@@ -1,11 +1,52 @@
 // Static game data for the 18th-century settlement skirmish.
 
-export const WORLD = { w: 5200, h: 3200 };
+export const WORLD = { w: 6600, h: 4200 };
 export const SIM_STEP = 1 / 30;
 export const MAX_POPULATION = 1200;
 
 export const RESOURCE_KEYS = ['food', 'wood', 'gold', 'stone'];
 export const STARTING_RESOURCES = { food: 240, wood: 320, gold: 120, stone: 120 };
+
+const PLAYER_TEAM_ID = 0;
+const RIVAL_TEAM_ID = 1;
+
+export const TEAM_START_SLOTS = Object.freeze({
+  player: Object.freeze([
+    Object.freeze({ x: 820, y: 0.50 }),
+    Object.freeze({ x: 2140, y: 0.22 }),
+    Object.freeze({ x: 2140, y: 0.78 }),
+  ]),
+  rival: Object.freeze([
+    Object.freeze({ x: WORLD.w - 820, y: 0.50 }),
+    Object.freeze({ x: WORLD.w - 2140, y: 0.78 }),
+    Object.freeze({ x: WORLD.w - 2140, y: 0.22 }),
+  ]),
+});
+
+export function defaultStartPositionForSlot(team, slot) {
+  const rival = team === RIVAL_TEAM_ID;
+  const starts = rival ? TEAM_START_SLOTS.rival : TEAM_START_SLOTS.player;
+  const start = starts[slot] || {
+    x: rival ? WORLD.w - 820 : 820,
+    y: Math.min(0.86, 0.20 + slot * 0.16),
+  };
+  return { x: start.x, y: WORLD.h * start.y };
+}
+
+function legacyTeamForSideIndex(sideIndex) {
+  return sideIndex % 2 === 0 ? PLAYER_TEAM_ID : RIVAL_TEAM_ID;
+}
+
+export function defaultStartPositionForSide(sides, sideIndex) {
+  const side = sides?.[sideIndex];
+  const team = Number.isInteger(side?.team) ? side.team : legacyTeamForSideIndex(sideIndex);
+  const slot = (sides || []).slice(0, sideIndex).filter((previousSide, previousIndex) => {
+    const previousTeam = Number.isInteger(previousSide?.team)
+      ? previousSide.team : legacyTeamForSideIndex(previousIndex);
+    return previousTeam === team;
+  }).length;
+  return defaultStartPositionForSlot(team, slot);
+}
 
 // Difficulty changes the rival commander's decisions, never combat stats or
 // starting resources. Hard intentionally preserves the original single-mode

@@ -390,7 +390,7 @@ function cBuildGrade(vw, vh) {
   // field recede into lit dust. Distance haze has to LIFT. Because the camera
   // is top-down and north is up, "screen top" is "further away" — so a single
   // vertical additive gradient is simultaneously the atmosphere and the depth
-  // cue the 5200x3200 field currently has none of.
+  // cue the 6600x4200 field currently has none of.
   {
     const [c, g] = cCanvas(w, h, false);
     // Amplitudes are baked at FULL strength, because the runtime multiplier is
@@ -1645,7 +1645,7 @@ function drawLightingPass(ctx, viewW, viewH, devicePR) {
   // shape it, which is the correct physical order (scattered light in the air
   // between the viewer and the board, then the board's own falloff).
   // More haze when pulled back = aerial perspective; it is what makes the far
-  // corner of a 5200x3200 map recede instead of merely being smaller.
+  // corner of a 6600x4200 map recede instead of merely being smaller.
   // The ceiling here MUST be 1. globalAlpha outside [0,1] is not clamped and
   // does not throw — the assignment is discarded and the context keeps its
   // previous value, so an out-of-range multiplier silently produces whatever
@@ -1736,7 +1736,7 @@ function drawDragRect(ctx, dragRect) {
  * buildTerrain() has produced terrainCanvas. Replaces the old `mmTerrain`
  * squashed-thumbnail approach entirely.
  *
- * A photographic downscale of a 5200x3200 painted board turns to mud at
+ * A photographic downscale of a 6600x4200 painted board turns to mud at
  * 244x150. So instead we posterize it into a five-tone tactical map palette
  * keyed off luminance, with earth and water pulled out by hue. The result is
  * a map that says "wood / field / plough / road / stream" at a glance and is
@@ -1753,7 +1753,7 @@ function buildMinimapBase(sourceCanvas) {
   // --- scratch: downscale the world board ---------------------------------
   // `sourceCanvas` defaults to render.js's module-level terrainCanvas, but is
   // accepted explicitly so this works whatever the terrain subsystem produces:
-  // the current half-res 2600x1600 sheet, a 0.25-res fallback composite, or a
+  // the current tiled terrain sheet, a 0.25-res fallback composite, or a
   // purpose-built minimap sheet. Only the ASPECT has to match the world; the
   // resolution is irrelevant because we are posterizing, not photographing.
   const src = sourceCanvas || (typeof terrainCanvas !== 'undefined' ? terrainCanvas : null);

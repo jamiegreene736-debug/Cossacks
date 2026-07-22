@@ -21,7 +21,7 @@ import {
   readThreeFingerViewGesture, readTrackpadViewGesture,
 } from './view-gesture.js';
 import { clampCameraZoom } from './camera.js';
-import { areHostileSides } from './teams.js';
+import { areHostileSides, isPlayerTeam } from './teams.js';
 
 let getWorld = () => null;
 let callbacks = {};
@@ -228,11 +228,25 @@ function minimapJump(event) {
   clampCamera();
 }
 
+export function canPlayerSelectEntity(world, entity) {
+  if (!world || !entity?.alive) return false;
+  if (entity.side === 0) return true;
+  return entity.entityKind === 'building' && isPlayerTeam(world, entity.side);
+}
+
+export function findPlayerSelectableEntityAt(world, x, y) {
+  const entity = findEntityAt(world, x, y);
+  return canPlayerSelectEntity(world, entity) ? entity : null;
+}
+
 function setSelection(entities) {
+  const world = getWorld();
   for (const entity of selection) entity.selected = false;
-  selection = entities.filter(entity => entity.alive && entity.side === 0);
+  selection = entities.filter(entity => canPlayerSelectEntity(world, entity));
   for (const entity of selection) entity.selected = true;
-  primaryTownCenterRallyArmed = selection.length === 1 && selection[0].type === 'town_center';
+  primaryTownCenterRallyArmed = selection.length === 1
+    && selection[0].side === 0
+    && selection[0].type === 'town_center';
   callbacks.onSelection?.(selection);
   updateResourceHover(mouseX, mouseY);
 }
@@ -255,7 +269,7 @@ function finishSelect(additive) {
 
   if (dx < 6 && dy < 6) {
     const point = screenToWorld(drag.x1, drag.y1);
-    const entity = findEntityAt(world, point.x, point.y, 0);
+    const entity = findPlayerSelectableEntityAt(world, point.x, point.y);
     if (entity) {
       picked = [entity];
     } else if (!additive && issuePrimaryUnitCommand(
@@ -288,7 +302,8 @@ function issueOrder(screenX, screenY) {
   const point = screenToWorld(screenX, screenY);
   const units = selected.filter(entity => entity.entityKind !== 'building');
   const workers = units.filter(unit => unit.type === 'villager');
-  const selectedBuildings = selected.filter(entity => entity.entityKind === 'building');
+  const selectedBuildings = selected.filter(entity => entity.entityKind === 'building'
+    && entity.side === 0);
 
   const enemy = findEntityAt(world, point.x, point.y, 1);
   if (enemy && attackUnits(world, units, enemy)) return;

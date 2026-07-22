@@ -4,7 +4,8 @@
 
 import { Commander } from './ai.js';
 import {
-  NATIONS, DEFAULT_CPU_DIFFICULTY, normalizeCpuDifficulty,
+  NATIONS, DEFAULT_CPU_DIFFICULTY, defaultStartPositionForSide,
+  normalizeCpuDifficulty,
 } from './config.js';
 import {
   repairEconomyLedgers, repairFieldAttachments, reserveEntityIds,
@@ -129,8 +130,8 @@ export function createGameSnapshot(world, commanderOrCommanders, camera, savedAt
     commander: serializeCommander(commanders[0]),
     commanders: commanders.map(serializeCommander),
     camera: {
-      x: Number(camera?.x) || 660,
-      y: Number(camera?.y) || 1600,
+      x: Number(camera?.x) || defaultStartPositionForSide(world.sides, 0).x,
+      y: Number(camera?.y) || defaultStartPositionForSide(world.sides, 0).y,
       zoom: Number(camera?.zoom) || 0.9,
       rotation: Number(camera?.rotation) || 0,
     },
@@ -153,22 +154,6 @@ function legacyTeamForSideIndex(sideIndex) {
   return sideIndex % 2 === 0 ? PLAYER_TEAM : RIVAL_TEAM;
 }
 
-function fallbackStartPosition(sideIndex) {
-  const rival = legacyTeamForSideIndex(sideIndex) === RIVAL_TEAM;
-  const slot = Math.floor(sideIndex / 2);
-  const playerStarts = [{ x: 660, y: 0.36 }, { x: 660, y: 0.66 }, { x: 1500, y: 0.82 }];
-  const rivalStarts = [
-    { x: 5200 - 660, y: 0.34 },
-    { x: 5200 - 660, y: 0.66 },
-    { x: 5200 - 1500, y: 0.82 },
-  ];
-  const start = (rival ? rivalStarts : playerStarts)[slot] || {
-    x: rival ? 5200 - 660 : 660,
-    y: Math.min(0.86, 0.22 + slot * 0.16),
-  };
-  return { x: start.x, y: 3200 * start.y };
-}
-
 function repairSideTeams(world) {
   for (let sideIndex = 0; sideIndex < world.sides.length; sideIndex++) {
     const side = world.sides[sideIndex];
@@ -176,7 +161,7 @@ function repairSideTeams(world) {
       side.team = legacyTeamForSideIndex(sideIndex);
     }
     side.controller = sideIndex === 0 ? 'human' : side.controller || 'ai';
-    if (!side.startPosition) side.startPosition = fallbackStartPosition(sideIndex);
+    if (!side.startPosition) side.startPosition = defaultStartPositionForSide(world.sides, sideIndex);
   }
   for (const unit of world.units || []) {
     if (!Number.isInteger(unit.team)) unit.team = world.sides[unit.side]?.team ?? null;

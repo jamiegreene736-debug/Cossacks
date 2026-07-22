@@ -2,10 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createWorld, spawnUnit, step } from '../js/sim.js';
+import { WORLD } from '../js/config.js';
 import { OPENING_PEACE_SECONDS } from '../js/truce.js';
 import {
-  assignVillagersToConstruction, assignVillagersToRepair, getVillagerAttackTargetAt,
-  getVillagerRepairTargetAt, isOpenGroundMoveTarget,
+  assignVillagersToConstruction, assignVillagersToRepair, canPlayerSelectEntity,
+  findPlayerSelectableEntityAt, getVillagerAttackTargetAt, getVillagerRepairTargetAt,
+  isOpenGroundMoveTarget,
   isSecondaryPointerEvent, issuePrimaryUnitCommand, issueVillagerAttack,
   issueVillagerGroundMove, setBuildingRallyAt, setTownCenterPrimaryRallyAt,
 } from '../js/input.js';
@@ -135,8 +137,8 @@ function makeWorld() {
 }
 
 function findOpenPoint(world) {
-  for (let y = 240; y <= 2960; y += 160) {
-    for (let x = 240; x <= 4960; x += 160) {
+  for (let y = 240; y <= WORLD.h - 240; y += 160) {
+    for (let x = 240; x <= WORLD.w - 240; x += 160) {
       if (isOpenGroundMoveTarget(world, x, y)) return { x, y };
     }
   }
@@ -159,6 +161,26 @@ test('Mac secondary clicks accept both trackpad button 2 and Control-click', () 
   assert.equal(isSecondaryPointerEvent(mouseEvent('mousedown', 0, { ctrlKey: true })), true);
   assert.equal(isSecondaryPointerEvent(mouseEvent('mousedown', 0)), false);
   assert.equal(isSecondaryPointerEvent(mouseEvent('mousedown', 0, { metaKey: true })), false);
+});
+
+test('allied buildings are selectable inspection targets without granting allied unit control', () => {
+  const world = createWorld({
+    playerNation: 'england',
+    enemyNation: 'ottoman',
+    allyNations: ['hogwarts', 'starwars'],
+    enemyAllyNation: 'nightmare_circus',
+  });
+  const playerTownCenter = world.buildings.find(building => building.side === 0 && building.type === 'town_center');
+  const hogwartsCastle = world.buildings.find(building => building.side === 2 && building.type === 'castle');
+  const enemyTownCenter = world.buildings.find(building => building.side === 1 && building.type === 'town_center');
+  const alliedWorker = spawnUnit(world, 2, 'wizard_worker', hogwartsCastle.x + 180, hogwartsCastle.y);
+
+  assert.equal(canPlayerSelectEntity(world, playerTownCenter), true);
+  assert.equal(canPlayerSelectEntity(world, hogwartsCastle), true);
+  assert.equal(canPlayerSelectEntity(world, alliedWorker), false);
+  assert.equal(canPlayerSelectEntity(world, enemyTownCenter), false);
+  assert.equal(findPlayerSelectableEntityAt(world, hogwartsCastle.x, hogwartsCastle.y), hogwartsCastle);
+  assert.equal(findPlayerSelectableEntityAt(world, enemyTownCenter.x, enemyTownCenter.y), null);
 });
 
 test('production buildings retain the clicked resource or friendly building as their rally target', () => {
@@ -190,7 +212,8 @@ test('a primary click gives a selected Town Center a resource or worksite rally'
   const world = makeWorld();
   const townCenter = world.buildings.find(building => building.side === 0);
   const berries = world.resources.find(resource => resource.resourceType === 'food');
-  const unfinishedWall = createBuilding(0, 'wall', 1300, 1780, false, { orientation: 'horizontal' });
+  const wallSite = findOpenPoint(world);
+  const unfinishedWall = createBuilding(0, 'wall', wallSite.x, wallSite.y, false, { orientation: 'horizontal' });
   world.buildings.push(unfinishedWall);
 
   const foodRally = setTownCenterPrimaryRallyAt(

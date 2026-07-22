@@ -362,10 +362,12 @@ function renderSelection(world, selection) {
   if (building) {
     const def = BUILDING_TYPES[building.type];
     const economy = getBuildingEconomyStats(world, building);
-    title.textContent = def.label;
+    const ownBuilding = building.side === 0;
+    const ownerNation = NATIONS[world.sides[building.side]?.nation]?.name || 'Allied';
+    title.textContent = ownBuilding ? def.label : `${ownerNation} ${def.label}`;
     info.textContent = building.complete ? def.description : `Under construction — ${Math.floor(building.progress * 100)}%`;
     const trainable = getTrainableUnitTypes(world.sides[building.side].nation, building.type);
-    const rally = building.complete && trainable.length ? rallyDescription(world, building) : '';
+    const rally = ownBuilding && building.complete && trainable.length ? rallyDescription(world, building) : '';
     const status = economy
       ? `${Math.ceil(building.hp).toLocaleString()} / ${building.maxHp.toLocaleString()} integrity · ${economy.workers} assigned · ${formatHourly(economy.projectedPerHour)} projected`
       : `${Math.ceil(building.hp).toLocaleString()} / ${building.maxHp.toLocaleString()} integrity`;
@@ -378,6 +380,24 @@ function renderSelection(world, selection) {
         : 'Production')
       : 'Construction';
     if (!building.complete) return;
+    if (!ownBuilding) {
+      detail.textContent = `Allied ${ownerNation} structure · ${status}`;
+      context.textContent = economy ? 'Allied building output per hour' : 'Allied building info';
+      if (building.type === 'tower') {
+        info.textContent = 'Garrisoned defensive cannon — measured fire with no splash damage.';
+        detail.textContent = `Allied ${ownerNation} structure · ${status} · ${def.attack} damage · ${def.range} attack radius · ${def.reload.toFixed(1)}s reload`;
+        context.textContent = 'Allied artillery coverage';
+      }
+      if (economy) {
+        for (const row of economy.resources) {
+          addEconomyMetric(grid, row, {
+            bonusPerHour: row.bonusPerHour,
+            remaining: building.resourceType === row.resourceType ? economy.remaining : null,
+          });
+        }
+      }
+      return;
+    }
     if (building.type === 'tower') {
       info.textContent = 'Garrisoned defensive cannon — measured fire with no splash damage.';
       detail.textContent = `${status} · ${def.attack} damage · ${def.range} attack radius · ${def.reload.toFixed(1)}s reload`;

@@ -71,7 +71,7 @@ function setEffectsView(w, h) { cw = w; ch = h; }
 //
 //  The two persistent fields are now blitted through fxBlitField(), which uses
 //  the 9-argument source-rect form clipped to the camera frustum. The old whole-
-//  world blit asked Chrome to sample a 5200x3200 destination every frame and
+//  world blit asked Chrome to sample a 6600x4200 destination every frame and
 //  threw away ~85% of it at typical zoom.
 //
 // =============================================================================
@@ -1251,7 +1251,7 @@ function stampSpill(x, y, r) {
  *  the rising pass deliberately offsets and oversizes it so the high smoke
  *  parallaxes against the ground-hugging copy.
  *
- *  Blitting the whole 5200x3200 destination and letting the canvas clip is
+ *  Blitting the whole 6600x4200 destination and letting the canvas clip is
  *  correct but wasteful: Chrome still sets up the full sampling transform, and
  *  at zoom 0.9 on a 1920x1080 viewport the visible world rect is ~2133x1200,
  *  i.e. 15% of the field. Clipping the SOURCE as well means the upscale filter
