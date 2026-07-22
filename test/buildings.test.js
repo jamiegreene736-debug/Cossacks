@@ -5,7 +5,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { BUILDING_TYPES } from '../js/config.js';
 import {
   bdConstructionArtFrame, getBuildingPresentation, getFortificationConstructionStage,
-  getFortificationRenderProfile,
+  getFortificationMasonryDetailProfile, getFortificationRenderProfile,
   usesFixedFortificationFrameArt,
 } from '../js/gfx/buildings.js';
 import { MILITARY_ART_SPECS } from '../js/gfx/art-assets.js';
@@ -130,6 +130,24 @@ test('connected wall frames expose only the two ends of the complete run', () =>
     useProductionFrame: false,
   });
   assert.equal(getFortificationRenderProfile(left, { buildings: [left] }).useProductionFrame, true);
+});
+
+test('detailed wall masonry keeps curved, gate and stair attachment contracts explicit', () => {
+  const openRun = getFortificationMasonryDetailProfile('wall', [false, false]);
+  const connectedRun = getFortificationMasonryDetailProfile('wall', [true, false]);
+  const gate = getFortificationMasonryDetailProfile('gate');
+
+  assert.equal(openRun.supportsCurvedRuns, true);
+  assert.equal(openRun.supportsGateAttachment, true);
+  assert.equal(openRun.supportsStairAttachment, true);
+  assert.deepEqual(openRun.exposedEnds, [true, true]);
+  assert.deepEqual(connectedRun.exposedEnds, [false, true]);
+  assert.ok(openRun.reliefBlocks >= 12);
+  assert.equal(openRun.hasBatteredPlinth, true);
+
+  assert.equal(gate.supportsGateAttachment, true);
+  assert.equal(gate.supportsStairAttachment, false);
+  assert.ok(gate.faceCourses > openRun.faceCourses);
 });
 
 test('the closed gate uses a substantial transparent production render', async () => {
