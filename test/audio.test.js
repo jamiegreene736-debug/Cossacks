@@ -63,12 +63,25 @@ test('campaign track order can weave researched ally palettes into the score', (
 });
 
 test('command and projectile profiles use physical layers instead of one beep', () => {
-  assert.deepEqual(Object.keys(commandSoundProfile('gather')).sort(), ['body', 'low', 'snap', 'volume']);
-  assert.ok(commandSoundProfile('attack').low < commandSoundProfile('select').low);
+  assert.deepEqual(Object.keys(commandSoundProfile('gather')).sort(), ['body', 'snap', 'thud', 'volume']);
+  assert.ok(commandSoundProfile('attack').thud < commandSoundProfile('select').thud);
   assert.equal(specialProjectileProfile('plasma').twang, true);
   assert.equal(specialProjectileProfile('arcane').chime, true);
   assert.equal(specialProjectileProfile('ion').heavy, true);
   assert.ok(specialProjectileProfile('spectral').whisper);
+});
+
+test('frequent feedback surfaces stay free of pitched beep oscillators', () => {
+  for (const method of [
+    'command', 'unitReady', 'buildingPlaced', 'buildingComplete',
+    'work', 'updateMovementSounds',
+  ]) {
+    assert.equal(
+      Soundscape.prototype[method].toString().includes('this.tone('),
+      false,
+      `${method} should use noise/transients instead of tonal beeps`,
+    );
+  }
 });
 
 test('pause music can duck smoothly or become fully silent', () => {
