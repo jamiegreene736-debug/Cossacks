@@ -101,14 +101,14 @@ export function workerSoundKind(worker, target) {
 
 export function commandSoundProfile(kind = 'move') {
   return {
-    move: { body: 760, snap: 2100, low: 118, volume: 0.028 },
-    select: { body: 980, snap: 2600, low: 154, volume: 0.022 },
-    gather: { body: 640, snap: 1550, low: 132, volume: 0.03 },
-    build: { body: 520, snap: 1320, low: 102, volume: 0.034 },
-    rally: { body: 880, snap: 2350, low: 146, volume: 0.027 },
-    train: { body: 720, snap: 1900, low: 128, volume: 0.026 },
-    attack: { body: 420, snap: 1450, low: 82, volume: 0.041 },
-  }[kind] || { body: 760, snap: 2100, low: 118, volume: 0.028 };
+    move: { body: 760, snap: 2100, thud: 180, volume: 0.028 },
+    select: { body: 980, snap: 2600, thud: 220, volume: 0.022 },
+    gather: { body: 640, snap: 1550, thud: 150, volume: 0.03 },
+    build: { body: 520, snap: 1320, thud: 120, volume: 0.034 },
+    rally: { body: 880, snap: 2350, thud: 180, volume: 0.027 },
+    train: { body: 720, snap: 1900, thud: 150, volume: 0.026 },
+    attack: { body: 420, snap: 1450, thud: 95, volume: 0.041 },
+  }[kind] || { body: 760, snap: 2100, thud: 180, volume: 0.028 };
 }
 
 export function specialProjectileProfile(kind) {
@@ -749,18 +749,17 @@ export class Soundscape {
     const pan = this.spatialPan(x);
     const level = this.spatialLevel(x);
     if (kind === 'wood') {
-      this.noiseBurst(time, 0.045, { filterType: 'lowpass', filter: 620, q: 0.75, volume: 0.12 * level, pan, reverb: 0.07 });
-      this.noiseBurst(time + 0.018, 0.055, { filter: 1850, q: 1.2, volume: 0.055 * level, pan, reverb: 0.06 });
-      this.tone(108, time, 0.13, { type: 'triangle', endFrequency: 68, volume: 0.095 * level, pan, reverb: 0.08 });
+      this.noiseBurst(time, 0.055, { filterType: 'lowpass', filter: 540, q: 0.55, volume: 0.14 * level, pan, reverb: 0.06 });
+      this.noiseBurst(time + 0.018, 0.06, { filter: 1700, q: 0.85, volume: 0.058 * level, pan, reverb: 0.05 });
+      this.noiseBurst(time + 0.052, 0.045, { filter: 950, q: 0.72, volume: 0.046 * level, pan, reverb: 0.04 });
     } else if (kind === 'stone' || kind === 'gold') {
-      const ring = kind === 'gold' ? 1480 : 1040;
-      this.noiseBurst(time, 0.045, { filter: 2200, q: 1.4, volume: 0.075 * level, pan, reverb: 0.13 });
-      this.tone(ring, time, kind === 'gold' ? 0.25 : 0.16, { type: 'triangle', endFrequency: ring * 0.72, volume: 0.055 * level, pan, reverb: 0.24 });
-      this.tone(ring * 1.42, time, 0.13, { type: 'sine', volume: 0.024 * level, pan, reverb: 0.2 });
+      this.noiseBurst(time, 0.052, { filter: kind === 'gold' ? 1900 : 1450, q: 1.05, volume: 0.09 * level, pan, reverb: 0.12 });
+      this.noiseBurst(time + 0.034, 0.08, { filter: 680, q: 0.62, volume: 0.052 * level, pan, reverb: 0.1 });
+      this.noiseBurst(time + 0.08, 0.035, { filter: 2600, q: 1.25, volume: 0.028 * level, pan, reverb: 0.08 });
     } else if (kind === 'build') {
       this.noiseBurst(time, 0.04, { filter: 980, q: 0.85, volume: 0.085 * level, pan, reverb: 0.08 });
       this.noiseBurst(time + 0.026, 0.055, { filter: 2100, q: 1.0, volume: 0.04 * level, pan, reverb: 0.08 });
-      this.tone(164, time, 0.11, { type: 'triangle', endFrequency: 96, volume: 0.072 * level, pan, reverb: 0.1 });
+      this.noiseBurst(time + 0.054, 0.055, { filterType: 'lowpass', filter: 360, q: 0.5, volume: 0.062 * level, pan, reverb: 0.08 });
     } else {
       this.noiseBurst(time, 0.18, { filter: 2100, q: 0.35, volume: 0.05 * level, pan, reverb: 0.04 });
       this.noiseBurst(time + 0.07, 0.12, { filter: 3200, q: 0.4, volume: 0.03 * level, pan, reverb: 0.03 });
@@ -836,7 +835,7 @@ export class Soundscape {
     const time = this.ctx.currentTime;
     const pan = this.spatialPan(x);
     this.noiseBurst(time, 0.12, { filterType: 'lowpass', filter: 680, volume: 0.13, pan, reverb: 0.08 });
-    this.tone(92, time, 0.16, { endFrequency: 58, volume: 0.09, pan, reverb: 0.08 });
+    this.noiseBurst(time + 0.045, 0.08, { filterType: 'lowpass', filter: 260, volume: 0.075, pan, reverb: 0.06 });
   }
 
   buildingComplete(_type, x, nation = 'england') {
@@ -847,16 +846,16 @@ export class Soundscape {
     this.work('build', x);
     if (nation === 'ottoman') {
       this.noiseBurst(time + 0.08, 0.09, { filterType: 'lowpass', filter: 340, volume: 0.07 * level, pan, reverb: 0.26 });
-      this.tone(392, time + 0.09, 0.32, { type: 'square', filter: 1450, volume: 0.027 * level, pan, reverb: 0.42 });
+      this.noiseBurst(time + 0.13, 0.08, { filter: 1250, q: 0.7, volume: 0.035 * level, pan, reverb: 0.24 });
     } else if (nation === 'hogwarts') {
-      this.tone(784, time + 0.06, 0.42, { type: 'sine', volume: 0.024 * level, pan, reverb: 0.7 });
-      this.tone(1175, time + 0.15, 0.5, { type: 'triangle', volume: 0.018 * level, pan, reverb: 0.75 });
+      this.noiseBurst(time + 0.06, 0.18, { filter: 4200, q: 0.55, volume: 0.025 * level, pan, reverb: 0.62 });
+      this.noiseBurst(time + 0.16, 0.2, { filter: 2600, q: 0.42, volume: 0.018 * level, pan, reverb: 0.66 });
     } else if (nation === 'starwars') {
-      this.tone(740, time + 0.06, 0.18, { type: 'sawtooth', endFrequency: 210, filter: 1800, volume: 0.035 * level, pan, reverb: 0.28 });
+      this.noiseBurst(time + 0.06, 0.12, { filter: 1750, q: 1.25, volume: 0.039 * level, pan, reverb: 0.24 });
       this.noiseBurst(time + 0.1, 0.08, { filter: 3600, q: 1.7, volume: 0.036 * level, pan, reverb: 0.18 });
     } else {
       this.noiseBurst(time + 0.08, 0.08, { filterType: 'lowpass', filter: 420, volume: 0.055 * level, pan, reverb: 0.22 });
-      this.tone(784, time + 0.1, 0.12, { type: 'sine', filter: 3200, volume: 0.015 * level, pan, reverb: 0.3 });
+      this.noiseBurst(time + 0.13, 0.055, { filter: 1850, q: 0.8, volume: 0.022 * level, pan, reverb: 0.18 });
     }
   }
 
@@ -893,9 +892,9 @@ export class Soundscape {
     this.noiseBurst(time, 0.045, { filterType: 'lowpass', filter: profile.body, volume: profile.volume, reverb: 0.045 });
     this.noiseBurst(time + 0.012, 0.026, { filter: profile.snap, q: 0.9, volume: profile.volume * 0.58, reverb: 0.055 });
     if (kind === 'attack' || kind === 'build' || kind === 'gather') {
-      this.tone(profile.low, time, 0.09, {
-        type: 'triangle', endFrequency: profile.low * 0.58,
-        volume: profile.volume * 0.55, reverb: 0.07,
+      this.noiseBurst(time + 0.028, 0.055, {
+        filterType: 'lowpass', filter: profile.thud, q: 0.5,
+        volume: profile.volume * 0.72, reverb: 0.05,
       });
     }
   }
@@ -908,17 +907,17 @@ export class Soundscape {
     this.noiseBurst(time, 0.07, { filterType: 'lowpass', filter: 720, volume: 0.035 * level, pan, reverb: 0.08 });
     if (nation === 'ottoman') {
       this.noiseBurst(time + 0.05, 0.08, { filterType: 'lowpass', filter: 300, volume: 0.05 * level, pan, reverb: 0.2 });
-      this.tone(523, time + 0.055, 0.19, { type: 'square', filter: 1700, volume: 0.018 * level, pan, reverb: 0.34 });
+      this.noiseBurst(time + 0.09, 0.07, { filter: 1200, q: 0.75, volume: 0.026 * level, pan, reverb: 0.24 });
     } else if (nation === 'hogwarts') {
-      this.tone(988, time + 0.025, 0.36, { type: 'sine', volume: 0.02 * level, pan, reverb: 0.75 });
-      this.tone(1319, time + 0.12, 0.4, { type: 'triangle', volume: 0.014 * level, pan, reverb: 0.8 });
+      this.noiseBurst(time + 0.025, 0.15, { filter: 3900, q: 0.5, volume: 0.024 * level, pan, reverb: 0.62 });
+      this.noiseBurst(time + 0.12, 0.16, { filter: 2600, q: 0.42, volume: 0.018 * level, pan, reverb: 0.64 });
     } else if (nation === 'starwars') {
-      this.tone(1040, time + 0.025, 0.16, { type: 'sawtooth', endFrequency: 260, filter: 2500, volume: 0.032 * level, pan, reverb: 0.22 });
+      this.noiseBurst(time + 0.025, 0.08, { filter: 1750, q: 1.3, volume: 0.034 * level, pan, reverb: 0.18 });
       this.noiseBurst(time + 0.05, 0.045, { filter: 4200, q: 1.8, volume: 0.025 * level, pan, reverb: 0.14 });
     } else {
       const military = !unitType.includes('villager') && unitType !== 'wizard_worker' && unitType !== 'starwars_mechanic';
       this.noiseBurst(time + 0.05, 0.08, { filter: military ? 1220 : 940, q: 0.7, volume: 0.036 * level, pan, reverb: 0.12 });
-      this.tone(military ? 330 : 247, time + 0.06, 0.12, { type: 'triangle', endFrequency: military ? 294 : 196, volume: 0.019 * level, pan, reverb: 0.16 });
+      this.noiseBurst(time + 0.1, 0.055, { filter: military ? 620 : 460, q: 0.55, volume: 0.024 * level, pan, reverb: 0.1 });
     }
   }
 
@@ -954,12 +953,11 @@ export class Soundscape {
     const pan = this.spatialPan(unit.x);
     const level = this.spatialLevel(unit.x);
     if (unit.type === 'cav') {
-      this.tone(92, time, 0.09, { type: 'triangle', endFrequency: 58, volume: 0.052 * level, pan, reverb: 0.06 });
       this.noiseBurst(time, 0.055, { filterType: 'lowpass', filter: 680, volume: 0.045 * level, pan, reverb: 0.04 });
-      this.tone(108, time + 0.11, 0.075, { type: 'triangle', endFrequency: 65, volume: 0.042 * level, pan, reverb: 0.05 });
+      this.noiseBurst(time + 0.11, 0.05, { filterType: 'lowpass', filter: 520, volume: 0.04 * level, pan, reverb: 0.04 });
     } else if (unit.type === 'gun') {
       this.noiseBurst(time, 0.16, { filter: 520, q: 1.1, volume: 0.045 * level, pan, reverb: 0.06 });
-      this.tone(136, time, 0.18, { type: 'triangle', endFrequency: 88, volume: 0.025 * level, pan, reverb: 0.08 });
+      this.noiseBurst(time + 0.08, 0.1, { filterType: 'lowpass', filter: 300, q: 0.5, volume: 0.032 * level, pan, reverb: 0.06 });
     } else {
       this.noiseBurst(time, 0.07, { filterType: 'lowpass', filter: 820, volume: 0.026 * level, pan, reverb: 0.025 });
     }
