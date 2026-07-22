@@ -9,10 +9,12 @@ import { viewDirectionLabel } from './camera.js';
 import { initInput, updateInput, getSelection, getDragRect,
          getPlacementPreview, getResourceHoverTarget, getResourceHoverKind, getMovePreview,
          beginPlacement, setFormation,
-         cancelPlacement, haltSelection, resetForBattle } from './input.js';
+         cancelPlacement, haltSelection, resetForBattle, selectEntitiesById,
+         setControlledSide } from './input.js';
 import {
-  assignBuilders, createBuilding, placeBuilding, placeWallRun, planWallRun,
-  queueUnit, validatePlacement,
+  assignBuilders, assignGatherers, assignRepairers, createBuilding, findEntityAt,
+  findResourceAt, placeBuilding, placeWallRun, planWallRun, queueUnit, setRallyPoint,
+  validatePlacement,
 } from './economy.js';
 import * as ui from './ui.js';
 import { sfx } from './audio.js';
@@ -24,14 +26,28 @@ import {
 import { toggleGate } from './fortifications.js';
 import { applyAttackOrder, applyMoveOrder } from './formations.js';
 import { OPENING_PEACE_SECONDS } from './truce.js';
+import {
+  createMultiplayerSession, createMultiplayerSnapshot, encodeMultiplayerSnapshot,
+  makeInviteUrl, readInviteFromLocation, restoreMultiplayerSnapshot,
+} from './multiplayer.js';
 
 let world = null;
 let commanders = [];
 let endShown = false;
+let localSide = 0;
+let suppressNetworkCommand = false;
+let lastSnapshotSentAt = 0;
 
 const canvas = document.getElementById('game');
 const minimap = document.getElementById('minimap');
 const productionArtReady = preloadProductionArt();
+const multiplayer = createMultiplayerSession({
+  onStatus: status => ui.setMultiplayerStatus(status),
+  onOpen: () => {
+    if (multiplayer.mode === 'host' && world) sendMultiplayerSnapshot(true);
+  },
+  onMessage: handleMultiplayerMessage,
+});
 
 initRender(canvas, minimap);
 initInput(canvas, minimap, () => world, {
@@ -47,19 +63,19 @@ initInput(canvas, minimap, () => world, {
     if (world) ui.updateHud(world, getSelection());
   },
   onOrder: kind => sfx.command(kind),
-  onValidatePlacement: (type, x, y, options) => validatePlacement(world, 0, type, x, y, options),
+  onValidatePlacement: (type, x, y, options) => validatePlacement(world, localSide, type, x, y, options),
   onPlanWallRun: (startX, startY, endX, endY, orientation, pathPoints) => (
-    planWallRun(world, 0, startX, startY, endX, endY, orientation, pathPoints)
+    planWallRun(world, localSide, startX, startY, endX, endY, orientation, pathPoints)
   ),
   onPlaceWallRun: (startX, startY, endX, endY, workers, orientation, pathPoints) => {
     const result = placeWallRun(
-      world, 0, startX, startY, endX, endY, workers, orientation, pathPoints,
+      world, localSide, startX, startY, endX, endY, workers, orientation, pathPoints,
     );
     if (result.ok) sfx.buildingPlaced(result.building.x);
     return result;
   },
   onPlaceBuilding: (type, x, y, workers, options) => {
-    const result = placeBuilding(world, 0, type, x, y, workers, options);
+    const result = placeBuilding(world, localSide, type, x, y, workers, options);
     if (result.ok) sfx.buildingPlaced(result.building.x);
     return result;
   },
@@ -71,12 +87,16 @@ initInput(canvas, minimap, () => world, {
   ),
   onResourceHover: hover => ui.setResourceHover(world, hover),
   onToast: ui.toast,
+  onPlayerCommand: sendPlayerCommand,
 });
 
 ui.initMenu({
   onStart: startBattle,
   onLoad: resumeSavedCampaign,
   onDelete: discardSavedCampaign,
+  onMultiplayerHost: createMultiplayerInvite,
+  onMultiplayerJoin: joinMultiplayerInvite,
+  onMultiplayerAnswer: applyMultiplayerAnswer,
 });
 ui.bindControls({
   onPause: togglePause,
@@ -137,13 +157,72 @@ bindPageLifecycle({
   onExit: exitActiveCampaignForPageExit,
 });
 
+const invite = readInviteFromLocation(window.location);
+if (invite.joinRequested && invite.offer) {
+  ui.setMultiplayerOffer(invite.offer);
+  ui.setMultiplayerStatus('Invite loaded');
+}
+
+function setLocalPlayerSide(sideIndex = 0) {
+  localSide = Number.isInteger(sideIndex) && sideIndex >= 0 ? sideIndex : 0;
+  setControlledSide(localSide);
+  ui.setLocalSide(localSide);
+}
+
+async function createMultiplayerInvite(role) {
+  try {
+    const offer = await multiplayer.createHostOffer(role);
+    ui.setMultiplayerOffer(makeInviteUrl(window.location.href, offer));
+    ui.setMultiplayerAnswer('');
+    ui.toast(`Invite ready. Guest will join as your ${role === 'enemy' ? 'enemy' : 'ally'}.`, 'good');
+  } catch (error) {
+    ui.setMultiplayerStatus('Invite failed');
+    ui.toast(error?.message || 'Multiplayer invite failed.', 'danger');
+  }
+}
+
+async function joinMultiplayerInvite(rawOffer) {
+  try {
+    const parsedInvite = (() => {
+      try { return readInviteFromLocation(new URL(rawOffer)); }
+      catch (_error) { return { offer: rawOffer }; }
+    })();
+    const answer = await multiplayer.joinFromOffer(parsedInvite.offer || rawOffer);
+    setLocalPlayerSide(multiplayer.remoteSide);
+    ui.setMultiplayerAnswer(answer);
+    ui.toast('Answer ready. Send it back to the host, then wait for the battle.', 'good');
+  } catch (error) {
+    ui.setMultiplayerStatus('Join failed');
+    ui.toast(error?.message || 'Multiplayer join failed.', 'danger');
+  }
+}
+
+async function applyMultiplayerAnswer(answer) {
+  try {
+    await multiplayer.acceptGuestAnswer(answer);
+    ui.toast('Answer accepted. The guest can connect now.', 'good');
+  } catch (error) {
+    ui.setMultiplayerStatus('Answer failed');
+    ui.toast(error?.message || 'The answer code could not be used.', 'danger');
+  }
+}
+
 async function startBattle(opts) {
   sfx.ensure();
   await productionArtReady;
   world = createWorld(opts);
+  setLocalPlayerSide(0);
+  if (multiplayer.mode === 'host') {
+    const remoteSide = multiplayer.remoteSide;
+    if (world.sides[remoteSide]) {
+      world.sides[remoteSide].controller = 'remote-human';
+      world.sides[remoteSide].label = multiplayer.role === 'enemy'
+        ? 'Guest rival' : 'Guest ally';
+    }
+  }
   commanders = world.sides
     .map((_side, sideIndex) => sideIndex)
-    .filter(sideIndex => sideIndex !== 0)
+    .filter(sideIndex => sideIndex !== 0 && world.sides[sideIndex]?.controller === 'ai')
     .map(sideIndex => new Commander(world, sideIndex, world.difficulty));
   resetForBattle();
   startBattleRender(world);
@@ -172,6 +251,7 @@ async function startBattle(opts) {
   endShown = false;
   acc = 0;
   resetFrameMetrics();
+  sendMultiplayerSnapshot(true);
 }
 
 function setupLocalFantasyFactionPreview(activeWorld) {
@@ -230,6 +310,150 @@ function setupLocalFantasyFactionPreview(activeWorld) {
   camera.y = 1450;
   camera.zoom = 0.72;
   clampCamera();
+}
+
+function livingUnitsById(unitIds, side) {
+  const wanted = new Set(unitIds || []);
+  return world?.units.filter(unit => unit.alive && unit.side === side && wanted.has(unit.id)) || [];
+}
+
+function buildingsById(buildingIds, side) {
+  const wanted = new Set(buildingIds || []);
+  return world?.buildings.filter(building => building.alive && building.side === side && wanted.has(building.id)) || [];
+}
+
+function entityById(id) {
+  return [...(world?.units || []), ...(world?.buildings || []), ...(world?.resources || [])]
+    .find(entity => entity.id === id && entity.alive);
+}
+
+function applyRemoteCommand(command) {
+  if (!world || !command || !Number.isInteger(command.side)) return false;
+  if (world.sides[command.side]?.controller !== 'remote-human') return false;
+  suppressNetworkCommand = true;
+  try {
+    if (command.kind === 'move') {
+      const units = livingUnitsById(command.unitIds, command.side);
+      if (!units.length) return false;
+      applyMoveOrder(units, command.x, command.y, command.formation || 'line');
+      world.flags.push({ kind: 'move', route: true, x: command.x, y: command.y, life: 2.8, max: 2.8 });
+      return true;
+    }
+    if (command.kind === 'attack') {
+      const units = livingUnitsById(command.unitIds, command.side);
+      const target = entityById(command.targetId);
+      if (!units.length || !target?.alive) return false;
+      applyAttackOrder(units, target);
+      world.flags.push({ kind: 'attack', attack: true, x: target.x, y: target.y, life: 1.2, max: 1.2 });
+      return true;
+    }
+    if (command.kind === 'gather') {
+      const workers = livingUnitsById(command.unitIds, command.side).filter(unit => unit.type === 'villager');
+      const target = entityById(command.targetId);
+      return assignGatherers(world, workers, target);
+    }
+    if (command.kind === 'assign-builders') {
+      const workers = livingUnitsById(command.unitIds, command.side).filter(unit => unit.type === 'villager');
+      const target = entityById(command.targetId);
+      return assignBuilders(world, workers, target);
+    }
+    if (command.kind === 'repair') {
+      const workers = livingUnitsById(command.unitIds, command.side).filter(unit => unit.type === 'villager');
+      const target = entityById(command.targetId);
+      return assignRepairers(world, workers, target);
+    }
+    if (command.kind === 'rally') {
+      const buildings = buildingsById(command.buildingIds, command.side);
+      if (!buildings.length) return false;
+      const resource = findResourceAt(world, command.x, command.y);
+      const ownEntity = findEntityAt(world, command.x, command.y, command.side);
+      const target = resource || (ownEntity?.entityKind === 'building' ? ownEntity : null);
+      let changed = false;
+      for (const building of buildings) changed = setRallyPoint(building, command.x, command.y, target) || changed;
+      return changed;
+    }
+    if (command.kind === 'place-building') {
+      const workers = livingUnitsById(command.workerIds, command.side).filter(unit => unit.type === 'villager');
+      return placeBuilding(
+        world, command.side, command.type, command.x, command.y, workers, command.options || {},
+      ).ok;
+    }
+    if (command.kind === 'place-wall-run') {
+      const workers = livingUnitsById(command.workerIds, command.side).filter(unit => unit.type === 'villager');
+      return placeWallRun(
+        world, command.side, command.startX, command.startY, command.endX, command.endY,
+        workers, command.orientation, command.pathPoints || [],
+      ).ok;
+    }
+    if (command.kind === 'train') {
+      const building = buildingsById([command.buildingId], command.side)[0];
+      return queueUnit(world, building, command.type, command.count).ok;
+    }
+    if (command.kind === 'gate') {
+      const gate = buildingsById([command.buildingId], command.side)[0];
+      return toggleGate(world, gate).ok;
+    }
+  } finally {
+    suppressNetworkCommand = false;
+  }
+  return false;
+}
+
+function sendPlayerCommand(command) {
+  if (suppressNetworkCommand || multiplayer.mode !== 'guest' || !multiplayer.connected) return;
+  if (command?.side !== localSide) return;
+  multiplayer.send({ type: 'command', command });
+}
+
+function sendMultiplayerSnapshot(force = false) {
+  if (multiplayer.mode !== 'host' || !multiplayer.connected || !world || !commanders.length) return;
+  const now = performance.now();
+  if (!force && now - lastSnapshotSentAt < 350) return;
+  lastSnapshotSentAt = now;
+  const snapshot = createMultiplayerSnapshot(world, commanders, camera);
+  multiplayer.send({ type: 'snapshot', snapshot: encodeMultiplayerSnapshot(snapshot) });
+}
+
+async function installGuestSnapshot(serialized) {
+  await productionArtReady;
+  const selectedIds = getSelection().map(entity => entity.id);
+  const firstSnapshot = !world;
+  const restored = restoreMultiplayerSnapshot(serialized);
+  world = restored.world;
+  commanders = [];
+  setLocalPlayerSide(multiplayer.remoteSide);
+  if (firstSnapshot) {
+    resetForBattle();
+    startBattleRender(world);
+  }
+  else {
+    selectEntitiesById(world, selectedIds);
+  }
+  camera.x = restored.camera?.x ?? camera.x;
+  camera.y = restored.camera?.y ?? camera.y;
+  camera.zoom = restored.camera?.zoom ?? camera.zoom;
+  camera.rotation = restored.camera?.rotation ?? camera.rotation;
+  clampCamera();
+  world.state = 'running';
+  ui.showBattleHud(world);
+  ui.setPauseLabel(false);
+  ui.setSpeedLabel(world.speed);
+  ui.setViewDirection(viewDirectionLabel(camera.rotation));
+  ui.markFormation('line');
+  endShown = false;
+  acc = 0;
+  resetFrameMetrics();
+}
+
+function handleMultiplayerMessage(message) {
+  if (message?.protocol !== 1) return;
+  if (multiplayer.mode === 'host' && message.type === 'command') {
+    if (applyRemoteCommand(message.command)) sendMultiplayerSnapshot(true);
+    return;
+  }
+  if (multiplayer.mode === 'guest' && message.type === 'snapshot') {
+    void installGuestSnapshot(message.snapshot);
+  }
 }
 
 function setupLocalOpeningTrucePreview(activeWorld) {
@@ -903,15 +1127,27 @@ function handleCommand(command) {
     if (result.ok) sfx.command('train');
     ui.toast(result.message, result.ok ? 'good' : 'danger');
     ui.updateHud(world, getSelection());
+    if (result.ok) sendPlayerCommand({
+      kind: 'train',
+      side: localSide,
+      buildingId: building.id,
+      type: command.type,
+      count: command.count,
+    });
     return;
   }
   if (command.action === 'gate') {
     const gate = getSelection().find(entity => entity.entityKind === 'building'
-      && entity.type === 'gate' && entity.side === 0);
+      && entity.type === 'gate' && entity.side === localSide);
     const result = toggleGate(world, gate);
     ui.toast(result.message, result.ok ? 'good' : 'danger');
     if (result.ok) sfx.command('move');
     ui.updateHud(world, getSelection());
+    if (result.ok) sendPlayerCommand({
+      kind: 'gate',
+      side: localSide,
+      buildingId: gate.id,
+    });
   }
 }
 
@@ -1080,15 +1316,18 @@ function frame(now) {
   const stageTimes = shouldSample ? {} : null;
 
   if (world.state === 'running') {
-    acc += dt * world.speed;
-    let steps = 0;
-    while (acc >= SIM_STEP && steps < 5) {
-      step(world, SIM_STEP);
-      for (const commander of commanders) commander.update(SIM_STEP);
-      acc -= SIM_STEP;
-      steps++;
+    if (multiplayer.mode !== 'guest') {
+      acc += dt * world.speed;
+      let steps = 0;
+      while (acc >= SIM_STEP && steps < 5) {
+        step(world, SIM_STEP);
+        for (const commander of commanders) commander.update(SIM_STEP);
+        acc -= SIM_STEP;
+        steps++;
+      }
+      if (steps === 5) acc = 0; // can't keep up — drop time rather than spiral
+      sendMultiplayerSnapshot();
     }
-    if (steps === 5) acc = 0; // can't keep up — drop time rather than spiral
   }
   if (shouldSample) {
     const next = performance.now();

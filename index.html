@@ -115,6 +115,28 @@
           <p class="scenario-preview"><b>Alliance:</b> England + Hogwarts + StarWars &nbsp;·&nbsp;
             <b>Enemies:</b> Ottoman Empire + Nightmare Circus</p>
 
+          <section class="multiplayer-card" aria-labelledby="multiplayer-title">
+            <div class="multiplayer-heading">
+              <span><small class="eyebrow">Multiplayer</small><b id="multiplayer-title">Invite a player</b></span>
+              <output id="multiplayer-status">Offline</output>
+            </div>
+            <div class="multiplayer-role" role="radiogroup" aria-label="Guest role">
+              <label><input type="radio" name="multiplayer-role" value="ally" checked> Ally</label>
+              <label><input type="radio" name="multiplayer-role" value="enemy"> Enemy</label>
+            </div>
+            <div class="multiplayer-actions">
+              <button id="btn-host-multiplayer" type="button">Create Invite</button>
+              <button id="btn-join-multiplayer" type="button">Join Invite</button>
+              <button id="btn-apply-answer" type="button">Apply Answer</button>
+            </div>
+            <label class="multiplayer-field">Invite code
+              <textarea id="multiplayer-offer" rows="2" spellcheck="false" autocomplete="off"></textarea>
+            </label>
+            <label class="multiplayer-field">Answer code
+              <textarea id="multiplayer-answer" rows="2" spellcheck="false" autocomplete="off"></textarea>
+            </label>
+          </section>
+
           <button id="btn-start" disabled>Found Your Empire</button>
         </section>
 

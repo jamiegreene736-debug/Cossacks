@@ -21,6 +21,12 @@ let selectedWorldCountry = 'GB';
 let lastSelectionKey = '';
 let toastTimer = 0;
 let activePlacementType = null;
+let localSide = 0;
+
+export function setLocalSide(sideIndex = 0) {
+  localSide = Number.isInteger(sideIndex) && sideIndex >= 0 ? sideIndex : 0;
+  lastSelectionKey = '';
+}
 
 export function initMenu(menuCallbacks) {
   const difficultyOptions = $('difficulty-options');
@@ -76,8 +82,33 @@ export function initMenu(menuCallbacks) {
       difficulty: selectedDifficulty,
     });
   });
+  $('btn-host-multiplayer').addEventListener('click', () => {
+    const role = document.querySelector('input[name="multiplayer-role"]:checked')?.value || 'ally';
+    menuCallbacks.onMultiplayerHost?.(role);
+  });
+  $('btn-join-multiplayer').addEventListener('click', () => (
+    menuCallbacks.onMultiplayerJoin?.($('multiplayer-offer').value)
+  ));
+  $('btn-apply-answer').addEventListener('click', () => (
+    menuCallbacks.onMultiplayerAnswer?.($('multiplayer-answer').value)
+  ));
   $('btn-load-save').addEventListener('click', () => menuCallbacks.onLoad?.());
   $('btn-delete-save').addEventListener('click', () => menuCallbacks.onDelete?.());
+}
+
+export function setMultiplayerStatus(message) {
+  const status = $('multiplayer-status');
+  if (status) status.textContent = message || 'Offline';
+}
+
+export function setMultiplayerOffer(value) {
+  const field = $('multiplayer-offer');
+  if (field) field.value = value || '';
+}
+
+export function setMultiplayerAnswer(value) {
+  const field = $('multiplayer-answer');
+  if (field) field.value = value || '';
 }
 
 function selectDifficulty(difficulty) {
@@ -145,19 +176,20 @@ export function showBattleHud(world) {
   $('overlay-end').classList.add('hidden');
   hidePauseMenu();
   for (const id of ['hud-top', 'time-controls', 'panel', 'minimap', 'hint-bar']) $(id).classList.remove('hidden');
+  const localTeam = world.sides[localSide]?.team ?? playerTeam(world);
   const playerAllies = world.sides
-    .filter((_side, sideIndex) => sideIndex !== 0 && isPlayerTeam(world, sideIndex))
+    .filter((_side, sideIndex) => sideIndex !== localSide && world.sides[sideIndex]?.team === localTeam)
     .map(side => NATIONS[side.nation].name);
-  const playerNames = [NATIONS[world.sides[0].nation].name, ...playerAllies];
+  const playerNames = [NATIONS[world.sides[localSide].nation].name, ...playerAllies];
   $('hud-player-nation').textContent = playerNames.join(' + ');
   const rivals = world.sides
-    .filter((_side, sideIndex) => !isPlayerTeam(world, sideIndex))
+    .filter((_side, sideIndex) => world.sides[sideIndex]?.team !== localTeam)
     .map(side => NATIONS[side.nation].name);
   $('hud-enemy-nation').textContent = rivals.join(' + ');
   const difficulty = CPU_DIFFICULTIES[world.difficulty] || CPU_DIFFICULTIES[DEFAULT_CPU_DIFFICULTY];
   $('hud-enemy-role').textContent = `${difficulty.name} CPU rival team`;
-  $('player-crest').textContent = NATIONS[world.sides[0].nation].name[0];
-  $('player-crest').style.background = NATIONS[world.sides[0].nation].coat;
+  $('player-crest').textContent = NATIONS[world.sides[localSide].nation].name[0];
+  $('player-crest').style.background = NATIONS[world.sides[localSide].nation].coat;
   const country = WORLD_COUNTRY_BY_CODE[world.worldCountry];
   $('hud-world-country').textContent = country
     ? `${countryFlag(country.code)} World Park: ${country.name}` : 'World Park';
@@ -263,9 +295,10 @@ function countMilitary(world, side) {
 
 function countTeamMilitary(world, wantPlayerTeam) {
   let count = 0;
+  const localTeam = world.sides[localSide]?.team ?? playerTeam(world);
   for (const unit of world.units) {
     if (!unit.alive || unit.type === 'villager') continue;
-    if (isPlayerTeam(world, unit.side) === wantPlayerTeam) count++;
+    if ((world.sides[unit.side]?.team === localTeam) === wantPlayerTeam) count++;
   }
   return count;
 }
@@ -288,7 +321,7 @@ export function updateHud(world, selection) {
   const now = performance.now();
   if (now - hudTime < 200) return;
   hudTime = now;
-  const player = world.sides[0];
+  const player = world.sides[localSide] || world.sides[0];
   $('hud-player-count').textContent = countTeamMilitary(world, true).toLocaleString();
   $('hud-enemy-count').textContent = countTeamMilitary(world, false).toLocaleString();
   for (const key of RESOURCE_KEYS) {
@@ -307,7 +340,7 @@ export function updateHud(world, selection) {
 
   while (world.events.length) {
     const event = world.events.shift();
-    if (event.side === 0) toast(event.text, event.tone);
+    if (event.side === localSide) toast(event.text, event.tone);
   }
 
   const hasLiveEconomy = selection.length === 0 || selection.some(entity => entity.type === 'villager'
@@ -348,11 +381,11 @@ function renderSelection(world, selection) {
   formations.classList.add('hidden');
 
   if (selection.length === 0) {
-    const economy = getEconomyBreakdown(world, 0);
+    const economy = getEconomyBreakdown(world, localSide);
     const gathering = RESOURCE_KEYS.reduce((sum, resourceType) => sum + economy[resourceType].workers, 0);
     title.textContent = 'Settlement';
     info.textContent = 'Live economy overview';
-    detail.textContent = `${world.units.filter(unit => unit.alive && unit.side === 0 && unit.type === 'villager').length} villagers · ${gathering} assigned to the economy · ${world.buildings.filter(b => b.alive && b.side === 0).length} buildings`;
+    detail.textContent = `${world.units.filter(unit => unit.alive && unit.side === localSide && unit.type === 'villager').length} villagers · ${gathering} assigned to the economy · ${world.buildings.filter(b => b.alive && b.side === localSide).length} buildings`;
     context.textContent = 'Assigned output / actual income per hour';
     for (const resourceType of RESOURCE_KEYS) addEconomyMetric(grid, economy[resourceType], { showActual: true });
     return;
@@ -362,7 +395,7 @@ function renderSelection(world, selection) {
   if (building) {
     const def = BUILDING_TYPES[building.type];
     const economy = getBuildingEconomyStats(world, building);
-    const ownBuilding = building.side === 0;
+    const ownBuilding = building.side === localSide;
     const ownerNation = NATIONS[world.sides[building.side]?.nation]?.name || 'Allied';
     title.textContent = ownBuilding ? def.label : `${ownerNation} ${def.label}`;
     info.textContent = building.complete ? def.description : `Under construction — ${Math.floor(building.progress * 100)}%`;
@@ -445,7 +478,7 @@ function renderSelection(world, selection) {
   const units = selection.filter(entity => entity.entityKind !== 'building');
   const villagers = units.filter(unit => unit.type === 'villager');
   if (villagers.length) {
-    const economy = getEconomyBreakdown(world, 0, villagers);
+    const economy = getEconomyBreakdown(world, localSide, villagers);
     const gatherers = RESOURCE_KEYS.reduce((sum, resourceType) => sum + economy[resourceType].workers, 0);
     const projected = RESOURCE_KEYS.reduce((sum, resourceType) => sum + economy[resourceType].projectedPerHour, 0);
     const women = villagers.filter(worker => worker.unitType === 'woman_villager').length;
@@ -468,7 +501,7 @@ function renderSelection(world, selection) {
     for (const [type, def] of Object.entries(BUILDING_TYPES)) {
       if (type === 'town_center') continue;
       if (!canNationBuildBuilding(world.sides[0]?.nation, type)) continue;
-      const fieldStatus = type === 'farm' ? getFieldAttachmentStatus(world, 0) : null;
+      const fieldStatus = type === 'farm' ? getFieldAttachmentStatus(world, localSide) : null;
       addCommand(grid, {
         action: 'build', type, icon: buildingIcon(type), label: def.label,
         meta: fieldStatus && !fieldStatus.ok ? fieldStatus.message : formatCost(def.cost),
@@ -589,9 +622,9 @@ function buildingIcon(type) {
 }
 
 function updateObjective(world) {
-  const villagers = world.units.filter(unit => unit.alive && unit.side === 0 && unit.type === 'villager');
-  const ownBuildings = world.buildings.filter(building => building.alive && building.side === 0);
-  const military = countMilitary(world, 0);
+  const villagers = world.units.filter(unit => unit.alive && unit.side === localSide && unit.type === 'villager');
+  const ownBuildings = world.buildings.filter(building => building.alive && building.side === localSide);
+  const military = countMilitary(world, localSide);
   let titleText, body;
   const hasFarm = ownBuildings.some(building => building.type === 'farm' && building.complete);
   const hasMill = ownBuildings.some(building => building.type === 'mill' && building.complete);
