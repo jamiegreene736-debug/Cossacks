@@ -89,6 +89,19 @@ const FX_SUN = {
 
 const FX_SIM_DT = 1 / 30;           // sim.js fixed step; used to back-extrapolate
 
+const SPECIAL_PROJECTILE_VISUALS = Object.freeze({
+  arcane: Object.freeze({ shape: 'bolt', core: '#eefcff', shell: '#5ab6ff', trail: 26 }),
+  spectral: Object.freeze({ shape: 'bolt', core: '#e3ffff', shell: '#62e3e8', trail: 26 }),
+  nightmare: Object.freeze({ shape: 'bolt', core: '#ffb2a7', shell: '#a31224', trail: 26 }),
+  cotton_candy: Object.freeze({ shape: 'bolt', core: '#fff0fb', shell: '#ff69c9', trail: 26 }),
+  plasma: Object.freeze({ shape: 'orb', core: '#f7ffff', shell: '#37caff', trail: 30 }),
+  ion: Object.freeze({ shape: 'discharge', core: '#ffffff', shell: '#6e7dff', trail: 38 }),
+});
+
+export function getSpecialProjectileVisualProfile(kind) {
+  return SPECIAL_PROJECTILE_VISUALS[kind] || null;
+}
+
 /* --------------------------------------------------------------------------
    Atlas geometry.  Shape/variant counts are powers of two so the hot loop can
    pick a variant with `p.v & MASK` instead of a modulo.
@@ -1772,38 +1785,77 @@ function drawEffects(ctx, world, alpha) {
           || p.kind === 'plasma' || p.kind === 'ion') {
         const distance = Math.max(1, Math.hypot(vx, vy));
         const nx = vx / distance, ny = vy / distance;
-        const palette = {
-          arcane: ['#eefcff', '#5ab6ff'],
-          spectral: ['#e3ffff', '#62e3e8'],
-          nightmare: ['#ffb2a7', '#a31224'],
-          cotton_candy: ['#fff0fb', '#ff69c9'],
-          plasma: ['#e9fbff', '#44c8ff'],
-          ion: ['#f5ffff', '#7b8cff'],
-        }[p.kind];
+        const visual = SPECIAL_PROJECTILE_VISUALS[p.kind];
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-        ctx.strokeStyle = palette[1];
-        ctx.lineWidth = p.kind === 'cotton_candy' ? 6 : p.kind === 'ion' ? 5 : 3.6;
+        ctx.strokeStyle = visual.shell;
+        ctx.lineWidth = p.kind === 'cotton_candy' ? 6 : visual.shape === 'discharge' ? 7 : 3.6;
         ctx.globalAlpha = 0.72;
         ctx.beginPath();
-        ctx.moveTo(ix - nx * 26, iy - ny * 26);
+        ctx.moveTo(ix - nx * visual.trail, iy - ny * visual.trail);
         ctx.lineTo(ix, iy);
         ctx.stroke();
-        ctx.strokeStyle = palette[0];
-        ctx.lineWidth = p.kind === 'cotton_candy' ? 2.4 : p.kind === 'ion' ? 1.9 : 1.45;
+        ctx.strokeStyle = visual.core;
+        ctx.lineWidth = p.kind === 'cotton_candy' ? 2.4 : visual.shape === 'discharge' ? 2.1 : 1.45;
         ctx.globalAlpha = 0.94;
         ctx.beginPath();
-        ctx.moveTo(ix - nx * 18, iy - ny * 18);
+        ctx.moveTo(ix - nx * (visual.trail * 0.72), iy - ny * (visual.trail * 0.72));
         ctx.lineTo(ix, iy);
         ctx.stroke();
-        ctx.fillStyle = palette[1];
+        ctx.fillStyle = visual.shell;
         ctx.globalAlpha = 0.58;
-        const radius = p.kind === 'cotton_candy' ? 8 : p.kind === 'ion' ? 6.5
+        const radius = p.kind === 'cotton_candy' ? 8 : visual.shape === 'discharge' ? 7.5
           : p.kind === 'spectral' ? 5.5 : 4.5;
         ctx.beginPath(); ctx.arc(ix, iy, radius, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = palette[0];
+        ctx.fillStyle = visual.core;
         ctx.globalAlpha = 0.94;
         ctx.beginPath(); ctx.arc(ix - nx * 1.5, iy - ny * 1.5, radius * 0.42, 0, Math.PI * 2); ctx.fill();
+        if (visual.shape === 'orb') {
+          const px = -ny, py = nx;
+          for (let bead = 1; bead <= 3; bead++) {
+            const back = bead * 7;
+            ctx.globalAlpha = 0.34 / bead;
+            ctx.fillStyle = visual.shell;
+            ctx.beginPath();
+            ctx.ellipse(ix - nx * back, iy - ny * back, 4.2 / bead, 2.5 / bead,
+              Math.atan2(ny, nx), 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.globalAlpha = 0.72;
+          ctx.strokeStyle = '#9eeeff';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.ellipse(ix, iy, 7.5, 4.6, Math.atan2(ny, nx), 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 0.3;
+          ctx.strokeStyle = '#4ad5ff';
+          ctx.beginPath();
+          ctx.moveTo(ix - nx * 12 + px * 4, iy - ny * 12 + py * 4);
+          ctx.lineTo(ix - nx * 4 - px * 3, iy - ny * 4 - py * 3);
+          ctx.stroke();
+        } else if (visual.shape === 'discharge') {
+          const px = -ny, py = nx;
+          ctx.lineWidth = 1.35;
+          ctx.strokeStyle = '#a9c4ff';
+          for (const side of [-1, 1]) {
+            ctx.globalAlpha = 0.7;
+            ctx.beginPath();
+            ctx.moveTo(ix - nx * 34, iy - ny * 34);
+            ctx.lineTo(ix - nx * 24 + px * 4 * side, iy - ny * 24 + py * 4 * side);
+            ctx.lineTo(ix - nx * 13 - px * 3 * side, iy - ny * 13 - py * 3 * side);
+            ctx.lineTo(ix, iy);
+            ctx.stroke();
+          }
+          for (const ring of [8, 12]) {
+            ctx.globalAlpha = ring === 8 ? 0.78 : 0.38;
+            ctx.strokeStyle = ring === 8 ? '#d6e5ff' : '#6d83ff';
+            ctx.lineWidth = ring === 8 ? 1.4 : 2.2;
+            ctx.beginPath();
+            ctx.ellipse(ix - nx * 3, iy - ny * 3, ring * 0.45, ring,
+              Math.atan2(ny, nx), 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
         if (p.kind === 'spectral') {
           ctx.strokeStyle = '#9ff7ff';
           ctx.globalAlpha = 0.68;

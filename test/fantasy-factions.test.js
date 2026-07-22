@@ -12,6 +12,9 @@ import {
 import { createBuilding, queueUnit, stepEconomy } from '../js/economy.js';
 import { applyAttackOrder } from '../js/formations.js';
 import { getBuildingProductionArtSpec } from '../js/gfx/buildings.js';
+import { getSpecialProjectileVisualProfile } from '../js/gfx/effects.js';
+import { getMilitaryFrame } from '../js/military-animation.js';
+import { getFactionCharacterFrameSources } from '../js/render.js';
 import { createGameSnapshot, restoreGameSnapshot } from '../js/savegame.js';
 import { createWorld, damage, spawnUnit, step } from '../js/sim.js';
 import { OPENING_PEACE_SECONDS } from '../js/truce.js';
@@ -106,6 +109,21 @@ test('StarWars trains detailed villagers and galactic defenders from faction bui
     'starwars_pulse_cannon',
   ]);
   assert.equal(queueUnit(world, townCenter, 'moaning_myrtle', 1, { free: true }).ok, false);
+});
+
+test('StarWars attacks retain distinct authored weapon and effect contracts', () => {
+  assert.deepEqual(getFactionCharacterFrameSources('starwars_pulse_cannon'), [0, 2]);
+  assert.equal(getMilitaryFrame({
+    type: 'starwars_pulse_cannon', unitType: 'starwars_pulse_cannon', fireT: 0.1, moving: false,
+  }), 1);
+  assert.equal(getFactionCharacterFrameSources('starwars_sentinel').at(-1), 2);
+
+  const plasma = getSpecialProjectileVisualProfile('plasma');
+  const ion = getSpecialProjectileVisualProfile('ion');
+  assert.equal(plasma.shape, 'orb');
+  assert.equal(ion.shape, 'discharge');
+  assert.ok(ion.trail > plasma.trail);
+  assert.notEqual(plasma.shell, ion.shell);
 });
 
 test('allied StarWars defenses do not target England or Hogwarts units', () => {

@@ -32,7 +32,9 @@ function getWalkPhase(unit) {
 }
 
 export function getMilitaryFrame(unit) {
-  if (unit.type === 'gun') return unit.fireT > 0 ? 1 : 0;
+  if (unit.type === 'gun' || unit.unitType === 'starwars_pulse_cannon') {
+    return unit.fireT > 0 ? 1 : 0;
+  }
 
   if (unit.moving) {
     return MILITARY_FRAME.WALK_START + Math.floor(getWalkPhase(unit));

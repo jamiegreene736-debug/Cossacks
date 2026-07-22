@@ -211,6 +211,52 @@ function drawThrowingTorch(unit, x, y, visualFacing = unit.facing) {
   ctx.restore();
 }
 
+function drawStarWarsEnergyBlade(unit, visualFacing = unit.facing) {
+  if (unit.unitType !== 'starwars_blade_guard' || !(unit.fireT > 0)) return;
+  const facing = visualFacing >= 0 ? 1 : -1;
+  const attack = Math.max(0, Math.min(1, 1 - unit.fireT / 0.12));
+  const pivotX = facing * 2;
+  const pivotY = -23;
+  const startAngle = facing > 0 ? -2.35 : Math.PI + 2.35;
+  const endAngle = facing > 0 ? 0.32 : Math.PI - 0.32;
+  const currentAngle = startAngle + (endAngle - startAngle) * attack;
+  const bladeLength = 31;
+  const tipX = pivotX + Math.cos(currentAngle) * bladeLength;
+  const tipY = pivotY + Math.sin(currentAngle) * bladeLength;
+  const fade = 0.68 + Math.sin(attack * Math.PI) * 0.32;
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
+  ctx.globalAlpha = 0.17 * fade;
+  ctx.strokeStyle = '#278dff';
+  ctx.lineWidth = 9;
+  ctx.beginPath();
+  ctx.arc(pivotX, pivotY, bladeLength, startAngle, currentAngle, facing < 0);
+  ctx.stroke();
+  ctx.globalAlpha = 0.5 * fade;
+  ctx.strokeStyle = '#4ed8ff';
+  ctx.lineWidth = 3.8;
+  ctx.stroke();
+  ctx.globalAlpha = 0.92 * fade;
+  ctx.strokeStyle = '#f6ffff';
+  ctx.lineWidth = 1.25;
+  ctx.stroke();
+
+  ctx.globalAlpha = 0.34 * fade;
+  ctx.strokeStyle = '#2da8ff';
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.moveTo(pivotX, pivotY);
+  ctx.lineTo(tipX, tipY);
+  ctx.stroke();
+  ctx.globalAlpha = 0.98 * fade;
+  ctx.strokeStyle = '#f8ffff';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.restore();
+}
+
 // ---------- Setup ----------
 
 export function initRender(gameCanvas, minimapCanvas) {
@@ -583,9 +629,7 @@ function buildFactionCharacterDefs(nationKey, side, nat) {
     const h = frame?.h ?? (isHeavy ? 66 : isMounted ? 62 : isGhost ? 64 : 62);
     const ax = frame?.ax ?? w / 2;
     const ay = frame?.ay ?? h - 5;
-    const sourceFrames = worker
-      ? [0, 1, 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 0, 1, 2, 3, 1, 1, 1, 1, 1, 1, 1, 1]
-      : [0, 1, 1, 1, 1, 1, 1, 2];
+    const sourceFrames = getFactionCharacterFrameSources(unitType, worker);
     defs[unitType] = {
       w, h, ax, ay,
       military: !worker,
@@ -601,6 +645,16 @@ function buildFactionCharacterDefs(nationKey, side, nat) {
     };
   }
   return defs;
+}
+
+export function getFactionCharacterFrameSources(unitType, worker = Boolean(UNIT_TYPES[unitType]?.worker)) {
+  if (worker) {
+    return [0, 1, 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 0, 1, 2, 3, 1, 1, 1, 1, 1, 1, 1, 1];
+  }
+  // Artillery uses a two-frame runtime contract. Its second runtime frame must
+  // address the authored firing column rather than the locomotion column.
+  if (unitType === 'starwars_pulse_cannon') return [0, 2];
+  return [0, 1, 1, 1, 1, 1, 1, 2];
 }
 
 
@@ -1210,6 +1264,7 @@ export function draw(
     ctx.rotate(-rotation);
     ctx.drawImage(sp.frames[dir][frame], -sp.ax, -sp.ay, sp.w, sp.h);
     drawThrowingTorch(u, 0, 0, dir === 0 ? 1 : -1);
+    drawStarWarsEnergyBlade(u, dir === 0 ? 1 : -1);
     ctx.restore();
   }
 

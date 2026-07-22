@@ -276,7 +276,8 @@ function setupLocalFantasyFactionPreview(activeWorld) {
 
   const hogwartsTypes = ['wizard_duelist', 'witch_duelist', 'moaning_myrtle'];
   const starwarsTypes = [
-    'starwars_sentinel', 'starwars_blade_guard', 'starwars_skiff_rider', 'starwars_pulse_cannon',
+    'starwars_mechanic', 'starwars_robed_villager', 'starwars_sentinel',
+    'starwars_blade_guard', 'starwars_skiff_rider', 'starwars_pulse_cannon',
   ];
   const circusTypes = [
     'pennywise', 'art_clown', 'twisty_clown', 'captain_spaulding', 'killer_klown',
@@ -285,7 +286,7 @@ function setupLocalFantasyFactionPreview(activeWorld) {
     spawnUnit(activeWorld, 2, type, 2250, 1260 + index * 145)
   ));
   const starwarsUnits = starwarsTypes.map((type, index) => (
-    spawnUnit(activeWorld, 4, type, 2385, 1110 + index * 125)
+    spawnUnit(activeWorld, 4, type, 2385, 1045 + index * 125)
   ));
   const circusUnits = circusTypes.map((type, index) => (
     spawnUnit(activeWorld, 3, type, 2710, 1130 + index * 140)
