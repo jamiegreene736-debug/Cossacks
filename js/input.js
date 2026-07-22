@@ -21,6 +21,7 @@ import {
   readThreeFingerViewGesture, readTrackpadViewGesture,
 } from './view-gesture.js';
 import { clampCameraZoom } from './camera.js';
+import { areHostileSides } from './teams.js';
 
 let getWorld = () => null;
 let callbacks = {};
@@ -421,7 +422,7 @@ function moveUnitsTo(world, units, x, y, formation) {
 }
 
 function attackUnits(world, units, target) {
-  if (!units.length || !target?.alive || target.side === units[0].side) return false;
+  if (!units.length || !target?.alive || !areHostileSides(world, units[0].side, target.side)) return false;
   if (isPeaceTime(world)) {
     callbacks.onToast?.(
       `The opening peace lasts ${formatPeaceTime(world)} longer. Combat orders are locked.`,
@@ -474,7 +475,8 @@ export function issuePrimaryUnitCommand(world, selected, x, y, formation = 'line
   const units = selected.filter(entity => entity.alive && entity.side === 0
     && entity.entityKind !== 'building');
   if (!world || units.length === 0) return false;
-  const enemy = findEntityAt(world, x, y, 1);
+  const enemy = findEntityAt(world, x, y);
+  if (enemy && !areHostileSides(world, units[0].side, enemy.side)) return false;
   if (enemy) return attackUnits(world, units, enemy);
   if (!isOpenGroundMoveTarget(world, x, y)) return false;
   return moveUnitsTo(world, units, x, y, formation);
@@ -507,8 +509,8 @@ export function getVillagerAttackTargetAt(world, selected, x, y) {
   if (!world || isPeaceTime(world) || workers.length === 0) return null;
   const side = workers[0].side;
   if (workers.some(worker => worker.side !== side)) return null;
-  const target = findEntityAt(world, x, y, side === 0 ? 1 : 0);
-  return target?.alive && target.side !== side ? target : null;
+  const target = findEntityAt(world, x, y);
+  return target?.alive && areHostileSides(world, side, target.side) ? target : null;
 }
 
 function hoverableVillagerAttackTargetAt(screenX, screenY) {
@@ -520,7 +522,7 @@ function hoverableVillagerAttackTargetAt(screenX, screenY) {
 
 export function issueVillagerAttack(world, selected, target) {
   const workers = selected.filter(entity => entity?.alive && entity.type === 'villager'
-    && target?.alive && entity.side !== target.side);
+    && target?.alive && areHostileSides(world, entity.side, target.side));
   if (!world || isPeaceTime(world) || !target?.alive || workers.length === 0) return 0;
   clearWorkerJobs(workers);
   for (const worker of workers) clearVillagerPath(worker);
@@ -545,9 +547,10 @@ function updateResourceHover(screenX, screenY) {
     && entity.entityKind !== 'building');
   const point = !target && hasMobileSelection
     ? screenToWorld(screenX, screenY) : null;
-  const enemy = point ? findEntityAt(getWorld(), point.x, point.y, 1) : null;
-  movePreview = enemy
-    ? { kind: 'attack', x: enemy.x, y: enemy.y, radius: enemy.radius }
+  const enemy = point ? findEntityAt(getWorld(), point.x, point.y) : null;
+  const hostileEnemy = enemy && areHostileSides(getWorld(), 0, enemy.side) ? enemy : null;
+  movePreview = hostileEnemy
+    ? { kind: 'attack', x: hostileEnemy.x, y: hostileEnemy.y, radius: hostileEnemy.radius }
     : point && isOpenGroundMoveTarget(getWorld(), point.x, point.y)
       ? { kind: 'move', x: point.x, y: point.y }
       : null;

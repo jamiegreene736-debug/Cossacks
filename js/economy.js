@@ -18,6 +18,7 @@ import { resolveWorkerAction } from './worker-animation.js';
 import { sfx } from './audio.js';
 import { assignVillagerPath, clearVillagerPath } from './navigation.js';
 import { isPeaceTime } from './truce.js';
+import { areHostileSides, sideFrontDirection } from './teams.js';
 
 let nextEntityId = 100000;
 
@@ -114,7 +115,9 @@ export function createBuilding(side, type, x, y, complete = false, options = {})
   const def = BUILDING_TYPES[type];
   if (!def) throw new Error(`Unknown building type: ${type}`);
   const building = {
-    id: nextEntityId++, entityKind: 'building', side, type,
+    id: nextEntityId++, entityKind: 'building', side,
+    team: Number.isInteger(options.team) ? options.team : null,
+    type,
     x, y, radius: def.radius, w: def.w, h: def.h,
     hp: complete ? def.hp : Math.max(1, def.hp * 0.08), maxHp: def.hp,
     alive: true, selected: false, complete,
@@ -158,23 +161,35 @@ function addResourceCluster(world, type, x, y, amount, radius) {
 }
 
 function seedMapResources(world) {
-  const cy = WORLD.h / 2;
-  for (const side of [0, 1]) {
-    const baseX = side === 0 ? 720 : WORLD.w - 720;
-    const dir = side === 0 ? 1 : -1;
-    addResourceCluster(world, 'food', baseX + dir * 245, cy - 235, 5200, 46);
-    addResourceCluster(world, 'wood', baseX + dir * 385, cy - 20, 14000, 72);
-    addResourceCluster(world, 'gold', baseX + dir * 320, cy + 245, 9000, 50);
-    addResourceCluster(world, 'stone', baseX + dir * 500, cy - 330, 9000, 52);
+  for (let sideIndex = 0; sideIndex < world.sides.length; sideIndex++) {
+    const start = world.sides[sideIndex].startPosition || {
+      x: sideIndex === 0 ? 720 : WORLD.w - 720,
+      y: WORLD.h / 2,
+    };
+    const dir = sideFrontDirection(world, sideIndex);
+    addResourceCluster(world, 'food', start.x + dir * 245, start.y - 205, 5600, 48);
+    addResourceCluster(world, 'food', start.x + dir * 175, start.y + 245, 4200, 42);
+    addResourceCluster(world, 'wood', start.x + dir * 385, start.y - 20, 17000, 78);
+    addResourceCluster(world, 'wood', start.x + dir * 215, start.y + 385, 12000, 62);
+    addResourceCluster(world, 'gold', start.x + dir * 320, start.y + 195, 9000, 50);
+    addResourceCluster(world, 'stone', start.x + dir * 500, start.y - 300, 9000, 52);
   }
 
-  // Rich central deposits create a reason for the two growing settlements to
-  // contest the middle rather than turtle indefinitely.
-  addResourceCluster(world, 'wood', WORLD.w / 2, cy - 520, 26000, 95);
-  addResourceCluster(world, 'wood', WORLD.w / 2, cy + 520, 26000, 95);
-  addResourceCluster(world, 'gold', WORLD.w / 2 - 130, cy, 18000, 65);
-  addResourceCluster(world, 'stone', WORLD.w / 2 + 150, cy + 100, 18000, 65);
-  addResourceCluster(world, 'food', WORLD.w / 2, cy - 235, 9000, 55);
+  // Rich central belts pull both teams into the middle, while the extra woods
+  // keep four economies from exhausting their opening lumber too quickly.
+  const cy = WORLD.h / 2;
+  addResourceCluster(world, 'wood', WORLD.w / 2, cy - 730, 30000, 104);
+  addResourceCluster(world, 'wood', WORLD.w / 2, cy - 355, 28000, 98);
+  addResourceCluster(world, 'wood', WORLD.w / 2, cy + 355, 28000, 98);
+  addResourceCluster(world, 'wood', WORLD.w / 2, cy + 730, 30000, 104);
+  addResourceCluster(world, 'wood', WORLD.w * 0.34, cy, 22000, 84);
+  addResourceCluster(world, 'wood', WORLD.w * 0.66, cy, 22000, 84);
+  addResourceCluster(world, 'gold', WORLD.w / 2 - 145, cy - 120, 20000, 67);
+  addResourceCluster(world, 'gold', WORLD.w / 2 + 145, cy + 120, 20000, 67);
+  addResourceCluster(world, 'stone', WORLD.w / 2 + 170, cy - 130, 20000, 67);
+  addResourceCluster(world, 'stone', WORLD.w / 2 - 170, cy + 130, 20000, 67);
+  addResourceCluster(world, 'food', WORLD.w / 2, cy - 245, 11000, 58);
+  addResourceCluster(world, 'food', WORLD.w / 2, cy + 245, 11000, 58);
 }
 
 export function initializeEconomy(world) {
@@ -183,7 +198,7 @@ export function initializeEconomy(world) {
   world.events = [];
 
   seedMapResources(world);
-  for (const sideIndex of [0, 1]) {
+  for (let sideIndex = 0; sideIndex < world.sides.length; sideIndex++) {
     const side = world.sides[sideIndex];
     side.resources = freshResources();
     side.incomePerHour = freshRates();
@@ -195,8 +210,13 @@ export function initializeEconomy(world) {
     side.maxPopulation = MAX_POPULATION;
     side.unitsCreated = 0;
     side.buildingsLost = 0;
-    const x = sideIndex === 0 ? 660 : WORLD.w - 660;
-    const tc = createBuilding(sideIndex, 'town_center', x, WORLD.h / 2, true);
+    const start = side.startPosition || {
+      x: sideIndex === 0 ? 660 : WORLD.w - 660,
+      y: WORLD.h / 2,
+    };
+    const tc = createBuilding(sideIndex, 'town_center', start.x, start.y, true, {
+      team: side.team,
+    });
     world.buildings.push(tc);
     side.townCenterId = tc.id;
 
@@ -652,7 +672,10 @@ export function placeWallRun(
     return { ok: false, message: `Need ${formatCost(plan.cost)}.` };
   }
   const buildings = plan.segments.map(segment => createBuilding(
-    sideIndex, 'wall', segment.x, segment.y, false, { orientation: segment.orientation },
+    sideIndex, 'wall', segment.x, segment.y, false, {
+      orientation: segment.orientation,
+      team: world.sides[sideIndex].team,
+    },
   ));
   world.buildings.push(...buildings);
   world.navigationVersion = (world.navigationVersion || 0) + 1;
@@ -689,6 +712,7 @@ export function placeBuilding(world, sideIndex, type, x, y, builders, options = 
       wallId: placement.wallId,
       stairSide: placement.stairSide,
       stairAlong: placement.stairAlong,
+      team: side.team,
     },
   );
   world.buildings.push(building);
@@ -1401,7 +1425,7 @@ function updateIncomeTelemetry(world, dt) {
 function spawnFromQueue(world, building, unitType) {
   const side = world.sides[building.side];
   side.queuedPopulation = Math.max(0, side.queuedPopulation - (UNIT_TYPES[unitType].pop || 1));
-  const dir = building.side === 0 ? 1 : -1;
+  const dir = sideFrontDirection(world, building.side);
   const angle = Math.random() * Math.PI - Math.PI / 2;
   // Production exits must clear the painted architecture, not only its compact
   // simulation radius. Enlarging the civic hall otherwise caused its first
@@ -1445,7 +1469,7 @@ function updateTowers(world, dt) {
     let target = null;
     let best = def.range;
     for (const unit of world.units) {
-      if (!unit.alive || unit.side === tower.side) continue;
+      if (!unit.alive || !areHostileSides(world, tower.side, unit.side)) continue;
       const d = Math.hypot(unit.x - tower.x, unit.y - tower.y);
       if (d <= best) { best = d; target = unit; }
     }

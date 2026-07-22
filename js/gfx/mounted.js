@@ -32,8 +32,8 @@ const MOUNT_SUN = {
 };
 
 // Faction colour. Baked in, never ambiguous, never occluded.
-const MOUNT_SIDE_RIM = ['#3E78B8', '#B8483E'];
-const MOUNT_SIDE_LIT = ['#6FA3DC', '#DC7A6F'];
+const MOUNT_SIDE_RIM = ['#3E78B8', '#B8483E', '#4FAE8B', '#C67A2F'];
+const MOUNT_SIDE_LIT = ['#6FA3DC', '#DC7A6F', '#7CD9B4', '#E5A35F'];
 
 // Ground contact line inside both sprite boxes (sprite units, y down).
 const MOUNT_GY = 23.4;
@@ -570,7 +570,7 @@ function mContactShadow(g, cx, cy, rx, ry, strength, side) {
 
   // side-tinted contact scuff: trodden earth cooled toward blue or warmed
   // toward red, sitting under the shadow so it never fights the figure.
-  if (side === 0 || side === 1) {
+  if (side >= 0 && side < MOUNT_SIDE_RIM.length) {
     const tint = mMix('#6B5B3C', MOUNT_SIDE_RIM[side], 0.42);
     // 1.5, matching the shadow's own falloff radius. At 1.9 the scuff ran past
     // the frame on both the gun (x 41.9 in a 40u box) and the horse, so it was
@@ -624,12 +624,12 @@ function mMaterials(nat, side) {
   // side index was threaded through — otherwise faction colour silently
   // degrades to nation trim and both armies end up wearing the same shabraque.
   const ri = (nat && typeof nat.rim === 'string') ? MOUNT_SIDE_RIM.indexOf(nat.rim) : -1;
-  const idx = (side === 0 || side === 1) ? side : ri;
+  const idx = (side >= 0 && side < MOUNT_SIDE_RIM.length) ? side : ri;
   // Normalised through the parser so a malformed config string can never reach
   // fillStyle directly — every colour this file emits is a valid 6-digit hex.
-  const sideHex = mToHex(mParseHex((idx === 0 || idx === 1) ? MOUNT_SIDE_RIM[idx]
+  const sideHex = mToHex(mParseHex((idx >= 0 && idx < MOUNT_SIDE_RIM.length) ? MOUNT_SIDE_RIM[idx]
     : (nat && nat.rim) || (nat && nat.trim) || '#D0C8A8'));
-  const sideLit = (idx === 0 || idx === 1) ? MOUNT_SIDE_LIT[idx] : mMix(sideHex, '#FFFFFF', 0.35);
+  const sideLit = (idx >= 0 && idx < MOUNT_SIDE_LIT.length) ? MOUNT_SIDE_LIT[idx] : mMix(sideHex, '#FFFFFF', 0.35);
   return {
     seed: h,
     headgear: mHeadgear(nat),

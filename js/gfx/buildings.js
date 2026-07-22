@@ -84,6 +84,8 @@ const bdSUN = {
 const BD_SIDE = [
   { rim: '#3E78B8', lit: '#6FA3DC' },   // side 0 — Prussian blue
   { rim: '#B8483E', lit: '#DC7A6F' },   // side 1 — oxide red
+  { rim: '#4FAE8B', lit: '#7CD9B4' },   // side 2 — allied green
+  { rim: '#C67A2F', lit: '#E5A35F' },   // side 3 — rival ochre
 ];
 
 // Board palette, from terrain.js. PALETTE LAW: nothing painted onto the ground
@@ -2422,18 +2424,35 @@ function bdPaintTownCenter(g, o) {
 function bdPaintHouse(g, o) {
   const def = o.def, s = bdRnd(o.seed);
   const ottoman = o.nation === 'ottoman';
-  const brickHouse = !ottoman && o.variant % 2 === 0;
+  const flavor = o.variant % 8;
+  const mansion = flavor === 5;
+  const estate = flavor === 3 || flavor === 4 || flavor === 6;
+  const rowHouse = flavor === 2;
+  const cottage = flavor === 7;
+  const brickHouse = !ottoman && (rowHouse || estate || flavor % 2 === 0);
+  const scaleW = mansion ? 1.58 : estate ? 1.46 : rowHouse ? 1.34 : cottage ? 1.18 : 1;
+  const scaleH = mansion ? 1.62 : estate ? 1.46 : rowHouse ? 1.18 : cottage ? 1.12 : 1;
   const G = bdGeometry({
-    w: def.w, h: def.h, bwK: 0.40, groundK: 0.42, wallK: 0.54,
-    overK: 0.07, roofK: ottoman ? 0.42 : 0.38, hipK: 0.68, plinthK: 0.13,
+    w: def.w * scaleW, h: def.h * scaleH,
+    bwK: mansion ? 0.42 : estate ? 0.43 : rowHouse ? 0.46 : 0.40,
+    groundK: 0.42,
+    wallK: mansion ? 0.60 : estate ? 0.58 : rowHouse ? 0.57 : 0.54,
+    overK: mansion ? 0.08 : 0.07,
+    roofK: mansion ? 0.34 : ottoman ? 0.42 : 0.38,
+    hipK: mansion ? 0.50 : estate ? 0.62 : 0.68,
+    plinthK: mansion ? 0.15 : 0.13,
+    depthK: estate || mansion ? 0.19 : 0.165,
   });
-  const wallHex = ottoman ? BMAT.PLASTER_WARM
+  const sideRim = (BD_SIDE[o.side] || BD_SIDE[0]).rim;
+  const wallHex = mansion ? '#4D4951'
+    : ottoman ? BMAT.PLASTER_WARM
     : brickHouse ? bdShiftHSL(BMAT.BRICK_RED, s(-0.015, 0.015), 0, s(-0.05, 0.04))
       : bdShiftHSL(BMAT.CLAPBOARD, s(-0.01, 0.01), 0, s(-0.05, 0.03));
   const wall = bdRamp(wallHex);
-  const roof = bdRoofMat(ottoman ? BMAT.TILE : BMAT.SLATE, o.natRoof, ottoman ? 0.30 : 0.45);
+  const roof = bdRoofMat(mansion ? '#434650' : ottoman ? BMAT.TILE : BMAT.SLATE,
+    o.natRoof, mansion ? 0.18 : ottoman ? 0.30 : 0.45);
 
-  bdWalls(g, G, { wall: wall, seed: o.seed, material: 'plain' });
+  bdWalls(g, G, { wall: wall, seed: o.seed, material: mansion ? 'stone' : 'plain' });
   const facadeH = G.yG - G.plinth - G.yE;
   if (brickHouse) {
     bdBrickCourses(g, -G.bw, G.yE, G.bw * 2, facadeH, wall, o.seed * 13);
@@ -2445,16 +2464,79 @@ function bdPaintHouse(g, o) {
     }
   }
 
-  if (ottoman) {
-    bdArchedWindow(g, -G.bw * 0.52, G.yE + G.h * 0.22, 7.5, 11);
-    bdArchedWindow(g, G.bw * 0.52, G.yE + G.h * 0.22, 7.5, 11);
-  } else {
-    bdSashWindow(g, -G.bw * 0.52, G.yE + G.h * 0.22, 8, 11, { keystone: brickHouse });
-    bdSashWindow(g, G.bw * 0.52, G.yE + G.h * 0.22, 8, 11, { keystone: brickHouse });
+  if (estate || mansion) {
+    const wing = bdRamp(mansion ? '#403D46' : wallHex);
+    const yBot = G.yG - G.plinth + 0.5;
+    const yTop = yBot - facadeH * (mansion ? 0.78 : 0.72);
+    const wingW = G.bw * (mansion ? 0.46 : 0.38);
+    const offset = G.bw * (mansion ? 0.76 : 0.72);
+    for (const dir of [-1, 1]) {
+      bdRect(g, dir * offset - wingW / 2, yTop, wingW, yBot - yTop, wing,
+        { litW: 1.05, edge: true });
+      if (mansion) {
+        bdStoneCourses(g, function (c) {
+          c.rect(dir * offset - wingW / 2, yTop, wingW, yBot - yTop);
+        }, dir * offset - wingW / 2, yTop, wingW, yBot - yTop, wing, o.seed * 31 + dir, 4.2);
+      } else {
+        bdBrickCourses(g, dir * offset - wingW / 2, yTop, wingW, yBot - yTop, wing, o.seed * 29 + dir);
+      }
+      bdPoly(g, [
+        dir * offset - wingW * 0.62, yTop + 2,
+        dir * offset, yTop - G.h * 0.16,
+        dir * offset + wingW * 0.62, yTop + 2,
+      ], roof, { litW: 0.7, edge: true });
+      if (mansion || dir === -1) {
+        bdSashWindow(g, dir * offset, yTop + (yBot - yTop) * 0.42,
+          wingW * 0.34, mansion ? 12 : 10, { trim: mansion ? '#7B7580' : BMAT.LIMESTONE });
+      }
+    }
   }
-  bdDoor(g, 0, G.yG - G.plinth, 10, G.h * 0.29, BD_SIDE[o.side].rim, { arch: ottoman });
 
-  if (!ottoman) {
+  const firstFloorY = G.yE + facadeH * 0.40;
+  const secondFloorY = G.yE + facadeH * 0.70;
+  const windowXs = estate || mansion || rowHouse
+    ? [-G.bw * 0.66, -G.bw * 0.25, G.bw * 0.25, G.bw * 0.66]
+    : [-G.bw * 0.52, G.bw * 0.52];
+  const windowTrim = mansion ? '#7D7681' : BMAT.LIMESTONE;
+  for (const wx of windowXs) {
+    if (ottoman && !mansion) bdArchedWindow(g, wx, firstFloorY, 7.5, 11);
+    else bdSashWindow(g, wx, firstFloorY, estate || mansion ? 7.2 : 8, estate || mansion ? 10.5 : 11,
+      { trim: windowTrim, keystone: brickHouse || mansion });
+  }
+  if (estate || mansion || rowHouse) {
+    for (const wx of mansion ? [-G.bw * 0.45, 0, G.bw * 0.45] : [-G.bw * 0.42, G.bw * 0.42]) {
+      if (ottoman && !mansion) bdArchedWindow(g, wx, secondFloorY, 7.2, 10.5);
+      else bdSashWindow(g, wx, secondFloorY, 7.0, 10,
+        { trim: windowTrim, keystone: mansion });
+      if (mansion && wx !== 0) {
+        const P = bdRamp(BMAT.TIMBER_DARK);
+        bdBeam(g, P, wx - 6, secondFloorY - 4, wx + 6, secondFloorY + 4, 1.5, { cap: 'butt' });
+        bdBeam(g, P, wx + 6, secondFloorY - 4, wx - 6, secondFloorY + 4, 1.5, { cap: 'butt' });
+      }
+    }
+  }
+
+  if (mansion) {
+    const tower = bdRamp('#3F3D47');
+    const tw = G.bw * 0.26;
+    const tBot = G.yG - G.plinth + 1;
+    const tTop = G.yE - G.h * 0.36;
+    const tx = -G.bw * 0.78;
+    bdRect(g, tx - tw / 2, tTop, tw, tBot - tTop, tower, { litW: 1.0, edge: true });
+    bdStoneCourses(g, function (c) { c.rect(tx - tw / 2, tTop, tw, tBot - tTop); },
+      tx - tw / 2, tTop, tw, tBot - tTop, tower, o.seed * 41, 4.1);
+    bdArchedWindow(g, tx, tTop + (tBot - tTop) * 0.35, tw * 0.36, 10);
+    bdPoly(g, [tx - tw * 0.72, tTop + 2, tx, tTop - G.h * 0.22, tx + tw * 0.72, tTop + 2],
+      roof, { litW: 0.85, edge: true });
+  }
+
+  if (mansion) {
+    bdDoor(g, 0, G.yG - G.plinth, 12, G.h * 0.31, sideRim, { arch: true });
+  } else {
+    bdDoor(g, 0, G.yG - G.plinth, rowHouse || estate ? 11 : 10, G.h * 0.29, sideRim, { arch: ottoman });
+  }
+
+  if (!ottoman && !mansion) {
     // A tiny but complete columned doorcase: bases, fluted shafts, a dentil
     // cornice and shallow pediment. It makes even the humble house colonial.
     const P = bdRamp(BMAT.LIMESTONE);
@@ -2472,12 +2554,41 @@ function bdPaintHouse(g, o) {
 
   bdRoof(g, G, { roof: roof, roofKind: ottoman ? 'tile' : 'slate', seed: o.seed, pitch: ottoman ? 4.1 : 3.3 });
 
-  bdChimney(g, G.bw * 0.62, G.yE + 2, 7.5, G.h * 0.38);
-  bdRidgePennant(g, -G.rr * 0.5, G.yR - 1, o.side, o.side === 0 ? 1 : -1);
+  if (estate || mansion || rowHouse) {
+    const dormers = mansion ? [-G.rr * 0.50, 0, G.rr * 0.50] : [-G.rr * 0.35, G.rr * 0.35];
+    const D = bdRamp(mansion ? '#6F6973' : BMAT.CLAPBOARD);
+    for (const dx of dormers) {
+      const dw = mansion ? 11 : 10;
+      const dh = mansion ? 13 : 11;
+      const yBot = G.yE - G.roofH * 0.18;
+      bdRect(g, dx - dw / 2, yBot - dh, dw, dh, D, { litW: 0.75, edge: true });
+      bdPoly(g, [dx - dw * 0.62, yBot - dh + 1, dx, yBot - dh - 7, dx + dw * 0.62, yBot - dh + 1],
+        roof, { litW: 0.65, edge: true });
+      if (mansion) bdArchedWindow(g, dx, yBot - dh * 0.47, 4.2, 6.4);
+      else bdSashWindow(g, dx, yBot - dh * 0.47, 4.2, 6.2, { keystone: false });
+    }
+  }
+
+  bdChimney(g, G.bw * 0.62, G.yE + 2, estate || mansion ? 8.5 : 7.5, G.h * (mansion ? 0.44 : 0.38));
+  if (estate || mansion) bdChimney(g, -G.bw * 0.52, G.yE + 5, 7.2, G.h * 0.34);
+  bdRidgePennant(g, -G.rr * 0.5, G.yR - 1, o.side, o.side === 0 || o.side === 2 ? 1 : -1);
 
   // A woodpile and a water butt against the wall — lived-in, and they break
   // the rectangle of the footprint
-  bdLogPile(g, -G.bw * 0.72, G.yG - 1, 16, 2, o.seed * 5);
+  bdLogPile(g, -G.bw * 0.72, G.yG - 1, estate || mansion ? 23 : 16, estate || mansion ? 3 : 2, o.seed * 5);
+  if (estate || mansion) {
+    bdFence(g, -G.bw * 1.12, G.bw * 1.14, G.yG + 11, 13, o.seed * 7, mansion ? 11 : 14);
+    bdCart(g, G.bw * 0.92, G.yG + 9, 0.56, o.seed * 9);
+  }
+  if (mansion) {
+    const Dead = bdRamp(BMAT.TIMBER_DARK);
+    const bx = -G.bw * 1.22, by = G.yG + 5;
+    bdBeam(g, Dead, bx, by, bx + 7, G.yE - G.h * 0.24, 2.5, { cap: 'butt' });
+    bdBeam(g, Dead, bx + 5, G.yE - G.h * 0.02, bx - 9, G.yE - G.h * 0.18, 1.5, { cap: 'butt' });
+    bdBeam(g, Dead, bx + 6, G.yE - G.h * 0.10, bx + 20, G.yE - G.h * 0.24, 1.4, { cap: 'butt' });
+    const moon = bdRamp('#B9B19C');
+    bdEllipse(g, G.bw * 0.96, G.yR - G.h * 0.07, 3.5, 3.5, moon, { litW: 0.7, edge: true });
+  }
   return G;
 }
 
@@ -4837,7 +4948,7 @@ function bdPaintFortification(
  * the hard cast shadow's down-right throw. Nothing here clips.
  */
 const BD_TOP_EXTRA = {
-  town_center: 112, house: 62, farm: 30, mill: 104, lumber_camp: 54,
+  town_center: 112, house: 118, farm: 30, mill: 104, lumber_camp: 54,
   mine: 74, barracks: 78, stable: 72, foundry: 108, tower: 106,
   castle: 162,
   wall: 72, gate: 94, wall_stairs: 92,
@@ -4900,7 +5011,7 @@ function bdResetCaches() {
 }
 
 const BD_VARIANTS = {
-  town_center: 1, tower: 2, castle: 2, farm: 1, house: 3,
+  town_center: 1, tower: 2, castle: 2, farm: 1, house: 8,
   mill: 2, lumber_camp: 2, mine: 2, barracks: 2, stable: 2, foundry: 2,
   wall: 3, gate: 3, wall_stairs: 3,
 };
@@ -4973,7 +5084,7 @@ export function getArchitectureProductionArtSpec(nation) {
 // every building type while still allowing roof overhang and vertical mass.
 const BD_BUILDING_PRESENTATION = Object.freeze({
   town_center: { artWidthScale: 1.48, apronWidthScale: 0.98, apronDepthScale: 0.62 },
-  house: { artWidthScale: 1.36, apronWidthScale: 0.82, apronDepthScale: 0.56 },
+  house: { artWidthScale: 1.36, apronWidthScale: 1.12, apronDepthScale: 0.66 },
   mill: { artWidthScale: 1.42, apronWidthScale: 0.86, apronDepthScale: 0.58 },
   lumber_camp: { artWidthScale: 1.44, apronWidthScale: 0.86, apronDepthScale: 0.58 },
   mine: { artWidthScale: 1.42, apronWidthScale: 0.86, apronDepthScale: 0.58 },
@@ -5253,7 +5364,7 @@ function bdProductionBuildingSprite(type, def, image, side, damageStage, seed) {
 
 function bdBuildingSprite(type, def, side, nation, natRoof, variant, damageStage, animFrame) {
   const art = getBuildingProductionArtSpec(nation, type);
-  const image = art ? getProductionArt(art.key) : null;
+  const image = art && !(type === 'house' && variant >= 2) ? getProductionArt(art.key) : null;
   const frame = type === 'mill' && !image ? (animFrame || 0) : 0;
   const damage = damageStage || 0;
   const key = type + '|' + side + '|' + nation + '|' + variant + '|' + damage + '|' + frame;
@@ -5271,9 +5382,9 @@ function bdBuildingSprite(type, def, side, nation, natRoof, variant, damageStage
   const painter = BD_PAINTERS[type];
   if (!painter) return null;
   const box = bdBoxFor(type, def);
-  // Seed from the key so a re-bake is byte-identical, and so the three house
+  // Seed from the key so a re-bake is byte-identical, and so the house
   // variants differ in their timber bracing, thatch and stonework rather than
-  // being the same house three times.
+  // being the same house over and over.
   let seed = variant * 7919 + side * 104729 + 1;
   for (let i = 0; i < type.length; i++) seed = (seed * 31 + type.charCodeAt(i)) | 0;
 
@@ -5461,18 +5572,128 @@ function bdFarmForegroundSprite(def, side, stage) {
 const BD_RES_STEPS = 5;
 
 const BD_RESOURCE_ART = Object.freeze({
-  wood: { key: 'woodland', widthK: 2.42 },
-  food: { key: 'berryBushes', widthK: 2.30 },
+  wood: { key: 'woodland', widthK: 2.72 },
+  food: { key: 'berryBushes', widthK: 2.48 },
   stone: { key: 'stoneOutcrop', widthK: 2.24 },
   gold: { key: 'goldOutcrop', widthK: 2.24 },
 });
+
+function bdProduceBasket(g, cx, yBot, w, fruitHex, rr) {
+  const B = bdRamp(BMAT.SHINGLE);
+  const F = bdRamp(fruitHex);
+  bdContactShadow(g, cx, yBot + 1, w * 0.65, w * 0.30, 0.55);
+  bdPoly(g, [
+    cx - w * 0.50, yBot - w * 0.12,
+    cx - w * 0.34, yBot - w * 0.44,
+    cx + w * 0.34, yBot - w * 0.44,
+    cx + w * 0.50, yBot - w * 0.12,
+    cx + w * 0.38, yBot,
+    cx - w * 0.38, yBot,
+  ], B, { litW: 0.7, edge: true });
+  g.strokeStyle = bdRgba(B.shade, 0.70);
+  g.lineWidth = 0.85;
+  g.beginPath();
+  g.arc(cx, yBot - w * 0.43, w * 0.36, Math.PI * 1.05, Math.PI * 1.95);
+  g.stroke();
+  for (let i = 0; i < 8; i++) {
+    const x = cx + rr(-w * 0.30, w * 0.30);
+    const y = yBot - rr(w * 0.20, w * 0.43);
+    g.fillStyle = F.shade;
+    g.beginPath(); g.arc(x, y, rr(1.0, 1.8), 0, BD_TAU); g.fill();
+    g.fillStyle = F.edge;
+    g.beginPath(); g.arc(x + bdSUN.x * 0.5, y + bdSUN.y * 0.5, 0.45, 0, BD_TAU); g.fill();
+  }
+}
+
+function bdGrainSheaf(g, cx, yBot, k, rr) {
+  const S = bdRamp(BT.STRAW);
+  bdContactShadow(g, cx, yBot, 8 * k, 7 * k, 0.50);
+  for (let i = -4; i <= 4; i++) {
+    const x0 = cx + i * 1.4 * k;
+    const x1 = cx + i * 0.55 * k + rr(-1, 1) * k;
+    bdBeam(g, S, x0, yBot, x1, yBot - rr(12, 18) * k, 1.0 * k, { cap: 'butt' });
+    g.fillStyle = bdRgba(BT.STRAW_LIGHT, 0.72);
+    g.beginPath();
+    g.ellipse(x1, yBot - rr(13, 19) * k, 1.3 * k, 2.3 * k, rr(-0.3, 0.3), 0, BD_TAU);
+    g.fill();
+  }
+  const bind = bdRamp(BMAT.TIMBER_DARK);
+  bdBeam(g, bind, cx - 7 * k, yBot - 6.4 * k, cx + 7 * k, yBot - 7.2 * k,
+    1.25 * k, { cap: 'butt' });
+}
+
+function bdPumpkin(g, cx, cy, r, hex) {
+  const P = bdRamp(hex);
+  bdContactShadow(g, cx, cy + r * 0.62, r * 1.05, r * 0.52, 0.55);
+  for (const dx of [-0.55, -0.25, 0, 0.25, 0.55]) {
+    bdEllipse(g, cx + dx * r, cy, r * 0.34, r * 0.50, P, { litW: 0.35, edge: dx === 0 });
+  }
+  const stem = bdRamp(BT.TRUNK_DARK);
+  bdBeam(g, stem, cx, cy - r * 0.46, cx + r * 0.16, cy - r * 0.78, 1.2, { cap: 'butt' });
+}
+
+function bdDrawFoodDressing(g, res, bottom, maxW, frac, rr) {
+  const kind = Math.abs(((res.seed * 10000) | 0)) % 4;
+  const live = bdClamp(0.30 + frac * 0.70, 0.25, 1);
+  const spread = maxW * 0.36;
+  if (kind === 0) {
+    const fruit = ['#8E2F33', '#B2465D', '#C18A34'];
+    for (let i = 0; i < Math.round(5 * live); i++) {
+      bdBush(g, rr(-spread, spread), bottom + rr(-16, 4),
+        rr(8, 13), rr, fruit[i % fruit.length]);
+    }
+    bdProduceBasket(g, -spread * 0.55, bottom + 7, 15, '#8E2F33', rr);
+    bdProduceBasket(g, spread * 0.42, bottom + 8, 13, '#C18A34', rr);
+  } else if (kind === 1) {
+    for (let i = 0; i < Math.round(4 * live); i++) {
+      const x = rr(-spread, spread);
+      const y = bottom + rr(-8, 5);
+      bdTree(g, x, y, rr(8, 12), rr, 'broadleaf');
+      const F = bdRamp(i % 2 ? '#B2463A' : '#D0A13A');
+      for (let dot = 0; dot < 8; dot++) {
+        g.fillStyle = F.base;
+        g.beginPath();
+        g.arc(x + rr(-8, 8), y - rr(14, 28), rr(0.9, 1.5), 0, BD_TAU);
+        g.fill();
+      }
+    }
+    bdCrate(g, spread * 0.58, bottom + 9, 16, 10, res.id + 31);
+    bdProduceBasket(g, -spread * 0.52, bottom + 8, 14, '#B2463A', rr);
+  } else if (kind === 2) {
+    for (let i = 0; i < Math.round(7 * live); i++) {
+      bdGrainSheaf(g, rr(-spread, spread), bottom + rr(-4, 8), rr(0.58, 0.88), rr);
+    }
+    bdSack(g, -spread * 0.45, bottom + 10, 10, 14, res.id + 41);
+    bdSack(g, -spread * 0.32, bottom + 11, 11, 15, res.id + 42);
+  } else {
+    const colors = ['#B86A31', '#D3983F', '#8D7040'];
+    for (let i = 0; i < Math.round(10 * live); i++) {
+      bdPumpkin(g, rr(-spread, spread), bottom + rr(-11, 5), rr(4, 7), colors[i % colors.length]);
+    }
+    bdCrate(g, spread * 0.52, bottom + 9, 15, 10, res.id + 51);
+    bdBarrel(g, -spread * 0.58, bottom + 9, 8, 12);
+  }
+}
+
+function bdDrawWoodDressing(g, res, bottom, maxW, frac, rr) {
+  const spread = maxW * 0.38;
+  const live = Math.round(9 * (0.30 + 0.70 * frac));
+  for (let i = 0; i < 9; i++) {
+    const x = rr(-spread, spread);
+    const y = bottom + rr(-18, 8);
+    if (i < live) bdTree(g, x, y, rr(10, 18), rr, rr(0, 1) < 0.30 ? 'conifer' : 'broadleaf');
+    else bdStump(g, x, y + 4, rr(3.6, 5.6), rr);
+  }
+  bdLogPile(g, -spread * 0.52, bottom + 10, 24, 3, res.id + 61);
+  bdLogPile(g, spread * 0.44, bottom + 8, 18, 2, res.id + 62);
+}
 
 function bdProductionResourceSprite(res, step, image, art) {
   const frac = step / (BD_RES_STEPS - 1);
   const maxW = res.radius * art.widthK;
   const maxH = maxW * image.naturalHeight / image.naturalWidth;
   const bottom = res.radius * 0.62 + 12;
-  const box = [-maxW / 2 - 28, bottom - maxH - 20, maxW + 56, maxH + 72];
+  const box = [-maxW / 2 - 34, bottom - maxH - 36, maxW + 68, maxH + 104];
   const scale = 0.58 + frac * 0.42;
   const width = maxW * scale;
   const height = maxH * scale;
@@ -5496,9 +5717,12 @@ function bdProductionResourceSprite(res, step, image, art) {
     // scars keep depletion physical rather than turning it into transparency.
     const removed = Math.round((1 - frac) * 8);
     if (res.type === 'wood') {
+      bdDrawWoodDressing(g, res, bottom, maxW, frac, rr);
       for (let i = 0; i < removed; i++) {
         bdStump(g, rr(-maxW * 0.34, maxW * 0.34), bottom + rr(-8, 7), rr(3.2, 5.2), rr);
       }
+    } else if (res.type === 'food') {
+      bdDrawFoodDressing(g, res, bottom, maxW, frac, rr);
     } else if (res.type === 'stone' || res.type === 'gold') {
       for (let i = 0; i < removed; i++) {
         const x = rr(-maxW * 0.36, maxW * 0.36);
@@ -5544,7 +5768,8 @@ function bdResourceSprite(res) {
     // Seeded from the node's own seed, so props keep their positions across
     // every depletion step and only their COUNT changes.
     const rr = bdRnd((res.seed * 1000) | 0);
-    const full = res.type === 'wood' ? 17 : res.type === 'food' ? 19 : 15;
+    const full = res.type === 'wood' ? 24 : res.type === 'food' ? 23 : 15;
+    const foodKind = res.type === 'food' ? Math.abs(((res.seed * 10000) | 0)) % 4 : 0;
     const props = [];
     for (let i = 0; i < full; i++) {
       const a = rr(0, BD_TAU);
@@ -5567,8 +5792,17 @@ function bdResourceSprite(res) {
         if (alive) bdTree(g, p.x, p.y, 15 + p.s * 11, pr);
         else bdStump(g, p.x, p.y, 4.5 + p.s * 2, pr);
       } else if (res.type === 'food') {
-        if (alive) bdBush(g, p.x, p.y, 9 + p.s * 5, pr, '#8E2F33');
-        else {
+        if (alive && foodKind === 1 && p.s > 0.54) {
+          bdTree(g, p.x, p.y + 3, 7 + p.s * 5, pr, 'broadleaf');
+        } else if (alive && foodKind === 2 && p.s > 0.45) {
+          bdGrainSheaf(g, p.x, p.y + 8, 0.42 + p.s * 0.26, pr);
+        } else if (alive && foodKind === 3 && p.s > 0.32) {
+          bdPumpkin(g, p.x, p.y + 1, 3.8 + p.s * 3.0,
+            p.s > 0.62 ? '#D3983F' : '#B86A31');
+        } else if (alive) {
+          bdBush(g, p.x, p.y, 9 + p.s * 5, pr,
+            foodKind === 0 ? '#8E2F33' : foodKind === 1 ? '#B2463A' : '#C18A34');
+        } else {
           // picked over: the bush survives but carries no fruit
           bdBush(g, p.x, p.y, 7 + p.s * 3, pr, null);
         }
@@ -5596,6 +5830,7 @@ function bdResourceSprite(res) {
     // Human-scale clues on the near edge communicate both use and scale. They
     // are sparse enough that an untouched resource still reads as landscape.
     if (res.type === 'wood') {
+      bdDrawWoodDressing(g, res, r * 0.56 + 12, r * 1.72, frac, rr);
       const L = bdRamp(BMAT.LOG);
       bdBeam(g, L, -r * 0.54, r * 0.38, -r * 0.14, r * 0.31, 7.5, { cap: 'round' });
       bdEllipse(g, -r * 0.14, r * 0.31, 3.8, 4.8, L, { litW: 0.7, edge: true });
@@ -5605,6 +5840,7 @@ function bdResourceSprite(res) {
         g.fillRect(-r * 0.34 + chips(-16, 16), r * 0.37 + chips(-4, 5), chips(1, 3.2), 1.1);
       }
     } else if (res.type === 'food') {
+      bdDrawFoodDressing(g, res, r * 0.56 + 12, r * 1.72, frac, rr);
       const B = bdRamp(BMAT.SHINGLE);
       bdLitPath(g, function (c) {
         c.moveTo(-r * 0.50, r * 0.42); c.lineTo(-r * 0.34, r * 0.42);

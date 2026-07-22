@@ -18,6 +18,10 @@ import {
   assignVillagerPath, clearVillagerPath, segmentBlocksVillager,
 } from './navigation.js';
 import { isHostilePair, isPeaceTime } from './truce.js';
+import {
+  RIVAL_TEAM, areAlliedSides, areHostileEntities, areHostileSides,
+  sideFrontDirection, sidePossessiveLabel, teamVictory,
+} from './teams.js';
 
 const PARTICLE_CAP = 900;
 const blockingFortifications = [];
@@ -101,11 +105,11 @@ export function getUnitRuntimeStats(type) {
   };
 }
 
-function makeUnit(side, nationKey, type, x, y) {
+function makeUnit(side, nationKey, type, x, y, team = null) {
   const stats = getUnitRuntimeStats(type);
   const definition = UNIT_TYPES[type];
   return {
-    id: nextId++, side,
+    id: nextId++, side, team,
     // Worker kinds share the mature villager job/navigation surface while the
     // durable unitType preserves their own balance, renderer and save identity.
     type: definition.worker ? 'villager' : type,
@@ -123,7 +127,7 @@ function makeUnit(side, nationKey, type, x, y) {
     navigationGoalX: NaN, navigationGoalY: NaN, navigationVersion: 0,
     target: null, acquireT: Math.random() * 0.5,
     formation: 'line',
-    facing: side === 0 ? 1 : -1,
+    facing: side === 0 || side === 2 ? 1 : -1,
     moving: false, animT: Math.random() * 10, walkPhaseOffset: 0,
     fireT: 0, torchT: 0,
     fleeYDrift: 0,
@@ -138,6 +142,41 @@ function clampPos(u) {
 }
 
 export function createWorld(opts) {
+  const playerNation = opts?.playerNation || 'england';
+  const enemyNation = opts?.enemyNation || (playerNation === 'england' ? 'ottoman' : 'england');
+  const allyNation = opts?.allyNation || playerNation;
+  const enemyAllyNation = opts?.enemyAllyNation || enemyNation;
+  const defaultSides = [
+    {
+      nation: playerNation, team: 0, controller: 'human',
+      label: 'Your town', startPosition: { x: 660, y: WORLD.h * 0.36 },
+    },
+    {
+      nation: enemyNation, team: RIVAL_TEAM, controller: 'ai',
+      label: 'Rival town', startPosition: { x: WORLD.w - 660, y: WORLD.h * 0.36 },
+    },
+    {
+      nation: allyNation, team: 0, controller: 'ai',
+      label: 'Allied town', startPosition: { x: 660, y: WORLD.h * 0.66 },
+    },
+    {
+      nation: enemyAllyNation, team: RIVAL_TEAM, controller: 'ai',
+      label: 'Rival ally', startPosition: { x: WORLD.w - 660, y: WORLD.h * 0.66 },
+    },
+  ];
+  const sides = Array.isArray(opts?.sides) && opts.sides.length >= 2
+    ? opts.sides.map((side, sideIndex) => ({
+      ...defaultSides[Math.min(sideIndex, defaultSides.length - 1)],
+      ...side,
+      nation: NATIONS[side?.nation] ? side.nation : defaultSides[Math.min(sideIndex, defaultSides.length - 1)].nation,
+      team: Number.isInteger(side?.team) ? side.team : sideIndex === 0 || sideIndex === 2 ? 0 : RIVAL_TEAM,
+      controller: sideIndex === 0 ? 'human' : side?.controller || 'ai',
+      start: 0,
+      alive: 0,
+      kills: 0,
+      losses: 0,
+    }))
+    : defaultSides.map(side => ({ ...side, start: 0, alive: 0, kills: 0, losses: 0 }));
   const world = {
     units: [], active: [],
     projectiles: [], particles: [], flags: [], destructions: [],
@@ -148,10 +187,8 @@ export function createWorld(opts) {
     navigationVersion: 0,
     sepGrid: new FlatGrid(20, WORLD.w, WORLD.h),
     tgtGrid: new FlatGrid(64, WORLD.w, WORLD.h),
-    sides: [
-      { nation: opts?.playerNation || 'england', start: 0, alive: 0, kills: 0, losses: 0 },
-      { nation: opts?.enemyNation || 'ottoman', start: 0, alive: 0, kills: 0, losses: 0 },
-    ],
+    mode: sides.length >= 4 ? '2v2' : '1v1',
+    sides,
   };
   world.spawnUnit = (side, type, x, y) => spawnUnit(world, side, type, x, y);
   world.damage = (victim, amount, attacker) => damage(world, victim, amount, attacker);
@@ -161,7 +198,7 @@ export function createWorld(opts) {
 
 export function spawnUnit(world, sideIndex, type, x, y) {
   const side = world.sides[sideIndex];
-  const unit = makeUnit(sideIndex, side.nation, type, x, y);
+  const unit = makeUnit(sideIndex, side.nation, type, x, y, side.team);
   world.units.push(unit);
   side.alive++;
   side.start++;
@@ -221,7 +258,7 @@ export function damage(world, victim, amount, attacker) {
   if (isPeaceTime(world) && isHostilePair(attacker, victim)) return false;
   victim.hp -= amount;
   if (victim.entityKind === 'building' && attacker?.alive && attacker.entityKind !== 'building'
-    && attacker.type !== 'villager' && attacker.side !== victim.side) {
+    && attacker.type !== 'villager' && areHostileEntities(world, attacker, victim)) {
     victim.lastHostileUnitDamageAt = world.time;
     victim.lastHostileUnitSide = attacker.side;
   }
@@ -259,7 +296,7 @@ function igniteBuilding(building) {
   }
 }
 
-function kill(world, entity) {
+function kill(world, entity, attacker = null) {
   entity.alive = false;
   entity.hp = 0;
   entity.state = 'dead';
@@ -283,7 +320,7 @@ function kill(world, entity) {
     });
     world.events.push({
       side: entity.side,
-      text: `${entity.side === 0 ? 'Your' : 'Enemy'} ${entity.type.replaceAll('_', ' ')} was destroyed.`,
+      text: `${sidePossessiveLabel(world, entity.side)} ${entity.type.replaceAll('_', ' ')} was destroyed.`,
       tone: 'danger',
     });
     return;
@@ -292,7 +329,9 @@ function kill(world, entity) {
   sfx.unitDeath(u.type, u.x);
   s.alive--; s.losses++;
   onUnitKilled(world, u);
-  world.sides[1 - u.side].kills++;
+  if (Number.isInteger(attacker?.side) && areHostileSides(world, attacker.side, u.side)) {
+    world.sides[attacker.side].kills++;
+  }
   world.pendingDecals.push({
     kind: u.type === 'gun' ? 'wreck' : 'corpse',
     x: u.x, y: u.y, type: u.type,
@@ -303,7 +342,7 @@ function kill(world, entity) {
   const active = world.active;
   world.sepGrid.forEach(u.x, u.y, 40, (i) => {
     const v = active[i];
-    if (v !== u && v.alive && v.side === u.side) {
+    if (v !== u && v.alive && areAlliedSides(world, v.side, u.side)) {
       v.morale -= 4;
       if (v.morale < 0) v.morale = 0;
       if (v.morale < 25 && Math.random() < 0.12) flee(world, v);
@@ -522,7 +561,7 @@ function updateUnit(world, u, dt) {
   u.moving = false;
 
   if (u.state === 'flee') {
-    const dirX = u.side === 0 ? -1 : 1;
+    const dirX = -sideFrontDirection(world, u.side);
     u.x += dirX * u.speed * 1.2 * dt;
     u.y += u.fleeYDrift * u.speed * 0.5 * dt;
     clampPos(u);
@@ -568,7 +607,7 @@ function updateUnit(world, u, dt) {
       const active = world.active;
       world.tgtGrid.forEach(u.x, u.y, u.acquire, (i) => {
         const v = active[i];
-        if (v.side === u.side || !v.alive) return;
+        if (!v.alive || areAlliedSides(world, v.side, u.side)) return;
         const dx = v.x - u.x, dy = v.y - u.y;
         const d = Math.sqrt(dx * dx + dy * dy);
         if (d < bestD && d <= u.acquire) { bestD = d; best = v; }
@@ -577,7 +616,7 @@ function updateUnit(world, u, dt) {
       // remains cheap and lets idle soldiers finish an exposed settlement.
       if (!best) {
         for (const building of world.buildings) {
-          if (!building.alive || building.side === u.side) continue;
+          if (!building.alive || areAlliedSides(world, building.side, u.side)) continue;
           const d = Math.hypot(building.x - u.x, building.y - u.y) - building.radius;
           if (d < bestD && d <= u.acquire) { bestD = d; best = building; }
         }
@@ -752,7 +791,7 @@ export function step(world, dt) {
   if (peaceWasActive && world.projectiles.length) world.projectiles.length = 0;
   world.time += dt;
   if (peaceWasActive && !isPeaceTime(world)) {
-    for (const side of [0, 1]) {
+    for (let side = 0; side < world.sides.length; side++) {
       world.events.push({
         side,
         text: 'The ten-minute peace has ended. Combat is now permitted.',
@@ -872,11 +911,10 @@ export function step(world, dt) {
   world.checkT -= dt;
   if (world.checkT <= 0) {
     world.checkT = 0.5;
-    const aDone = !world.buildings.some(b => b.alive && b.id === world.sides[0].townCenterId);
-    const bDone = !world.buildings.some(b => b.alive && b.id === world.sides[1].townCenterId);
-    if (aDone || bDone) {
+    const winner = teamVictory(world);
+    if (winner !== null) {
       world.state = 'ended';
-      world.winner = aDone && bDone ? -2 : aDone ? 1 : 0;
+      world.winner = winner;
     }
   }
 }

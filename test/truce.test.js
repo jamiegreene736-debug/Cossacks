@@ -88,10 +88,10 @@ test('combat unlocks on the exact boundary and announces the transition once', (
 
   step(world, 0.02);
   assert.equal(isPeaceTime(world), false);
-  assert.equal(world.events.filter(event => event.text.includes('peace has ended')).length, 2);
+  assert.equal(world.events.filter(event => event.text.includes('peace has ended')).length, world.sides.length);
   assert.equal(damage(world, target, 10, attacker), true);
   assert.equal(target.hp, target.maxHp - 10);
 
   step(world, 1);
-  assert.equal(world.events.filter(event => event.text.includes('peace has ended')).length, 2);
+  assert.equal(world.events.filter(event => event.text.includes('peace has ended')).length, world.sides.length);
 });

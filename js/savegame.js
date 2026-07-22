@@ -10,6 +10,7 @@ import {
   repairEconomyLedgers, repairFieldAttachments, reserveEntityIds,
 } from './economy.js';
 import { createWorld, getUnitRuntimeStats, reserveUnitIds } from './sim.js';
+import { PLAYER_TEAM, RIVAL_TEAM } from './teams.js';
 
 export const SAVE_KEY = 'empires1700.campaign.v1';
 export const SAVE_VERSION = 1;
@@ -74,12 +75,30 @@ function serializeProjectile(projectile) {
   return copy;
 }
 
+function normalizeCommanderList(commanderOrCommanders) {
+  return (Array.isArray(commanderOrCommanders) ? commanderOrCommanders : [commanderOrCommanders])
+    .filter(Boolean);
+}
+
+function serializeCommander(commander) {
+  return {
+    side: commander.side,
+    difficulty: commander.difficulty,
+    thinkTimer: commander.thinkTimer,
+    attackTimer: commander.attackTimer,
+    committed: [...commander.committed],
+    planCursor: clone(commander.planCursor),
+    resourceCursor: commander.resourceCursor,
+  };
+}
+
 function campaignSummary(world, savedAt) {
   const player = world.sides[0];
+  const enemySides = world.sides.filter(side => side.team !== player.team);
   return {
     savedAt,
     nation: player.nation,
-    enemyNation: world.sides[1].nation,
+    enemyNation: enemySides[0]?.nation || world.sides[1]?.nation,
     difficulty: normalizeCpuDifficulty(world.difficulty),
     elapsed: world.time,
     population: player.population,
@@ -88,8 +107,9 @@ function campaignSummary(world, savedAt) {
   };
 }
 
-export function createGameSnapshot(world, commander, camera, savedAt = Date.now()) {
-  if (!world || !commander) throw new Error('A running campaign is required to save.');
+export function createGameSnapshot(world, commanderOrCommanders, camera, savedAt = Date.now()) {
+  const commanders = normalizeCommanderList(commanderOrCommanders);
+  if (!world || commanders.length === 0) throw new Error('A running campaign is required to save.');
   const worldData = {
     units: world.units.map(serializeUnit),
     projectiles: world.projectiles.map(serializeProjectile),
@@ -102,15 +122,8 @@ export function createGameSnapshot(world, commander, camera, savedAt = Date.now(
     savedAt,
     summary: campaignSummary(world, savedAt),
     world: worldData,
-    commander: {
-      side: commander.side,
-      difficulty: commander.difficulty,
-      thinkTimer: commander.thinkTimer,
-      attackTimer: commander.attackTimer,
-      committed: [...commander.committed],
-      planCursor: clone(commander.planCursor),
-      resourceCursor: commander.resourceCursor,
-    },
+    commander: serializeCommander(commanders[0]),
+    commanders: commanders.map(serializeCommander),
     camera: {
       x: Number(camera?.x) || 660,
       y: Number(camera?.y) || 1600,
@@ -126,9 +139,31 @@ function validateSnapshot(snapshot) {
   if (!data || !Array.isArray(data.units) || !Array.isArray(data.buildings) || !Array.isArray(data.resources)) {
     throw new Error('The campaign save is incomplete.');
   }
-  if (!Array.isArray(data.sides) || data.sides.length !== 2
+  if (!Array.isArray(data.sides) || data.sides.length < 2
       || data.sides.some(side => !NATIONS[side?.nation])) {
     throw new Error('The campaign save contains an unknown nation.');
+  }
+}
+
+function repairSideTeams(world) {
+  for (let sideIndex = 0; sideIndex < world.sides.length; sideIndex++) {
+    const side = world.sides[sideIndex];
+    if (!Number.isInteger(side.team)) {
+      side.team = sideIndex === 0 || sideIndex === 2 ? PLAYER_TEAM : RIVAL_TEAM;
+    }
+    side.controller = sideIndex === 0 ? 'human' : side.controller || 'ai';
+    if (!side.startPosition) {
+      side.startPosition = {
+        x: sideIndex === 0 || sideIndex === 2 ? 660 : 5200 - 660,
+        y: sideIndex === 2 || sideIndex === 3 ? 3200 * 0.66 : 3200 * 0.36,
+      };
+    }
+  }
+  for (const unit of world.units || []) {
+    if (!Number.isInteger(unit.team)) unit.team = world.sides[unit.side]?.team ?? null;
+  }
+  for (const building of world.buildings || []) {
+    if (!Number.isInteger(building.team)) building.team = world.sides[building.side]?.team ?? null;
   }
 }
 
@@ -156,6 +191,7 @@ export function restoreGameSnapshot(snapshot) {
     playerNation: data.sides[0].nation,
     enemyNation: data.sides[1].nation,
     difficulty,
+    sides: data.sides,
   });
 
   for (const key of WORLD_ARRAYS) world[key] = clone(data[key] || []);
@@ -167,6 +203,7 @@ export function restoreGameSnapshot(snapshot) {
   world.projectiles = clone(data.projectiles || []);
   world.active = [];
   world.state = 'paused';
+  repairSideTeams(world);
   repairEconomyLedgers(world);
   repairFieldAttachments(world);
 
@@ -196,17 +233,36 @@ export function restoreGameSnapshot(snapshot) {
   reserveUnitIds(Math.max(0, ...world.units.map(unit => unit.id)));
   reserveEntityIds(Math.max(99999, ...world.buildings.map(building => building.id), ...world.resources.map(resource => resource.id)));
 
-  const commander = new Commander(world, snapshot.commander?.side ?? 1, difficulty);
-  commander.thinkTimer = Number(snapshot.commander?.thinkTimer) || 0;
-  commander.attackTimer = Number(snapshot.commander?.attackTimer) || 0;
-  commander.committed = new Set(snapshot.commander?.committed || []);
-  commander.planCursor = clone(snapshot.commander?.planCursor || {});
-  commander.resourceCursor = Math.max(0, Number(snapshot.commander?.resourceCursor) || 0);
+  const commanderSnapshots = Array.isArray(snapshot.commanders) && snapshot.commanders.length
+    ? snapshot.commanders : snapshot.commander ? [snapshot.commander] : [];
+  const aiSides = world.sides
+    .map((_side, sideIndex) => sideIndex)
+    .filter(sideIndex => sideIndex !== 0);
+  const restoredCommanders = commanderSnapshots.length
+    ? commanderSnapshots.map(saved => {
+      const side = saved?.side ?? 1;
+      const commander = new Commander(world, side, saved?.difficulty || difficulty);
+      commander.thinkTimer = Number(saved?.thinkTimer) || 0;
+      commander.attackTimer = Number(saved?.attackTimer) || 0;
+      commander.committed = new Set(saved?.committed || []);
+      commander.planCursor = clone(saved?.planCursor || {});
+      commander.resourceCursor = Math.max(0, Number(saved?.resourceCursor) || 0);
+      return commander;
+    })
+    : [];
+  const commandersBySide = new Map(restoredCommanders.map(commander => [commander.side, commander]));
+  for (const sideIndex of aiSides) {
+    if (!commandersBySide.has(sideIndex)) {
+      commandersBySide.set(sideIndex, new Commander(world, sideIndex, difficulty));
+    }
+  }
+  const commanders = aiSides.map(sideIndex => commandersBySide.get(sideIndex));
 
   const savedCamera = snapshot.camera || {};
   return {
     world,
-    commander,
+    commander: commanders[0] || null,
+    commanders,
     camera: {
       x: Number(savedCamera.x) || 660,
       y: Number(savedCamera.y) || 1600,

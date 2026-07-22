@@ -1,16 +1,18 @@
 # Empires: 1700
 
 A browser-based real-time strategy game about building an 18th-century
-settlement into an empire and fielding armies at *Cossacks* scale. England and
-the Ottoman Empire begin with one Town Center, grow real economies, construct
-bases, and fight for the rival seat of power.
+settlement into an empire and fielding armies at *Cossacks* scale. A default
+skirmish is now a 2v2 town war: your settlement and an allied town grow against
+two rival towns, all racing for the enemy team's seats of power.
 
 The game has no runtime dependencies or build step. Military troops, effects,
 sound, and the Ottoman settlement are generated procedurally with plain HTML,
 CSS, and JavaScript. English and Ottoman civilians use detailed production-art
 animation sheets; England's completed structures use a coordinated
-high-resolution Georgian/colonial set; and the woodland, berry, stone, gold,
-meadow, trees, rocks, river, road, cultivated soil, hedge, and scrub assets
+high-resolution Georgian/colonial set; house variants range from cottages to
+ginormous estates and a creepy mansion; and the woodland, berry, orchard, grain,
+garden produce, stone, gold, meadow, trees, rocks, river, road, cultivated soil,
+hedge, and scrub assets
 share the same grounded palette and lighting.
 These preloaded sprites retain deterministic damage and depletion states
 without adding per-frame painting work. The British Town Center carries a
@@ -25,9 +27,10 @@ npm start
 
 ## The skirmish loop
 
-- Begin with exactly one Town Center. A free first villager emerges so the
-  opening cannot deadlock.
-- Gather food, wood, gold, and stone from deposits across a 5,200 × 3,200 map.
+- Begin with exactly one Town Center per side in a 2v2 layout. A free first
+  villager emerges from every Town Center so the opening cannot deadlock.
+- Gather food, wood, gold, and stone from deposits across a 5,200 × 3,200 map,
+  including denser woods and varied food sources.
 - Build houses, mills with attached renewable fields, lumber and mining camps, barracks,
   stables, artillery foundries, defensive towers, and a late-game Grand Artillery Castle.
 - Employ villagers directly at completed mills and economic camps, with exact
@@ -43,7 +46,8 @@ npm start
   weapons remain explicit-order only. Women villagers wheel out a compact
   cannon whose direct hit instantly defeats a soldier; civilians and buildings
   receive its ordinary damage instead.
-- Destroy the enemy Town Center while protecting your own.
+- Destroy both rival Town Centers while protecting your team's towns. A sudden
+  rainbow breaks over the battlefield when your team wins.
 
 The Ottoman or English opponent uses the same resource costs, construction,
 population, and training queues as the player. It develops a settlement and

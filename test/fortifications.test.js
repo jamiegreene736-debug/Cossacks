@@ -79,7 +79,7 @@ test('a rotated wall snaps to an endpoint to form an isometric corner', () => {
 test('dragged wall runs place the longest affordable contiguous prefix', () => {
   const world = makeWorld();
   const worker = builder();
-  const plan = planWallRun(world, 0, 660, 1900, 1660, 1900, 'horizontal');
+  const plan = planWallRun(world, 0, 660, 2000, 1660, 2000, 'horizontal');
 
   assert.equal(plan.ok, true);
   assert.equal(plan.requestedCount, 12);
@@ -87,7 +87,7 @@ test('dragged wall runs place the longest affordable contiguous prefix', () => {
   assert.equal(plan.limitedByResources, true);
   assert.deepEqual(plan.segments.map(segment => segment.x), [660, 748, 836, 924]);
 
-  const placed = placeWallRun(world, 0, 660, 1900, 1660, 1900, [worker], 'horizontal');
+  const placed = placeWallRun(world, 0, 660, 2000, 1660, 2000, [worker], 'horizontal');
   assert.equal(placed.ok, true);
   assert.equal(placed.buildings.length, 4);
   assert.equal(world.sides[0].resources.stone, 20);
