@@ -2,10 +2,11 @@
 // gathering and population rules as the player; only its decisions are scripted.
 
 import {
-  WORLD, BUILDING_TYPES, CPU_DIFFICULTIES, UNIT_TYPES, getTrainableUnitTypes,
-  normalizeCpuDifficulty,
+  BUILDING_TYPES, CPU_DIFFICULTIES, UNIT_TYPES, getTrainableUnitTypes, normalizeCpuDifficulty,
 } from './config.js';
-import { applyMoveOrder, applyAttackOrder } from './formations.js';
+import {
+  applyAttackOrder, applyHomeGuardFormation, homeGuardRallyPoint,
+} from './formations.js';
 import {
   assignBuilders, assignGatherers, buildingsOf, findNearestResource, getTownCenter,
   getMillFieldSlots, placeBuilding, queueUnit, setRallyPoint, unitsOf,
@@ -17,6 +18,14 @@ import {
 
 function isMilitaryUnit(unit) {
   return Boolean(unit?.alive && !UNIT_TYPES[unit.unitType || unit.type]?.worker);
+}
+
+function isHomeGuardCandidate(unit) {
+  return isMilitaryUnit(unit)
+    && unit.state !== 'flee'
+    && unit.state !== 'wall'
+    && !unit.orderTarget
+    && !unit.deferredAttack;
 }
 
 function centroid(units) {
@@ -49,6 +58,7 @@ export class Commander {
     this.thinkTimer = this.profile.planningInterval;
     this.manageEconomy();
     this.manageProduction();
+    this.arrangeHomeGuard();
     if (!peaceActive) this.manageArmy();
   }
 
@@ -179,6 +189,8 @@ export class Commander {
     const world = this.world;
     const nation = world.sides[this.side].nation;
     const military = unitsOf(world, this.side).filter(isMilitaryUnit);
+    const tc = getTownCenter(world, this.side);
+    const dir = sideFrontDirection(world, this.side);
     const hasFoundry = buildingsOf(world, this.side, 'foundry').length > 0;
     for (const building of buildingsOf(world, this.side, null, true)) {
       const trains = getTrainableUnitTypes(nation, building.type)
@@ -201,9 +213,20 @@ export class Commander {
         const count = UNIT_TYPES[unitType].splash ? 1 : UNIT_TYPES[unitType].pop > 1 ? 2 : 3;
         queueUnit(world, building, unitType, count);
       }
-      const dir = sideFrontDirection(world, this.side);
-      setRallyPoint(building, WORLD.w / 2 - dir * 420, WORLD.h / 2);
+      if (tc) {
+        const rally = homeGuardRallyPoint(tc, dir);
+        setRallyPoint(building, rally.x, rally.y);
+      }
     }
+  }
+
+  arrangeHomeGuard(units = null) {
+    const world = this.world;
+    const tc = getTownCenter(world, this.side);
+    if (!tc) return [];
+    const guards = (units || unitsOf(world, this.side))
+      .filter(unit => isHomeGuardCandidate(unit) && !this.committed.has(unit.id));
+    return applyHomeGuardFormation(guards, tc, sideFrontDirection(world, this.side));
   }
 
   manageArmy() {
@@ -240,10 +263,9 @@ export class Commander {
     const enemyTc = nearestHostileTownCenter(world, this.side, center.x, center.y);
     if (!enemyTc) return;
     for (const unit of wave) this.committed.add(unit.id);
-    // Dress the wave into a broad line before the final attack order. The
-    // brief staging move produces the Cossacks-like wall of troops.
-    const stageX = center.x + (enemyTc.x - center.x) * 0.22;
-    applyMoveOrder(wave, stageX, center.y, 'line');
+    // Dress the wave at home before the final attack order. The staging delay
+    // keeps the settlement guard readable instead of piling troops mid-map.
+    applyHomeGuardFormation(wave, tc, sideFrontDirection(world, this.side));
     for (const unit of wave) {
       unit.deferredAttack = { target: enemyTc, at: world.time + this.profile.stagingDelay };
     }
