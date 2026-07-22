@@ -10,6 +10,7 @@ import {
   isFortificationType, normalizeFortificationOrientation, WALL_WALK_ELEVATION,
 } from '../fortifications.js';
 import { viewMirrorsHorizontalFacing } from '../camera.js';
+import { createResourceVisualLayout, getResourceVisualProfile } from '../resource-visuals.js';
 import { getProductionArt } from './art-assets.js';
 
 let ctx = null;
@@ -5786,11 +5787,222 @@ function bdFarmForegroundSprite(def, side, stage) {
 const BD_RES_STEPS = 5;
 
 const BD_RESOURCE_ART = Object.freeze({
-  wood: { key: 'woodland', widthK: 2.72 },
-  food: { key: 'berryBushes', widthK: 2.48 },
   stone: { key: 'stoneOutcrop', widthK: 2.24 },
   gold: { key: 'goldOutcrop', widthK: 2.24 },
 });
+
+const BD_VEGETATION_CELL = 512;
+
+function bdDrawVegetationFrame(g, image, frame, x, baseY, width, flip, alpha = 1) {
+  if (!image) return false;
+  g.save();
+  g.globalAlpha *= alpha;
+  if (flip) {
+    g.translate(x, 0);
+    g.scale(-1, 1);
+    g.drawImage(
+      image,
+      frame * BD_VEGETATION_CELL, 0, BD_VEGETATION_CELL, BD_VEGETATION_CELL,
+      -width / 2, baseY - width, width, width,
+    );
+  } else {
+    g.drawImage(
+      image,
+      frame * BD_VEGETATION_CELL, 0, BD_VEGETATION_CELL, BD_VEGETATION_CELL,
+      x - width / 2, baseY - width, width, width,
+    );
+  }
+  g.restore();
+  return true;
+}
+
+function bdPaintResourceFloor(g, res, profile, rr) {
+  const radius = res.radius;
+  const isWood = profile.type === 'wood';
+  const floor = profile.floor;
+  const earth = floor === 'needle_litter'
+    ? bdMix(BT.EARTH_DARK, BT.TRUNK_DARK, 0.36)
+    : floor === 'light_litter'
+      ? bdMix(BT.EARTH, BT.STRAW, 0.26)
+      : bdMix(BT.EARTH_DARK, BT.TRUNK_LIT, 0.24);
+  const ground = bdRamp(bdLawful(isWood ? earth : bdMix(BT.EARTH, BT.TURF_MID, 0.34)));
+  const rx = radius * (isWood ? 0.96 : profile.crop === 'orchard' ? 1.32 : 0.90);
+  const ry = radius * (isWood ? 0.52 : 0.46);
+
+  g.save();
+  g.globalAlpha = isWood ? 0.40 : 0.44;
+  bdEllipse(g, 0, radius * 0.12, rx, ry, ground, { litW: 0.75, edge: true });
+  g.restore();
+
+  const marks = isWood ? 76 : 42;
+  for (let index = 0; index < marks; index++) {
+    const angle = rr(0, BD_TAU);
+    const distance = Math.sqrt(rr(0, 1));
+    const x = Math.cos(angle) * distance * rx * 0.92;
+    const y = radius * 0.12 + Math.sin(angle) * distance * ry * 0.84;
+    const pine = floor === 'needle_litter';
+    g.strokeStyle = bdRgba(
+      pine ? BT.TRUNK_LIT : index % 3 ? BT.STRAW : BT.SCRUB_COOL,
+      rr(0.22, 0.52),
+    );
+    g.lineWidth = rr(0.45, 0.9);
+    g.beginPath();
+    g.moveTo(x - rr(0.8, 2.4), y - rr(0.2, 0.8));
+    g.lineTo(x + rr(1.0, pine ? 4.6 : 2.8), y + rr(-0.4, 1.0));
+    g.stroke();
+  }
+
+  if (profile.crop === 'orchard') {
+    g.save();
+    g.strokeStyle = bdRgba(BT.EARTH_LIGHT, 0.48);
+    g.lineWidth = 1.2;
+    g.setLineDash([3.5, 3]);
+    for (const y of [-radius * 0.24, radius * 0.20]) {
+      g.beginPath();
+      g.moveTo(-radius * 0.68, y);
+      g.quadraticCurveTo(0, y + radius * 0.08, radius * 0.68, y);
+      g.stroke();
+    }
+    g.restore();
+  }
+}
+
+function bdDrawDetailedWoodNode(g, res, profile, frac, rr) {
+  const trees = getProductionArt('countryTrees');
+  const layout = createResourceVisualLayout(res);
+  const liveCount = Math.max(2, Math.round(layout.length * (0.18 + frac * 0.82)));
+  const survivors = new Set([...layout]
+    .sort((a, b) => a.harvestRank - b.harvestRank)
+    .slice(0, liveCount));
+
+  bdPaintResourceFloor(g, res, profile, rr);
+  for (const item of layout) {
+    if (!survivors.has(item)) continue;
+    const width = res.radius * profile.treeWidth * item.scale;
+    bdContactShadow(g, item.x, item.y + 3, width * 0.44, width * 0.72, 0.68);
+  }
+
+  for (const item of layout) {
+    const local = bdRnd(((res.seed * 1000 + item.x * 41 + item.y * 67) | 0));
+    if (!survivors.has(item)) {
+      bdStump(g, item.x, item.y + 3, res.radius * (0.045 + item.scale * 0.018), local);
+      continue;
+    }
+    const width = res.radius * profile.treeWidth * item.scale;
+    if (!bdDrawVegetationFrame(
+      g, trees, profile.treeFrame, item.x, item.y + 5, width, item.flip,
+    )) {
+      bdTree(
+        g, item.x, item.y + 3, width * 0.31, local,
+        profile.treeFrame === 2 ? 'conifer' : 'broadleaf',
+      );
+    }
+  }
+
+  // Forestry evidence belongs only on a wood node: split logs, a mossed
+  // windfall and fresh stumps. No fruit or crop props can enter this painter.
+  const bottom = res.radius * 0.58 + 12;
+  bdLogPile(g, -res.radius * 0.50, bottom, res.radius * 0.34, 2, res.id + 61);
+  const log = bdRamp(BMAT.LOG);
+  bdBeam(
+    g, log, res.radius * 0.18, bottom - 3, res.radius * 0.61, bottom + 3,
+    Math.max(4, res.radius * 0.075), { cap: 'round' },
+  );
+  bdEllipse(
+    g, res.radius * 0.61, bottom + 3, Math.max(2, res.radius * 0.038),
+    Math.max(3, res.radius * 0.052), log, { litW: 0.65, edge: true },
+  );
+}
+
+function bdDrawBerryGarden(g, res, frac, rr) {
+  const image = getProductionArt('berryBushes');
+  const bottom = res.radius * 0.54 + 10;
+  const maxWidth = res.radius * 3.15;
+  const scale = 0.84 + frac * 0.16;
+  const width = maxWidth * scale;
+  if (image) {
+    const height = width * image.naturalHeight / image.naturalWidth;
+    bdContactShadow(g, 0, bottom - 5, width * 0.39, height * 0.38, 0.72);
+    g.save();
+    g.globalAlpha = 0.68 + frac * 0.32;
+    g.drawImage(image, -width / 2, bottom - height, width, height);
+    g.restore();
+  } else {
+    for (let index = 0; index < 9; index++) {
+      const row = Math.floor(index / 3), column = index % 3;
+      bdBush(
+        g,
+        (column - 1) * res.radius * 0.42,
+        (row - 1) * res.radius * 0.24,
+        res.radius * 0.19,
+        bdRnd((res.id * 97 + index * 311) | 0),
+        frac > index / 12 ? '#8E2F33' : null,
+      );
+    }
+  }
+  if (frac > 0.18) {
+    bdProduceBasket(g, -res.radius * 0.42, bottom + 4, 12 + res.radius * 0.07, '#8E2F33', rr);
+  }
+}
+
+function bdDrawAppleOrchard(g, res, profile, frac, rr) {
+  const trees = getProductionArt('countryTrees');
+  const layout = createResourceVisualLayout(res);
+  for (const item of layout) {
+    const width = res.radius * profile.treeWidth * item.scale;
+    bdContactShadow(g, item.x, item.y + 4, width * 0.42, width * 0.72, 0.64);
+  }
+  for (let index = 0; index < layout.length; index++) {
+    const item = layout[index];
+    const local = bdRnd((res.id * 193 + index * 997) | 0);
+    const width = res.radius * profile.treeWidth * item.scale;
+    if (!bdDrawVegetationFrame(
+      g, trees, profile.treeFrame, item.x, item.y + 5, width, item.flip,
+    )) {
+      bdTree(g, item.x, item.y + 3, width * 0.31, local, 'broadleaf');
+    }
+    const fruitCount = Math.round(10 * frac);
+    const apples = bdRamp(index % 2 ? '#A84434' : '#C18A34');
+    for (let fruit = 0; fruit < fruitCount; fruit++) {
+      const x = item.x + local(-width * 0.28, width * 0.28);
+      const y = item.y - local(width * 0.28, width * 0.68);
+      g.fillStyle = apples.shade;
+      g.beginPath(); g.arc(x, y, local(1.55, 2.35), 0, BD_TAU); g.fill();
+      g.fillStyle = apples.edge;
+      g.beginPath(); g.arc(x - 0.55, y - 0.55, 0.52, 0, BD_TAU); g.fill();
+    }
+  }
+  if (frac > 0.12) {
+    bdProduceBasket(
+      g, res.radius * 0.40, res.radius * 0.62 + 11,
+      12 + res.radius * 0.08, '#A84434', rr,
+    );
+  }
+}
+
+function bdDetailedOrganicResourceSprite(res, step) {
+  const profile = getResourceVisualProfile(res);
+  if (!profile) return null;
+  const frac = step / (BD_RES_STEPS - 1);
+  const radius = res.radius;
+  const box = [
+    -(radius * 1.95 + 54),
+    -(radius * 1.75 + 80),
+    (radius * 1.95 + 54) * 2,
+    radius * 3 + 140,
+  ];
+  const rr = bdRnd((res.seed * 1000) | 0);
+  return bdBake(box, BD_RES_SCALE, function (g) {
+    if (profile.type === 'wood') {
+      bdDrawDetailedWoodNode(g, res, profile, frac, rr);
+    } else {
+      bdPaintResourceFloor(g, res, profile, rr);
+      if (profile.crop === 'orchard') bdDrawAppleOrchard(g, res, profile, frac, rr);
+      else bdDrawBerryGarden(g, res, frac, rr);
+    }
+    bdPassSurfacePatina(g, box, (res.seed * 97 + step * 13) | 0);
+  });
+}
 
 function bdProduceBasket(g, cx, yBot, w, fruitHex, rr) {
   const B = bdRamp(BMAT.SHINGLE);
@@ -5817,89 +6029,6 @@ function bdProduceBasket(g, cx, yBot, w, fruitHex, rr) {
     g.fillStyle = F.edge;
     g.beginPath(); g.arc(x + bdSUN.x * 0.5, y + bdSUN.y * 0.5, 0.45, 0, BD_TAU); g.fill();
   }
-}
-
-function bdGrainSheaf(g, cx, yBot, k, rr) {
-  const S = bdRamp(BT.STRAW);
-  bdContactShadow(g, cx, yBot, 8 * k, 7 * k, 0.50);
-  for (let i = -4; i <= 4; i++) {
-    const x0 = cx + i * 1.4 * k;
-    const x1 = cx + i * 0.55 * k + rr(-1, 1) * k;
-    bdBeam(g, S, x0, yBot, x1, yBot - rr(12, 18) * k, 1.0 * k, { cap: 'butt' });
-    g.fillStyle = bdRgba(BT.STRAW_LIGHT, 0.72);
-    g.beginPath();
-    g.ellipse(x1, yBot - rr(13, 19) * k, 1.3 * k, 2.3 * k, rr(-0.3, 0.3), 0, BD_TAU);
-    g.fill();
-  }
-  const bind = bdRamp(BMAT.TIMBER_DARK);
-  bdBeam(g, bind, cx - 7 * k, yBot - 6.4 * k, cx + 7 * k, yBot - 7.2 * k,
-    1.25 * k, { cap: 'butt' });
-}
-
-function bdPumpkin(g, cx, cy, r, hex) {
-  const P = bdRamp(hex);
-  bdContactShadow(g, cx, cy + r * 0.62, r * 1.05, r * 0.52, 0.55);
-  for (const dx of [-0.55, -0.25, 0, 0.25, 0.55]) {
-    bdEllipse(g, cx + dx * r, cy, r * 0.34, r * 0.50, P, { litW: 0.35, edge: dx === 0 });
-  }
-  const stem = bdRamp(BT.TRUNK_DARK);
-  bdBeam(g, stem, cx, cy - r * 0.46, cx + r * 0.16, cy - r * 0.78, 1.2, { cap: 'butt' });
-}
-
-function bdDrawFoodDressing(g, res, bottom, maxW, frac, rr) {
-  const kind = Math.abs(((res.seed * 10000) | 0)) % 4;
-  const live = bdClamp(0.30 + frac * 0.70, 0.25, 1);
-  const spread = maxW * 0.36;
-  if (kind === 0) {
-    const fruit = ['#8E2F33', '#B2465D', '#C18A34'];
-    for (let i = 0; i < Math.round(5 * live); i++) {
-      bdBush(g, rr(-spread, spread), bottom + rr(-16, 4),
-        rr(8, 13), rr, fruit[i % fruit.length]);
-    }
-    bdProduceBasket(g, -spread * 0.55, bottom + 7, 15, '#8E2F33', rr);
-    bdProduceBasket(g, spread * 0.42, bottom + 8, 13, '#C18A34', rr);
-  } else if (kind === 1) {
-    for (let i = 0; i < Math.round(4 * live); i++) {
-      const x = rr(-spread, spread);
-      const y = bottom + rr(-8, 5);
-      bdTree(g, x, y, rr(8, 12), rr, 'broadleaf');
-      const F = bdRamp(i % 2 ? '#B2463A' : '#D0A13A');
-      for (let dot = 0; dot < 8; dot++) {
-        g.fillStyle = F.base;
-        g.beginPath();
-        g.arc(x + rr(-8, 8), y - rr(14, 28), rr(0.9, 1.5), 0, BD_TAU);
-        g.fill();
-      }
-    }
-    bdCrate(g, spread * 0.58, bottom + 9, 16, 10, res.id + 31);
-    bdProduceBasket(g, -spread * 0.52, bottom + 8, 14, '#B2463A', rr);
-  } else if (kind === 2) {
-    for (let i = 0; i < Math.round(7 * live); i++) {
-      bdGrainSheaf(g, rr(-spread, spread), bottom + rr(-4, 8), rr(0.58, 0.88), rr);
-    }
-    bdSack(g, -spread * 0.45, bottom + 10, 10, 14, res.id + 41);
-    bdSack(g, -spread * 0.32, bottom + 11, 11, 15, res.id + 42);
-  } else {
-    const colors = ['#B86A31', '#D3983F', '#8D7040'];
-    for (let i = 0; i < Math.round(10 * live); i++) {
-      bdPumpkin(g, rr(-spread, spread), bottom + rr(-11, 5), rr(4, 7), colors[i % colors.length]);
-    }
-    bdCrate(g, spread * 0.52, bottom + 9, 15, 10, res.id + 51);
-    bdBarrel(g, -spread * 0.58, bottom + 9, 8, 12);
-  }
-}
-
-function bdDrawWoodDressing(g, res, bottom, maxW, frac, rr) {
-  const spread = maxW * 0.38;
-  const live = Math.round(9 * (0.30 + 0.70 * frac));
-  for (let i = 0; i < 9; i++) {
-    const x = rr(-spread, spread);
-    const y = bottom + rr(-18, 8);
-    if (i < live) bdTree(g, x, y, rr(10, 18), rr, rr(0, 1) < 0.30 ? 'conifer' : 'broadleaf');
-    else bdStump(g, x, y + 4, rr(3.6, 5.6), rr);
-  }
-  bdLogPile(g, -spread * 0.52, bottom + 10, 24, 3, res.id + 61);
-  bdLogPile(g, spread * 0.44, bottom + 8, 18, 2, res.id + 62);
 }
 
 function bdProductionResourceSprite(res, step, image, art) {
@@ -5930,22 +6059,13 @@ function bdProductionResourceSprite(res, step, image, art) {
     // The cluster contracts as it is gathered. Persistent stumps and quarry
     // scars keep depletion physical rather than turning it into transparency.
     const removed = Math.round((1 - frac) * 8);
-    if (res.type === 'wood') {
-      bdDrawWoodDressing(g, res, bottom, maxW, frac, rr);
-      for (let i = 0; i < removed; i++) {
-        bdStump(g, rr(-maxW * 0.34, maxW * 0.34), bottom + rr(-8, 7), rr(3.2, 5.2), rr);
-      }
-    } else if (res.type === 'food') {
-      bdDrawFoodDressing(g, res, bottom, maxW, frac, rr);
-    } else if (res.type === 'stone' || res.type === 'gold') {
-      for (let i = 0; i < removed; i++) {
-        const x = rr(-maxW * 0.36, maxW * 0.36);
-        const y = bottom + rr(-8, 6);
-        g.fillStyle = bdRgba(BT.EARTH_DARK, 0.30 + (1 - frac) * 0.24);
-        g.beginPath();
-        g.ellipse(x, y, rr(5, 11), rr(2.2, 4.8), rr(-0.3, 0.3), 0, BD_TAU);
-        g.fill();
-      }
+    for (let i = 0; i < removed; i++) {
+      const x = rr(-maxW * 0.36, maxW * 0.36);
+      const y = bottom + rr(-8, 6);
+      g.fillStyle = bdRgba(BT.EARTH_DARK, 0.30 + (1 - frac) * 0.24);
+      g.beginPath();
+      g.ellipse(x, y, rr(5, 11), rr(2.2, 4.8), rr(-0.3, 0.3), 0, BD_TAU);
+      g.fill();
     }
 
     g.save();
@@ -5966,6 +6086,12 @@ function bdResourceSprite(res) {
   const prev = bdResourceCache.get(res.id);
   if (prev && prev.step === step) return prev.s;
 
+  if (res.type === 'wood' || res.type === 'food') {
+    const organic = bdDetailedOrganicResourceSprite(res, step);
+    bdResourceCache.set(res.id, { step: step, s: organic });
+    return organic;
+  }
+
   const art = BD_RESOURCE_ART[res.type];
   const image = art ? getProductionArt(art.key) : null;
   if (image) {
@@ -5982,8 +6108,7 @@ function bdResourceSprite(res) {
     // Seeded from the node's own seed, so props keep their positions across
     // every depletion step and only their COUNT changes.
     const rr = bdRnd((res.seed * 1000) | 0);
-    const full = res.type === 'wood' ? 24 : res.type === 'food' ? 23 : 15;
-    const foodKind = res.type === 'food' ? Math.abs(((res.seed * 10000) | 0)) % 4 : 0;
+    const full = 15;
     const props = [];
     for (let i = 0; i < full; i++) {
       const a = rr(0, BD_TAU);
@@ -6002,80 +6127,32 @@ function bdResourceSprite(res) {
       const p = props[i];
       const alive = i >= props.length - live;
       const pr = bdRnd(((res.seed * 100 + i * 37) | 0));
-      if (res.type === 'wood') {
-        if (alive) bdTree(g, p.x, p.y, 15 + p.s * 11, pr);
-        else bdStump(g, p.x, p.y, 4.5 + p.s * 2, pr);
-      } else if (res.type === 'food') {
-        if (alive && foodKind === 1 && p.s > 0.54) {
-          bdTree(g, p.x, p.y + 3, 7 + p.s * 5, pr, 'broadleaf');
-        } else if (alive && foodKind === 2 && p.s > 0.45) {
-          bdGrainSheaf(g, p.x, p.y + 8, 0.42 + p.s * 0.26, pr);
-        } else if (alive && foodKind === 3 && p.s > 0.32) {
-          bdPumpkin(g, p.x, p.y + 1, 3.8 + p.s * 3.0,
-            p.s > 0.62 ? '#D3983F' : '#B86A31');
-        } else if (alive) {
-          bdBush(g, p.x, p.y, 9 + p.s * 5, pr,
-            foodKind === 0 ? '#8E2F33' : foodKind === 1 ? '#B2463A' : '#C18A34');
-        } else {
-          // picked over: the bush survives but carries no fruit
-          bdBush(g, p.x, p.y, 7 + p.s * 3, pr, null);
-        }
+      const gold = res.type === 'gold';
+      if (alive) {
+        bdRock(g, p.x, p.y, 9 + p.s * 9, pr,
+          gold ? bdMix(BT.ROCK, '#8A7038', 0.32) : BT.ROCK,
+          gold ? '#C9A24E' : null);
       } else {
-        const gold = res.type === 'gold';
-        if (alive) {
-          bdRock(g, p.x, p.y, 9 + p.s * 9, pr,
-            gold ? bdMix(BT.ROCK, '#8A7038', 0.32) : BT.ROCK,
-            gold ? '#C9A24E' : null);
-        } else {
-          // worked out: a shallow scar and loose scree where the rock was
-          g.fillStyle = bdRgba(bdLawful(bdMix(BT.EARTH_DARK, BT.ROCK, 0.3)), 0.55);
+        // Worked out: a shallow scar and loose scree where the rock was.
+        g.fillStyle = bdRgba(bdLawful(bdMix(BT.EARTH_DARK, BT.ROCK, 0.3)), 0.55);
+        g.beginPath();
+        g.ellipse(p.x, p.y, 9 + p.s * 5, (9 + p.s * 5) * 0.42, 0, 0, BD_TAU);
+        g.fill();
+        for (let k = 0; k < 6; k++) {
+          g.fillStyle = bdRgba(BT.ROCK_DARK, pr(0.35, 0.7));
           g.beginPath();
-          g.ellipse(p.x, p.y, 9 + p.s * 5, (9 + p.s * 5) * 0.42, 0, 0, BD_TAU);
+          g.arc(p.x + pr(-9, 9), p.y + pr(-4, 4), pr(0.8, 2.2), 0, BD_TAU);
           g.fill();
-          for (let k = 0; k < 6; k++) {
-            g.fillStyle = bdRgba(BT.ROCK_DARK, pr(0.35, 0.7));
-            g.beginPath();
-            g.arc(p.x + pr(-9, 9), p.y + pr(-4, 4), pr(0.8, 2.2), 0, BD_TAU);
-            g.fill();
-          }
         }
       }
     }
     // Human-scale clues on the near edge communicate both use and scale. They
     // are sparse enough that an untouched resource still reads as landscape.
-    if (res.type === 'wood') {
-      bdDrawWoodDressing(g, res, r * 0.56 + 12, r * 1.72, frac, rr);
-      const L = bdRamp(BMAT.LOG);
-      bdBeam(g, L, -r * 0.54, r * 0.38, -r * 0.14, r * 0.31, 7.5, { cap: 'round' });
-      bdEllipse(g, -r * 0.14, r * 0.31, 3.8, 4.8, L, { litW: 0.7, edge: true });
-      const chips = bdRnd(((res.seed * 43) | 0));
-      for (let i = 0; i < 18; i++) {
-        g.fillStyle = bdRgba(i % 2 ? BT.STRAW : BT.TRUNK_LIT, chips(0.30, 0.68));
-        g.fillRect(-r * 0.34 + chips(-16, 16), r * 0.37 + chips(-4, 5), chips(1, 3.2), 1.1);
-      }
-    } else if (res.type === 'food') {
-      bdDrawFoodDressing(g, res, r * 0.56 + 12, r * 1.72, frac, rr);
-      const B = bdRamp(BMAT.SHINGLE);
-      bdLitPath(g, function (c) {
-        c.moveTo(-r * 0.50, r * 0.42); c.lineTo(-r * 0.34, r * 0.42);
-        c.lineTo(-r * 0.37, r * 0.30); c.lineTo(-r * 0.47, r * 0.30); c.closePath();
-      }, B, { bbox: [-r * 0.50, r * 0.30, r * 0.16, r * 0.12], litW: 0.65, edge: true });
-      g.strokeStyle = B.lit; g.lineWidth = 0.75;
-      for (let i = 0; i < 4; i++) {
-        const y = r * (0.32 + i * 0.026);
-        g.beginPath(); g.moveTo(-r * 0.48, y); g.lineTo(-r * 0.36, y); g.stroke();
-      }
-      g.fillStyle = '#8E2F33';
-      for (let i = 0; i < 12; i++) {
-        g.beginPath(); g.arc(-r * 0.47 + rr(0, r * 0.10), r * 0.31 + rr(-2, 2), rr(0.8, 1.4), 0, BD_TAU); g.fill();
-      }
-    } else {
-      const I = bdRamp(BMAT.IRON), T = bdRamp(BMAT.TIMBER);
-      bdBeam(g, T, -r * 0.52, r * 0.40, -r * 0.37, r * 0.18, 2.0, { cap: 'butt' });
-      bdPoly(g, [-r * 0.41, r * 0.17, -r * 0.31, r * 0.19,
-        -r * 0.33, r * 0.24, -r * 0.43, r * 0.22], I, { litW: 0.55, edge: true });
-      bdCrate(g, r * 0.40, r * 0.43, 12, 9, (res.seed * 59) | 0);
-    }
+    const I = bdRamp(BMAT.IRON), timber = bdRamp(BMAT.TIMBER);
+    bdBeam(g, timber, -r * 0.52, r * 0.40, -r * 0.37, r * 0.18, 2.0, { cap: 'butt' });
+    bdPoly(g, [-r * 0.41, r * 0.17, -r * 0.31, r * 0.19,
+      -r * 0.33, r * 0.24, -r * 0.43, r * 0.22], I, { litW: 0.55, edge: true });
+    bdCrate(g, r * 0.40, r * 0.43, 12, 9, (res.seed * 59) | 0);
     // A quarry face / cut bank for the mineral nodes, so stone and gold sit IN
     // the board rather than on it.
     if (res.type === 'gold' || res.type === 'stone') {

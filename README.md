@@ -36,8 +36,9 @@ npm start
 
 - Begin with exactly one Town Center per side in a 2v2 layout. A free first
   villager emerges from every Town Center so the opening cannot deadlock.
-- Gather food, wood, gold, and stone from deposits across a 5,200 × 3,200 map,
-  including denser woods and varied food sources.
+- Gather food, wood, gold, and stone from deposits across a 5,200 × 3,200 map.
+  Oak copses, birch groves, and pine stands are separate cuttable woodlands;
+  apple orchards and currant-and-gooseberry gardens are distinct food sites.
 - Build houses, mills with attached renewable fields, lumber and mining camps, barracks,
   stables, artillery foundries, defensive towers, schools, pools, beaches,
   regional parks, playgrounds, and a late-game Grand Artillery Castle.

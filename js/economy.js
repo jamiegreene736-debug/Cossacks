@@ -149,16 +149,17 @@ export function createBuilding(side, type, x, y, complete = false, options = {})
   return building;
 }
 
-function createResource(type, x, y, amount, radius = 38) {
+function createResource(type, x, y, amount, radius = 38, visualVariant = null) {
   return {
     id: nextEntityId++, entityKind: 'resource', type, resourceType: type,
     x, y, amount, maxAmount: amount, radius, alive: true,
     seed: Math.random() * 10000,
+    visualVariant,
   };
 }
 
-function addResourceCluster(world, type, x, y, amount, radius) {
-  const node = createResource(type, x, y, amount, radius);
+function addResourceCluster(world, type, x, y, amount, radius, visualVariant = null) {
+  const node = createResource(type, x, y, amount, radius, visualVariant);
   world.resources.push(node);
   return node;
 }
@@ -183,10 +184,20 @@ function seedMapResources(world) {
   for (let sideIndex = 0; sideIndex < world.sides.length; sideIndex++) {
     const start = world.sides[sideIndex].startPosition || fallbackStartPosition(sideIndex);
     const dir = sideFrontDirection(world, sideIndex);
-    addResourceCluster(world, 'food', start.x + dir * 245, start.y - 205, 5600, 48);
-    addResourceCluster(world, 'food', start.x + dir * 175, start.y + 245, 4200, 42);
-    addResourceCluster(world, 'wood', start.x + dir * 385, start.y - 20, 17000, 78);
-    addResourceCluster(world, 'wood', start.x + dir * 215, start.y + 385, 12000, 62);
+    addResourceCluster(
+      world, 'food', start.x + dir * 245, start.y - 205, 5600, 48, 'berry_garden',
+    );
+    addResourceCluster(
+      world, 'food', start.x + dir * 175, start.y + 245, 4200, 42, 'apple_orchard',
+    );
+    const firstWood = ['oak_copse', 'birch_grove', 'pine_stand'][sideIndex % 3];
+    const secondWood = ['birch_grove', 'pine_stand', 'oak_copse'][sideIndex % 3];
+    addResourceCluster(
+      world, 'wood', start.x + dir * 385, start.y - 20, 17000, 78, firstWood,
+    );
+    addResourceCluster(
+      world, 'wood', start.x + dir * 215, start.y + 385, 12000, 62, secondWood,
+    );
     addResourceCluster(world, 'gold', start.x + dir * 320, start.y + 195, 9000, 50);
     addResourceCluster(world, 'stone', start.x + dir * 500, start.y - 300, 9000, 52);
   }
@@ -194,18 +205,18 @@ function seedMapResources(world) {
   // Rich central belts pull both teams into the middle, while the extra woods
   // keep four economies from exhausting their opening lumber too quickly.
   const cy = WORLD.h / 2;
-  addResourceCluster(world, 'wood', WORLD.w / 2, cy - 730, 30000, 104);
-  addResourceCluster(world, 'wood', WORLD.w / 2, cy - 355, 28000, 98);
-  addResourceCluster(world, 'wood', WORLD.w / 2, cy + 355, 28000, 98);
-  addResourceCluster(world, 'wood', WORLD.w / 2, cy + 730, 30000, 104);
-  addResourceCluster(world, 'wood', WORLD.w * 0.34, cy, 22000, 84);
-  addResourceCluster(world, 'wood', WORLD.w * 0.66, cy, 22000, 84);
+  addResourceCluster(world, 'wood', WORLD.w / 2, cy - 730, 30000, 104, 'oak_copse');
+  addResourceCluster(world, 'wood', WORLD.w / 2, cy - 355, 28000, 98, 'birch_grove');
+  addResourceCluster(world, 'wood', WORLD.w / 2, cy + 355, 28000, 98, 'pine_stand');
+  addResourceCluster(world, 'wood', WORLD.w / 2, cy + 730, 30000, 104, 'oak_copse');
+  addResourceCluster(world, 'wood', WORLD.w * 0.34, cy, 22000, 84, 'birch_grove');
+  addResourceCluster(world, 'wood', WORLD.w * 0.66, cy, 22000, 84, 'pine_stand');
   addResourceCluster(world, 'gold', WORLD.w / 2 - 145, cy - 120, 20000, 67);
   addResourceCluster(world, 'gold', WORLD.w / 2 + 145, cy + 120, 20000, 67);
   addResourceCluster(world, 'stone', WORLD.w / 2 + 170, cy - 130, 20000, 67);
   addResourceCluster(world, 'stone', WORLD.w / 2 - 170, cy + 130, 20000, 67);
-  addResourceCluster(world, 'food', WORLD.w / 2, cy - 245, 11000, 58);
-  addResourceCluster(world, 'food', WORLD.w / 2, cy + 245, 11000, 58);
+  addResourceCluster(world, 'food', WORLD.w / 2, cy - 245, 11000, 58, 'berry_garden');
+  addResourceCluster(world, 'food', WORLD.w / 2, cy + 245, 11000, 58, 'apple_orchard');
 }
 
 export function initializeEconomy(world) {

@@ -103,7 +103,7 @@ Measured at 1,625 living units: 0.4ms median frame draw against a 16.7ms budget.
 | `terrain.js` | The board: material-aware meadow with directional micro-relief and modelled grass tussocks, faceted rocks, granular soil/sand, deadwood, river reeds, road/water materials, hedgerow and scrub art; material field and parcels. Bakes at 1.5 texels per world pixel into frustum-culled tiles; `drawTerrain()` is ≤12 blits. |
 | `buildings.js` | Nation-specific 18th-century architecture, farms, production and procedural resource nodes, scene props, waving Union flag, and cached damage/depletion states. |
 | `assets/buildings/` | Transparent high-resolution sources for completed English and Ottoman structures, nation-specific four-stage construction, and completed/in-progress stone fortifications. |
-| `assets/resources/` | Transparent woodland, berry, stone, and gold sources. |
+| `assets/resources/` | Transparent berry, stone, and gold sources; woodlands use individual high-resolution tree frames so oak, birch, and pine remain separate. |
 | `assets/terrain/` | Seamless meadow, road, water, soil and stubble materials plus alpha tree, rock, reed, deadwood and country-vegetation sources. |
 | `assets/units/` | English and Ottoman men/women civilian, musketeer, polearm-guard, cavalry, and artillery production sheets; women have nation-specific work sheets and a shared two-row cannon deployment/attack sheet, while mobile troops use separate lossless walk cycles. |
 | `docs/ottoman-architecture-art-references.md` | Period anchors and material decisions for the Ottoman production architecture set. |
