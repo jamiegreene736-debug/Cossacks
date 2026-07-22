@@ -9,9 +9,10 @@ The game has no runtime dependencies or build step. Military troops, effects,
 sound, and the Ottoman settlement are generated procedurally with plain HTML,
 CSS, and JavaScript. English and Ottoman civilians use detailed production-art
 animation sheets; England's completed structures use a coordinated
-high-resolution Georgian/colonial set; house variants range from cottages to
-ginormous estates and a creepy mansion; and the woodland, berry, orchard, grain,
-garden produce, stone, gold, meadow, trees, rocks, river, road, cultivated soil,
+high-resolution Georgian/colonial set; house variants are built from the same
+production art into cottages, row houses, ginormous estates, and a restrained
+creepy mansion; and the woodland, berry, orchard, grain, garden produce, stone,
+gold, meadow, trees, rocks, river, road, cultivated soil,
 hedge, and scrub assets
 share the same grounded palette and lighting.
 These preloaded sprites retain deterministic damage and depletion states

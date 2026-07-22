@@ -2424,7 +2424,7 @@ function bdPaintTownCenter(g, o) {
 function bdPaintHouse(g, o) {
   const def = o.def, s = bdRnd(o.seed);
   const ottoman = o.nation === 'ottoman';
-  const flavor = o.variant % 8;
+  const flavor = o.variant % 2;
   const mansion = flavor === 5;
   const estate = flavor === 3 || flavor === 4 || flavor === 6;
   const rowHouse = flavor === 2;
@@ -5293,6 +5293,172 @@ export function getFortificationRenderProfile(building, world) {
  * gallery-light bands would destroy the sub-pixel masonry, glazing and carved
  * stone detail that the authored assets supply.
  */
+function bdPaintProductionDamage(g, left, top, imageW, imageH, damageStage, seed) {
+  if (!damageStage) return;
+  const rr = bdRnd(seed ^ (damageStage * 0x45d9f3b));
+  g.save();
+  g.globalCompositeOperation = 'source-atop';
+  for (let i = 0; i < damageStage + 1; i++) {
+    const x = rr(left + imageW * 0.14, left + imageW * 0.86);
+    const y = rr(top + imageH * 0.22, top + imageH * 0.76);
+    const radius = rr(9, 18) * damageStage;
+    const soot = g.createRadialGradient(x, y, 0, x, y, radius);
+    soot.addColorStop(0, `rgba(27,24,26,${damageStage === 1 ? 0.24 : 0.42})`);
+    soot.addColorStop(1, 'rgba(27,24,26,0)');
+    g.fillStyle = soot;
+    g.beginPath();
+    g.ellipse(x, y, radius, radius * 0.62, rr(-0.35, 0.35), 0, BD_TAU);
+    g.fill();
+  }
+  g.strokeStyle = bdShadow(damageStage === 1 ? 0.48 : 0.68);
+  g.lineWidth = damageStage === 1 ? 0.48 : 0.72;
+  for (let i = 0; i < damageStage * 3; i++) {
+    let x = rr(left + imageW * 0.20, left + imageW * 0.80);
+    let y = rr(top + imageH * 0.48, top + imageH * 0.82);
+    g.beginPath();
+    g.moveTo(x, y);
+    for (let k = 0; k < 4; k++) {
+      x += rr(-3.2, 3.2);
+      y += rr(2.0, 5.0);
+      g.lineTo(x, y);
+    }
+    g.stroke();
+  }
+  g.restore();
+}
+
+function bdHouseVariantPlan(def, image, variant) {
+  const presentation = getBuildingPresentation('house', def);
+  const baseW = presentation.artWidth;
+  const bottom = def.h * 0.48 + 8;
+  const flavor = variant % 8;
+  const mansionTint = 'rgba(23,22,28,0.32)';
+  const estateTint = 'rgba(73,64,56,0.10)';
+  const part = (cx, width, bottomOffset = 0, opts = {}) => ({
+    cx, width, bottom: bottom + bottomOffset,
+    alpha: opts.alpha == null ? 1 : opts.alpha,
+    tint: opts.tint || null,
+  });
+  const plans = [
+    { apron: 1.00, shadow: 1.00, parts: [part(0, baseW)] },
+    { apron: 0.96, shadow: 0.92, parts: [part(0, baseW * 0.92, 1)] },
+    {
+      apron: 1.34, shadow: 1.16,
+      parts: [
+        part(-baseW * 0.28, baseW * 0.78, 2),
+        part(baseW * 0.28, baseW * 0.78, 0),
+      ],
+    },
+    {
+      apron: 1.62, shadow: 1.34,
+      parts: [
+        part(-baseW * 0.52, baseW * 0.68, 5, { tint: estateTint }),
+        part(baseW * 0.52, baseW * 0.68, 5, { tint: estateTint }),
+        part(0, baseW * 1.14, 0),
+      ],
+    },
+    {
+      apron: 1.78, shadow: 1.44,
+      parts: [
+        part(-baseW * 0.62, baseW * 0.76, 7, { tint: estateTint }),
+        part(baseW * 0.62, baseW * 0.76, 7, { tint: estateTint }),
+        part(0, baseW * 1.28, 0),
+      ],
+    },
+    {
+      apron: 1.86, shadow: 1.48,
+      parts: [
+        part(-baseW * 0.66, baseW * 0.78, 7, { tint: mansionTint }),
+        part(baseW * 0.66, baseW * 0.78, 7, { tint: mansionTint }),
+        part(0, baseW * 1.30, 0, { tint: mansionTint }),
+      ],
+    },
+    {
+      apron: 2.05, shadow: 1.62,
+      parts: [
+        part(-baseW * 0.82, baseW * 0.72, 9, { tint: estateTint }),
+        part(baseW * 0.82, baseW * 0.72, 9, { tint: estateTint }),
+        part(-baseW * 0.34, baseW * 0.82, 4),
+        part(baseW * 0.34, baseW * 0.82, 4),
+        part(0, baseW * 1.36, 0),
+      ],
+    },
+    { apron: 0.86, shadow: 0.82, parts: [part(0, baseW * 0.82, 2)] },
+  ];
+  const plan = plans[flavor];
+  const aspect = image.naturalHeight / image.naturalWidth;
+  const parts = plan.parts.map(entry => ({
+    ...entry,
+    height: entry.width * aspect,
+    left: entry.cx - entry.width / 2,
+    right: entry.cx + entry.width / 2,
+    top: entry.bottom - entry.width * aspect,
+  }));
+  return {
+    apron: plan.apron,
+    shadow: plan.shadow,
+    parts,
+    bounds: {
+      left: Math.min(...parts.map(entry => entry.left)),
+      right: Math.max(...parts.map(entry => entry.right)),
+      top: Math.min(...parts.map(entry => entry.top)),
+      bottom: Math.max(...parts.map(entry => entry.bottom)),
+    },
+    presentation,
+  };
+}
+
+function bdDrawProductionHousePart(g, image, part) {
+  g.save();
+  g.globalAlpha *= part.alpha;
+  g.drawImage(image, part.left, part.top, part.width, part.height);
+  if (part.tint) {
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = part.tint;
+    g.fillRect(part.left, part.top, part.width, part.height);
+  }
+  g.restore();
+}
+
+function bdProductionHouseSprite(def, image, side, variant, damageStage, seed) {
+  const plan = bdHouseVariantPlan(def, image, variant);
+  const { presentation, bounds } = plan;
+  const apronRx = presentation.apronRx * plan.apron;
+  const apronRy = presentation.apronRy * Math.min(1.55, 0.88 + plan.apron * 0.28);
+  const boxLeft = Math.min(bounds.left - 24, -apronRx * 1.18 - 4);
+  const boxRight = Math.max(bounds.right + 24, apronRx * 1.18 + 4);
+  const boxBottom = Math.max(
+    bounds.bottom + 60,
+    presentation.pavingCenterY + apronRy * 1.20 + 8,
+  );
+  const box = [boxLeft, bounds.top - 18, boxRight - boxLeft, boxBottom - (bounds.top - 18)];
+
+  return bdBake(box, BD_SCALE, function (g) {
+    for (const entry of plan.parts) bdDrawProductionHousePart(g, image, entry);
+    for (let index = 0; index < plan.parts.length; index++) {
+      const entry = plan.parts[index];
+      bdPaintProductionDamage(
+        g, entry.left, entry.top, entry.width, entry.height,
+        damageStage, seed + index * 92821,
+      );
+    }
+
+    g.save();
+    g.globalCompositeOperation = 'destination-over';
+    for (const entry of plan.parts) {
+      bdContactShadow(g, entry.cx, entry.bottom - 8,
+        def.w * 0.44 * plan.shadow, def.h * 0.46, 0.54);
+    }
+    g.restore();
+
+    bdPassGroundApron(g, 0, presentation.pavingCenterY,
+      apronRx, BD_SIDE[side].rim, {
+      ry: apronRy,
+      seed,
+    });
+  });
+}
+
 function bdProductionBuildingSprite(type, def, image, side, damageStage, seed) {
   const presentation = getBuildingPresentation(type, def);
   const imageW = presentation.artWidth;
@@ -5314,38 +5480,7 @@ function bdProductionBuildingSprite(type, def, image, side, damageStage, seed) {
     // Damage remains cached with the sprite. Low-opacity soot and hairline
     // fractures preserve the pre-rendered material response instead of
     // replacing it with the procedural renderer's broad damage marks.
-    if (damageStage) {
-      const rr = bdRnd(seed ^ (damageStage * 0x45d9f3b));
-      g.save();
-      g.globalCompositeOperation = 'source-atop';
-      for (let i = 0; i < damageStage + 1; i++) {
-        const x = rr(left + imageW * 0.14, left + imageW * 0.86);
-        const y = rr(top + imageH * 0.22, top + imageH * 0.76);
-        const radius = rr(9, 18) * damageStage;
-        const soot = g.createRadialGradient(x, y, 0, x, y, radius);
-        soot.addColorStop(0, `rgba(27,24,26,${damageStage === 1 ? 0.24 : 0.42})`);
-        soot.addColorStop(1, 'rgba(27,24,26,0)');
-        g.fillStyle = soot;
-        g.beginPath();
-        g.ellipse(x, y, radius, radius * 0.62, rr(-0.35, 0.35), 0, BD_TAU);
-        g.fill();
-      }
-      g.strokeStyle = bdShadow(damageStage === 1 ? 0.48 : 0.68);
-      g.lineWidth = damageStage === 1 ? 0.48 : 0.72;
-      for (let i = 0; i < damageStage * 3; i++) {
-        let x = rr(left + imageW * 0.20, left + imageW * 0.80);
-        let y = rr(top + imageH * 0.48, top + imageH * 0.82);
-        g.beginPath();
-        g.moveTo(x, y);
-        for (let k = 0; k < 4; k++) {
-          x += rr(-3.2, 3.2);
-          y += rr(2.0, 5.0);
-          g.lineTo(x, y);
-        }
-        g.stroke();
-      }
-      g.restore();
-    }
+    bdPaintProductionDamage(g, left, top, imageW, imageH, damageStage, seed);
 
     // A soft, cool ambient bed ties the isolated sprite to the terrain. It is
     // destination-over so no shadow pigment can muddy the stone stair or base.
@@ -5364,7 +5499,7 @@ function bdProductionBuildingSprite(type, def, image, side, damageStage, seed) {
 
 function bdBuildingSprite(type, def, side, nation, natRoof, variant, damageStage, animFrame) {
   const art = getBuildingProductionArtSpec(nation, type);
-  const image = art && !(type === 'house' && variant >= 2) ? getProductionArt(art.key) : null;
+  const image = art ? getProductionArt(art.key) : null;
   const frame = type === 'mill' && !image ? (animFrame || 0) : 0;
   const damage = damageStage || 0;
   const key = type + '|' + side + '|' + nation + '|' + variant + '|' + damage + '|' + frame;
@@ -5372,9 +5507,10 @@ function bdBuildingSprite(type, def, side, nation, natRoof, variant, damageStage
   if (s) return s;
 
   if (image) {
-    s = bdProductionBuildingSprite(
-      type, def, image, side, damage, variant * 7919 + side * 104729 + 1,
-    );
+    const seed = variant * 7919 + side * 104729 + 1;
+    s = type === 'house'
+      ? bdProductionHouseSprite(def, image, side, variant, damage, seed)
+      : bdProductionBuildingSprite(type, def, image, side, damage, seed);
     bdBuildingCache.set(key, s);
     return s;
   }
