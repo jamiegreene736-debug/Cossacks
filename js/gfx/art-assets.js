@@ -35,6 +35,25 @@ const WOMAN_VILLAGER_CANNON_ART_SPEC = Object.freeze({
   sourceW: 384, sourceH: 512,
 });
 
+const FACTION_CHARACTER_ART_SPECS = Object.freeze({
+  hogwarts: Object.freeze({
+    key: 'hogwartsMagic', file: 'hogwarts-magic.webp', columns: 4, rows: 3,
+    sourceW: 362, sourceH: 362,
+    unitRows: Object.freeze({
+      wizard_worker: 0, witch_worker: 1,
+      wizard_duelist: 0, witch_duelist: 1, moaning_myrtle: 2,
+    }),
+  }),
+  nightmare_circus: Object.freeze({
+    key: 'nightmareClowns', file: 'nightmare-clowns.webp', columns: 4, rows: 5,
+    sourceW: 313.5, sourceH: 250.8,
+    unitRows: Object.freeze({
+      circus_worker: 1, pennywise: 0, art_clown: 1, twisty_clown: 2,
+      captain_spaulding: 3, killer_klown: 4,
+    }),
+  }),
+});
+
 const WALK_ART_SPECS = Object.freeze({
   musk: Object.freeze({
     key: 'musketeersWalk', file: 'musketeers-walk.webp', columns: 6, rows: 2,
@@ -141,6 +160,30 @@ const ART_URLS = Object.freeze({
   ottomanFoundry: new URL('../../assets/buildings/ottoman-foundry.webp', import.meta.url).href,
   ottomanTower: new URL('../../assets/buildings/ottoman-tower.webp', import.meta.url).href,
   ottomanCastle: new URL('../../assets/buildings/ottoman-grand-artillery-castle.webp', import.meta.url).href,
+  hogwartsTownCenter: new URL('../../assets/buildings/hogwarts-town-center.webp', import.meta.url).href,
+  hogwartsHouse: new URL('../../assets/buildings/hogwarts-house.webp', import.meta.url).href,
+  hogwartsMill: new URL('../../assets/buildings/hogwarts-mill.webp', import.meta.url).href,
+  hogwartsLumberCamp: new URL('../../assets/buildings/hogwarts-lumber-camp.webp', import.meta.url).href,
+  hogwartsMine: new URL('../../assets/buildings/hogwarts-mine.webp', import.meta.url).href,
+  hogwartsBarracks: new URL('../../assets/buildings/hogwarts-barracks.webp', import.meta.url).href,
+  hogwartsStable: new URL('../../assets/buildings/hogwarts-stable.webp', import.meta.url).href,
+  hogwartsFoundry: new URL('../../assets/buildings/hogwarts-foundry.webp', import.meta.url).href,
+  hogwartsTower: new URL('../../assets/buildings/hogwarts-tower.webp', import.meta.url).href,
+  hogwartsCastle: new URL('../../assets/buildings/hogwarts-castle.webp', import.meta.url).href,
+  hogwartsGreatHall: new URL('../../assets/buildings/hogwarts-great-hall.webp', import.meta.url).href,
+  hogwartsPool: new URL('../../assets/buildings/hogwarts-pool.webp', import.meta.url).href,
+  hogwartsBeach: new URL('../../assets/buildings/hogwarts-beach.webp', import.meta.url).href,
+  circusTownCenter: new URL('../../assets/buildings/circus-town-center.webp', import.meta.url).href,
+  circusHouse: new URL('../../assets/buildings/circus-house.webp', import.meta.url).href,
+  circusBarracks: new URL('../../assets/buildings/circus-barracks.webp', import.meta.url).href,
+  circusFoundry: new URL('../../assets/buildings/circus-foundry.webp', import.meta.url).href,
+  circusCastle: new URL('../../assets/buildings/circus-castle.webp', import.meta.url).href,
+  parkEnglish: new URL('../../assets/buildings/park-english.webp', import.meta.url).href,
+  parkEastAsian: new URL('../../assets/buildings/park-east-asian.webp', import.meta.url).href,
+  parkTropical: new URL('../../assets/buildings/park-tropical.webp', import.meta.url).href,
+  parkOasis: new URL('../../assets/buildings/park-oasis.webp', import.meta.url).href,
+  parkAlpine: new URL('../../assets/buildings/park-alpine.webp', import.meta.url).href,
+  worldPlayground: new URL('../../assets/buildings/world-playground.webp', import.meta.url).href,
   englishConstruction: new URL('../../assets/buildings/english-construction.webp', import.meta.url).href,
   englishFortifications: new URL('../../assets/buildings/english-fortifications.webp', import.meta.url).href,
   fortificationMasonry: new URL('../../assets/buildings/fortification-masonry.webp', import.meta.url).href,
@@ -171,6 +214,8 @@ const ART_URLS = Object.freeze({
   englishWomanVillager: new URL('../../assets/units/english-woman-villager.webp', import.meta.url).href,
   ottomanWomanVillager: new URL('../../assets/units/ottoman-woman-villager.webp', import.meta.url).href,
   womanVillagerCannon: new URL('../../assets/units/woman-villager-cannon.webp', import.meta.url).href,
+  hogwartsMagic: new URL('../../assets/units/hogwarts-magic.webp', import.meta.url).href,
+  nightmareClowns: new URL('../../assets/units/nightmare-clowns.webp', import.meta.url).href,
   musketeers: new URL('../../assets/units/musketeers.webp', import.meta.url).href,
   musketeersWalk: new URL('../../assets/units/musketeers-walk.webp', import.meta.url).href,
   partisans: new URL('../../assets/units/partisans.webp', import.meta.url).href,
@@ -223,6 +268,7 @@ export {
   VILLAGER_CARRY_ART_SPECS,
   WOMAN_VILLAGER_ART_SPECS,
   WOMAN_VILLAGER_CANNON_ART_SPEC,
+  FACTION_CHARACTER_ART_SPECS,
   getProductionFrameSlice,
   preloadProductionArt,
   getProductionArt,

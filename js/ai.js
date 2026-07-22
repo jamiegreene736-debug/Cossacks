@@ -2,7 +2,8 @@
 // gathering and population rules as the player; only its decisions are scripted.
 
 import {
-  WORLD, BUILDING_TYPES, CPU_DIFFICULTIES, UNIT_TYPES, normalizeCpuDifficulty,
+  WORLD, BUILDING_TYPES, CPU_DIFFICULTIES, UNIT_TYPES, getTrainableUnitTypes,
+  normalizeCpuDifficulty,
 } from './config.js';
 import { applyMoveOrder, applyAttackOrder } from './formations.js';
 import {
@@ -14,7 +15,9 @@ import {
   hostileUnits, nearestHostileTownCenter, sideFrontDirection,
 } from './teams.js';
 
-const MILITARY_TYPES = new Set(['musk', 'pike', 'cav', 'gun']);
+function isMilitaryUnit(unit) {
+  return Boolean(unit?.alive && !UNIT_TYPES[unit.unitType || unit.type]?.worker);
+}
 
 function centroid(units) {
   let x = 0, y = 0;
@@ -62,11 +65,10 @@ export class Commander {
     if (villagers.length + queuedVillagers.length
           < this.profile.villagerTarget
         && tc.queue.length < this.profile.villagerQueueLimit) {
-      const women = villagers.filter(worker => worker.unitType === 'woman_villager').length
-        + queuedVillagers.filter(item => item.type === 'woman_villager').length;
-      const womenTarget = Math.max(1, Math.floor(this.profile.villagerTarget / 4));
-      const unitType = villagers.length >= 2 && women < womenTarget
-        ? 'woman_villager' : 'villager';
+      const workerRoster = getTrainableUnitTypes(side.nation, 'town_center')
+        .filter(unitType => UNIT_TYPES[unitType]?.worker);
+      const rosterIndex = (villagers.length + queuedVillagers.length) % Math.max(1, workerRoster.length);
+      const unitType = workerRoster[rosterIndex] || 'villager';
       queueUnit(world, tc, unitType, 1);
     }
 
@@ -175,27 +177,28 @@ export class Commander {
 
   manageProduction() {
     const world = this.world;
-    const military = unitsOf(world, this.side).filter(unit => MILITARY_TYPES.has(unit.type));
+    const nation = world.sides[this.side].nation;
+    const military = unitsOf(world, this.side).filter(isMilitaryUnit);
     const hasFoundry = buildingsOf(world, this.side, 'foundry').length > 0;
     for (const building of buildingsOf(world, this.side, null, true)) {
-      const trains = BUILDING_TYPES[building.type].trains || [];
+      const trains = getTrainableUnitTypes(nation, building.type)
+        .filter(unitType => !UNIT_TYPES[unitType]?.worker);
       if (trains.length === 0 || building.type === 'town_center'
           || building.queue.length >= this.profile.productionQueueLimit) continue;
       if (building.type === 'barracks') {
-        queueUnit(
-          world, building, !hasFoundry || military.length % 3 === 0 ? 'pike' : 'musk',
-          this.profile.productionBatch.barracks,
-        );
+        const unitType = trains[(military.length + building.queue.length) % trains.length];
+        queueUnit(world, building, unitType, this.profile.productionBatch.barracks);
       } else if (building.type === 'stable') {
         if (hasFoundry || world.time > this.profile.cavalryFallbackTime) {
-          queueUnit(world, building, 'cav', this.profile.productionBatch.stable);
+          queueUnit(world, building, trains[military.length % trains.length], this.profile.productionBatch.stable);
         }
       } else if (building.type === 'foundry') {
-        queueUnit(world, building, 'gun', this.profile.productionBatch.foundry);
+        const unitType = trains[(military.length + building.queue.length) % trains.length];
+        const count = unitType === 'killer_klown' ? 1 : this.profile.productionBatch.foundry;
+        queueUnit(world, building, unitType, count);
       } else if (building.type === 'castle') {
-        const roster = ['musk', 'pike', 'cav', 'gun'];
-        const unitType = roster[(military.length + building.queue.length) % roster.length];
-        const count = unitType === 'gun' ? 1 : unitType === 'cav' ? 2 : 3;
+        const unitType = trains[(military.length + building.queue.length) % trains.length];
+        const count = UNIT_TYPES[unitType].splash ? 1 : UNIT_TYPES[unitType].pop > 1 ? 2 : 3;
         queueUnit(world, building, unitType, count);
       }
       const dir = sideFrontDirection(world, this.side);
@@ -208,7 +211,7 @@ export class Commander {
     const tc = getTownCenter(world, this.side);
     if (!tc) return;
     const enemyUnits = hostileUnits(world, this.side);
-    const defenders = unitsOf(world, this.side).filter(unit => MILITARY_TYPES.has(unit.type));
+    const defenders = unitsOf(world, this.side).filter(isMilitaryUnit);
     const nearbyEnemy = enemyUnits.find(unit => (
       Math.hypot(unit.x - tc.x, unit.y - tc.y) < this.profile.defenseRadius
     ));

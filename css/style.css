@@ -197,6 +197,10 @@ button, select { font: inherit; }
 #objective-panel { border-left: 1px solid var(--line-soft); background: rgba(48,45,29,.34); }
 #objective-panel h3 { margin: 5px 0; color: #d9c77f; font-size: 15px; }
 #objective-panel p { color: #b7ad91; font-size: 12px; line-height: 1.4; }
+.world-country-badge {
+  margin: -4px 0 7px; color: #d9c77f; font: 700 10px/1.2 Arial, sans-serif;
+  letter-spacing: .35px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 #minimap {
   position: absolute; right: 12px; bottom: 166px; z-index: 12;
@@ -335,6 +339,18 @@ button, select { font: inherit; }
   -webkit-appearance: none; appearance: none; text-shadow: 0 0 0 #eee6cd;
 }
 .nation-picker select option { color: #eee6cd; background: #171b12; }
+.world-country-picker {
+  display: grid; grid-template-columns: auto minmax(230px, 1fr); align-items: center;
+  gap: 5px 12px; margin: -5px auto 11px; max-width: 460px;
+  color: #a99f82; font: 700 10px Arial, sans-serif; letter-spacing: 1px; text-transform: uppercase;
+}
+.world-country-picker select {
+  min-width: 0; padding: 7px 10px; color: #eee6cd; background: #171b12;
+  border: 1px solid #706748; border-radius: 3px; font-size: 13px; text-transform: none;
+}
+.world-country-picker small { grid-column: 2; color: #807960; font: 9px Arial, sans-serif; text-align: left; }
+.scenario-preview { margin: 0 0 12px; color: #a69b7b; font: 10.5px/1.35 Arial, sans-serif; }
+.scenario-preview b { color: #d7c58b; }
 #nation-preview {
   display: grid; grid-template-columns: 54px 1fr 42px 1fr; align-items: center; gap: 13px;
   margin: 17px 0; padding: 13px 17px; text-align: left;

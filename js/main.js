@@ -157,6 +157,7 @@ async function startBattle(opts) {
   setupLocalVillagerCarryPreview(world);
   setupLocalWomanVillagerPreview(world);
   setupLocalOpeningTrucePreview(world);
+  setupLocalFantasyFactionPreview(world);
   setupLocalSettlementVarietyPreview(world);
   setupLocalVictoryRainbowPreview(world);
   ui.showBattleHud(world);
@@ -168,6 +169,54 @@ async function startBattle(opts) {
   endShown = false;
   acc = 0;
   resetFrameMetrics();
+}
+
+function setupLocalFantasyFactionPreview(activeWorld) {
+  const debugName = new URLSearchParams(window.location.search).get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'fantasy-factions') return;
+
+  const previewBounds = { left: 1950, right: 3250, top: 850, bottom: 2350 };
+  activeWorld.resources = activeWorld.resources.filter(resource => (
+    resource.x < previewBounds.left || resource.x > previewBounds.right
+    || resource.y < previewBounds.top || resource.y > previewBounds.bottom
+  ));
+  activeWorld.buildings = activeWorld.buildings.filter(building => (
+    building.x < previewBounds.left || building.x > previewBounds.right
+    || building.y < previewBounds.top || building.y > previewBounds.bottom
+  ));
+  activeWorld.time = OPENING_PEACE_SECONDS;
+
+  const hogwartsTypes = ['wizard_duelist', 'witch_duelist', 'moaning_myrtle'];
+  const circusTypes = [
+    'pennywise', 'art_clown', 'twisty_clown', 'captain_spaulding', 'killer_klown',
+  ];
+  const hogwartsUnits = hogwartsTypes.map((type, index) => (
+    spawnUnit(activeWorld, 2, type, 2350, 1320 + index * 150)
+  ));
+  const circusUnits = circusTypes.map((type, index) => (
+    spawnUnit(activeWorld, 3, type, 2710, 1130 + index * 140)
+  ));
+
+  for (const unit of [...hogwartsUnits, ...circusUnits]) {
+    unit.maxHp = Math.max(unit.maxHp, 420);
+    unit.hp = unit.maxHp;
+    unit.reload = 0;
+    if (unit.range > 0) unit.reloadTime = Math.min(unit.reloadTime, 1.15);
+    unit.acquireT = 0;
+  }
+  hogwartsUnits.forEach((unit, index) => {
+    applyAttackOrder([unit], circusUnits[index % circusUnits.length]);
+  });
+  circusUnits.forEach((unit, index) => {
+    applyAttackOrder([unit], hogwartsUnits[index % hogwartsUnits.length]);
+  });
+
+  camera.x = 2540;
+  camera.y = 1450;
+  camera.zoom = 0.72;
+  clampCamera();
 }
 
 function setupLocalOpeningTrucePreview(activeWorld) {

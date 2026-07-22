@@ -34,7 +34,7 @@
       </div>
     </header>
 
-    <div id="time-controls" class="hud hidden">
+      <div id="time-controls" class="hud hidden">
       <button id="btn-view-left" title="Turn view left (Q)" aria-label="Turn view left">&#8634;</button>
       <span id="view-direction" title="Current viewing direction">South</span>
       <button id="btn-view-right" title="Turn view right (E)" aria-label="Turn view right">&#8635;</button>
@@ -59,11 +59,13 @@
           <button id="btn-halt" title="Halt (H)">Halt</button>
         </div>
       </div>
+
       <div id="command-area">
         <div class="command-heading"><small class="eyebrow">Orders</small><span id="command-context">Select a unit or building</span></div>
         <div id="command-grid"></div>
       </div>
       <div id="objective-panel">
+        <div id="hud-world-country" class="world-country-badge">🇬🇧 World Park: United Kingdom</div>
         <small class="eyebrow">Campaign objective</small>
         <h3 id="objective-title">Found a settlement</h3>
         <p id="objective-text">Your first villager is preparing inside the Town Center.</p>
@@ -84,7 +86,7 @@
 
     <div id="overlay-start" class="overlay">
       <div class="menu-card start-card">
-        <div class="menu-kicker">An original mass-scale historical RTS</div>
+        <div class="menu-kicker">A mass-scale historical and fantasy RTS</div>
         <h1>Empires<span class="subtitle">Seventeen Hundred</span></h1>
         <p class="tagline">From one Town Center to an army of thousands.</p>
 
@@ -104,6 +106,14 @@
             <span class="versus">VS</span>
             <div class="enemy-preview"><small>Your <span id="preview-difficulty">chosen</span> rival</small><b id="preview-enemy">Ottoman Empire</b></div>
           </div>
+
+          <label class="world-country-picker">World Park country
+            <select id="sel-world-country" aria-describedby="world-country-count" disabled></select>
+            <small id="world-country-count">195 countries represented</small>
+          </label>
+
+          <p class="scenario-preview"><b>Alliance:</b> England + Hogwarts &nbsp;·&nbsp;
+            <b>Enemies:</b> Ottoman Empire + Nightmare Circus</p>
 
           <button id="btn-start" disabled>Found Your Empire</button>
         </section>

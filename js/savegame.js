@@ -22,6 +22,7 @@ const WORLD_ARRAYS = [
 ];
 const WORLD_VALUES = [
   'time', 'winner', 'checkT', 'speed', 'killLog', 'sides', 'difficulty', 'navigationVersion',
+  'worldCountry',
 ];
 
 function encodeNumber(value) {
@@ -94,11 +95,14 @@ function serializeCommander(commander) {
 
 function campaignSummary(world, savedAt) {
   const player = world.sides[0];
+  const alliedSides = world.sides.filter((side, index) => index !== 0 && side.team === player.team);
   const enemySides = world.sides.filter(side => side.team !== player.team);
   return {
     savedAt,
     nation: player.nation,
+    allyNations: alliedSides.map(side => side.nation),
     enemyNation: enemySides[0]?.nation || world.sides[1]?.nation,
+    enemyNations: enemySides.map(side => side.nation),
     difficulty: normalizeCpuDifficulty(world.difficulty),
     elapsed: world.time,
     population: player.population,
@@ -191,6 +195,7 @@ export function restoreGameSnapshot(snapshot) {
     playerNation: data.sides[0].nation,
     enemyNation: data.sides[1].nation,
     difficulty,
+    worldCountry: data.worldCountry,
     sides: data.sides,
   });
 

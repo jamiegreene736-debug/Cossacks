@@ -1,7 +1,7 @@
 // Rendering: procedural sprite atlases plus selected production building art,
 // terrain and corpse-decal canvases, camera transform, effects, and minimap.
 
-import { WORLD, NATIONS, BUILDING_TYPES } from './config.js';
+import { WORLD, NATIONS, UNIT_TYPES, BUILDING_TYPES } from './config.js';
 import { buildTerrain, drawTerrain, drawTree, buildMinimapTerrain } from './gfx/terrain.js';
 import { drawSoldier, INF_W, INF_H, INF_AX, INF_AY } from './gfx/infantry.js';
 import { setDecalCtx, buildDecalStamps, paintDecal } from './gfx/decals.js';
@@ -19,6 +19,7 @@ import {
   VILLAGER_CARRY_ART_SPECS,
   WOMAN_VILLAGER_ART_SPECS,
   WOMAN_VILLAGER_CANNON_ART_SPEC,
+  FACTION_CHARACTER_ART_SPECS,
   getProductionArt,
   getProductionFrameSlice,
 } from './gfx/art-assets.js';
@@ -427,7 +428,7 @@ function withProductionMilitaryArt(type, nationKey, fallback) {
   const spec = MILITARY_ART_SPECS[type];
   const image = spec ? getProductionArt(spec.key) : null;
   const walkImage = spec?.walk ? getProductionArt(spec.walk.key) : null;
-  const sourceRow = MILITARY_ART_ROWS[nationKey];
+  const sourceRow = MILITARY_ART_ROWS[nationKey] ?? 0;
   if (!spec || !image || sourceRow === undefined) return fallback;
 
   return {
@@ -529,6 +530,37 @@ function paintFallbackWomanCannon(g, nat, pose, side) {
   g.restore();
 }
 
+function buildFactionCharacterDefs(nationKey, side, nat) {
+  const spec = FACTION_CHARACTER_ART_SPECS[nationKey];
+  const image = spec ? getProductionArt(spec.key) : null;
+  if (!spec || !image) return {};
+  const defs = {};
+  for (const [unitType, sourceRow] of Object.entries(spec.unitRows)) {
+    const worker = Boolean(UNIT_TYPES[unitType]?.worker);
+    const isGhost = unitType === 'moaning_myrtle';
+    const isHeavy = unitType === 'killer_klown';
+    const w = isHeavy ? 76 : isGhost ? 68 : 58;
+    const h = isHeavy ? 66 : isGhost ? 64 : 62;
+    const sourceFrames = worker
+      ? [0, 1, 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 0, 1, 2, 3, 1, 1, 1, 1, 1, 1, 1, 1]
+      : [0, 1, 1, 1, 1, 1, 1, 2];
+    defs[unitType] = {
+      w, h, ax: w / 2, ay: h - 5,
+      military: !worker,
+      baseRadiusX: isHeavy ? 23 : 15,
+      baseRadiusY: isHeavy ? 4.2 : 3.1,
+      production: {
+        image, sourceW: spec.sourceW, sourceH: spec.sourceH, sourceRow,
+      },
+      frames: sourceFrames.map(sourceFrame => ['idle', 0, null, sourceFrame]),
+      painter: worker
+        ? (g, pose, leg, action) => drawWorker(g, nat, pose, leg, action)
+        : (g, pose, leg) => drawSoldier(g, nat, pose, leg, 'musk'),
+    };
+  }
+  return defs;
+}
+
 
 
 
@@ -540,9 +572,9 @@ function buildNationSprites(nationKey, side = 0) {
   const productionWorker = getProductionArt(PRODUCTION_WORKER_ART[nationKey]);
   const productionWorkerCombat = getProductionArt(VILLAGER_COMBAT_ART_SPEC.key);
   const carryArtSpec = VILLAGER_CARRY_ART_SPECS[nationKey];
-  const productionWorkerCarry = getProductionArt(carryArtSpec.key);
+  const productionWorkerCarry = carryArtSpec ? getProductionArt(carryArtSpec.key) : null;
   const womanArtSpec = WOMAN_VILLAGER_ART_SPECS[nationKey];
-  const productionWomanWorker = getProductionArt(womanArtSpec.key);
+  const productionWomanWorker = womanArtSpec ? getProductionArt(womanArtSpec.key) : null;
   const productionWomanCannon = getProductionArt(WOMAN_VILLAGER_CANNON_ART_SPEC.key);
   const workerFrames = [
     ['idle', 0, null, 0], ['idle', 1, null, 1], ['idle', 2, null, 2],
@@ -597,7 +629,7 @@ function buildNationSprites(nationKey, side = 0) {
       image: productionWorkerCombat,
       sourceW: VILLAGER_COMBAT_ART_SPEC.sourceW,
       sourceH: VILLAGER_COMBAT_ART_SPEC.sourceH,
-      sourceRow: MILITARY_ART_ROWS[nationKey],
+      sourceRow: MILITARY_ART_ROWS[nationKey] ?? 0,
     } : null,
   };
   const womanWorkerFrames = [
@@ -614,7 +646,7 @@ function buildNationSprites(nationKey, side = 0) {
     w: 86, h: 58, ax: 43, ay: 53,
     frames: womanWorkerFrames,
     cannonWorker: true,
-    production: productionWomanWorker ? {
+    production: productionWomanWorker && womanArtSpec ? {
       image: productionWomanWorker,
       sourceW: womanArtSpec.sourceW,
       sourceH: womanArtSpec.sourceH,
@@ -624,7 +656,7 @@ function buildNationSprites(nationKey, side = 0) {
       image: productionWomanCannon,
       sourceW: WOMAN_VILLAGER_CANNON_ART_SPEC.sourceW,
       sourceH: WOMAN_VILLAGER_CANNON_ART_SPEC.sourceH,
-      sourceRow: MILITARY_ART_ROWS[nationKey],
+      sourceRow: MILITARY_ART_ROWS[nationKey] ?? 0,
     } : null,
     painter: (g, pose, leg, action) => paintFallbackWomanWorker(g, nat, pose, leg, action),
     combatPainter: (g, pose) => paintFallbackWomanCannon(g, nat, pose, side),
@@ -668,6 +700,7 @@ function buildNationSprites(nationKey, side = 0) {
     pike: withProductionMilitaryArt('pike', nationKey, proceduralDefs.pike),
     cav: withProductionMilitaryArt('cav', nationKey, proceduralDefs.cav),
     gun: withProductionMilitaryArt('gun', nationKey, proceduralDefs.gun),
+    ...buildFactionCharacterDefs(nationKey, side, nat),
   };
 
   for (const [type, def] of Object.entries(defs)) {
