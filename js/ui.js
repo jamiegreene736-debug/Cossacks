@@ -3,6 +3,7 @@
 import {
   NATIONS, UNIT_TYPES, BUILDING_TYPES, RESOURCE_KEYS,
   CPU_DIFFICULTIES, DEFAULT_CPU_DIFFICULTY, getTrainableUnitTypes,
+  canNationBuildBuilding,
 } from './config.js';
 import { WORLD_COUNTRIES, WORLD_COUNTRY_BY_CODE, countryFlag } from './countries.js';
 import {
@@ -446,6 +447,7 @@ function renderSelection(world, selection) {
     }
     for (const [type, def] of Object.entries(BUILDING_TYPES)) {
       if (type === 'town_center') continue;
+      if (!canNationBuildBuilding(world.sides[0]?.nation, type)) continue;
       const fieldStatus = type === 'farm' ? getFieldAttachmentStatus(world, 0) : null;
       addCommand(grid, {
         action: 'build', type, icon: buildingIcon(type), label: def.label,
@@ -557,7 +559,9 @@ function unitIcon(type) {
 
 function buildingIcon(type) {
   return {
-    house: '⌂', farm: '≋', mill: '✣', lumber_camp: '♣', mine: '◆',
+    house: '⌂', english_cottage: '⌂', english_townhouse: '▤',
+    english_mansion: '▣', spooky_house: '☾',
+    farm: '≋', mill: '✣', lumber_camp: '♣', mine: '◆',
     barracks: '⚔', stable: '♞', foundry: '◉', tower: '♜', castle: '♛',
     school: '⌘', pool: '≈', beach: '≋', park: '♧', playground: '☆',
     wall: '▥', gate: '∩', wall_stairs: '▰',

@@ -2425,8 +2425,15 @@ function bdPaintTownCenter(g, o) {
 function bdPaintHouse(g, o) {
   const def = o.def, s = bdRnd(o.seed);
   const ottoman = o.nation === 'ottoman';
-  const flavor = o.variant % 2;
+  const namedFlavor = {
+    english_cottage: 7,
+    english_townhouse: 2,
+    english_mansion: 5,
+    spooky_house: 5,
+  }[o.type];
+  const flavor = namedFlavor ?? (o.variant % 8);
   const mansion = flavor === 5;
+  const spooky = o.type === 'spooky_house';
   const estate = flavor === 3 || flavor === 4 || flavor === 6;
   const rowHouse = flavor === 2;
   const cottage = flavor === 7;
@@ -2445,12 +2452,13 @@ function bdPaintHouse(g, o) {
     depthK: estate || mansion ? 0.19 : 0.165,
   });
   const sideRim = (BD_SIDE[o.side] || BD_SIDE[0]).rim;
-  const wallHex = mansion ? '#4D4951'
+  const wallHex = spooky ? '#39363F'
+    : mansion ? '#4D4951'
     : ottoman ? BMAT.PLASTER_WARM
     : brickHouse ? bdShiftHSL(BMAT.BRICK_RED, s(-0.015, 0.015), 0, s(-0.05, 0.04))
       : bdShiftHSL(BMAT.CLAPBOARD, s(-0.01, 0.01), 0, s(-0.05, 0.03));
   const wall = bdRamp(wallHex);
-  const roof = bdRoofMat(mansion ? '#434650' : ottoman ? BMAT.TILE : BMAT.SLATE,
+  const roof = bdRoofMat(spooky ? '#262834' : mansion ? '#434650' : ottoman ? BMAT.TILE : BMAT.SLATE,
     o.natRoof, mansion ? 0.18 : ottoman ? 0.30 : 0.45);
 
   bdWalls(g, G, { wall: wall, seed: o.seed, material: mansion ? 'stone' : 'plain' });
@@ -2582,7 +2590,7 @@ function bdPaintHouse(g, o) {
     bdCart(g, G.bw * 0.92, G.yG + 9, 0.56, o.seed * 9);
   }
   if (mansion) {
-    const Dead = bdRamp(BMAT.TIMBER_DARK);
+    const Dead = bdRamp(spooky ? '#18151B' : BMAT.TIMBER_DARK);
     const bx = -G.bw * 1.22, by = G.yG + 5;
     bdBeam(g, Dead, bx, by, bx + 7, G.yE - G.h * 0.24, 2.5, { cap: 'butt' });
     bdBeam(g, Dead, bx + 5, G.yE - G.h * 0.02, bx - 9, G.yE - G.h * 0.18, 1.5, { cap: 'butt' });
@@ -4949,7 +4957,8 @@ function bdPaintFortification(
  * the hard cast shadow's down-right throw. Nothing here clips.
  */
 const BD_TOP_EXTRA = {
-  town_center: 112, house: 118, farm: 30, mill: 104, lumber_camp: 54,
+  town_center: 112, house: 118, english_cottage: 108, english_townhouse: 116,
+  english_mansion: 148, spooky_house: 146, farm: 30, mill: 104, lumber_camp: 54,
   mine: 74, barracks: 78, stable: 72, foundry: 108, tower: 106,
   castle: 162,
   wall: 72, gate: 94, wall_stairs: 92,
@@ -5012,14 +5021,17 @@ function bdResetCaches() {
 }
 
 const BD_VARIANTS = {
-  town_center: 1, tower: 2, castle: 2, farm: 1, house: 8,
+  town_center: 1, tower: 2, castle: 2, farm: 1, house: 1,
+  english_cottage: 1, english_townhouse: 1, english_mansion: 1, spooky_house: 1,
   mill: 2, lumber_camp: 2, mine: 2, barracks: 2, stable: 2, foundry: 2,
   school: 1, pool: 1, beach: 1, park: 5, playground: 1,
   wall: 3, gate: 3, wall_stairs: 3,
 };
 
 const BD_PAINTERS = {
-  town_center: bdPaintTownCenter, house: bdPaintHouse, mill: bdPaintMill,
+  town_center: bdPaintTownCenter, house: bdPaintHouse, english_cottage: bdPaintHouse,
+  english_townhouse: bdPaintHouse, english_mansion: bdPaintHouse,
+  spooky_house: bdPaintHouse, mill: bdPaintMill,
   lumber_camp: bdPaintLumberCamp, mine: bdPaintMine, barracks: bdPaintBarracks,
   stable: bdPaintStable, foundry: bdPaintFoundry, tower: bdPaintTower,
   castle: bdPaintCastle, school: bdPaintBarracks, pool: bdPaintMill,
@@ -5029,6 +5041,10 @@ const BD_PAINTERS = {
 const BD_ENGLISH_BUILDING_ART = Object.freeze({
   town_center: { key: 'englishTownCenter' },
   house: { key: 'englishHouse' },
+  english_cottage: { key: 'englishCottage' },
+  english_townhouse: { key: 'englishTownhouse' },
+  english_mansion: { key: 'englishMansion' },
+  spooky_house: { key: 'englishSpookyHouse' },
   mill: { key: 'englishMill' },
   lumber_camp: { key: 'englishLumberCamp' },
   mine: { key: 'englishMine' },
@@ -5140,6 +5156,10 @@ export function getArchitectureProductionArtSpec(nation) {
 const BD_BUILDING_PRESENTATION = Object.freeze({
   town_center: { artWidthScale: 1.48, apronWidthScale: 0.98, apronDepthScale: 0.62 },
   house: { artWidthScale: 1.36, apronWidthScale: 1.12, apronDepthScale: 0.66 },
+  english_cottage: { artWidthScale: 1.42, apronWidthScale: 1.12, apronDepthScale: 0.66 },
+  english_townhouse: { artWidthScale: 1.46, apronWidthScale: 1.10, apronDepthScale: 0.66 },
+  english_mansion: { artWidthScale: 1.58, apronWidthScale: 1.02, apronDepthScale: 0.64 },
+  spooky_house: { artWidthScale: 1.54, apronWidthScale: 1.06, apronDepthScale: 0.66 },
   mill: { artWidthScale: 1.42, apronWidthScale: 0.86, apronDepthScale: 0.58 },
   lumber_camp: { artWidthScale: 1.44, apronWidthScale: 0.86, apronDepthScale: 0.58 },
   mine: { artWidthScale: 1.42, apronWidthScale: 0.86, apronDepthScale: 0.58 },
@@ -5568,9 +5588,7 @@ function bdBuildingSprite(type, def, side, nation, natRoof, variant, damageStage
 
   if (image) {
     const seed = variant * 7919 + side * 104729 + 1;
-    s = type === 'house'
-      ? bdProductionHouseSprite(def, image, side, variant, damage, seed)
-      : bdProductionBuildingSprite(type, def, image, side, damage, seed);
+    s = bdProductionBuildingSprite(type, def, image, side, damage, seed);
     bdBuildingCache.set(key, s);
     return s;
   }

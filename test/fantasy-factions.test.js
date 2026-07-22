@@ -168,27 +168,36 @@ test('magic attacks travel visibly while protected parks and children cannot be 
 
 test('fantasy architecture is backed by substantial high-detail production assets', async () => {
   const fixtures = [
-    ['hogwarts', 'town_center', 'hogwartsTownCenter', 'hogwarts-town-center.webp'],
-    ['hogwarts', 'school', 'hogwartsGreatHall', 'hogwarts-great-hall.webp'],
-    ['hogwarts', 'pool', 'hogwartsPool', 'hogwarts-pool.webp'],
-    ['hogwarts', 'beach', 'hogwartsBeach', 'hogwarts-beach.webp'],
-    ['nightmare_circus', 'town_center', 'circusTownCenter', 'circus-town-center.webp'],
-    ['nightmare_circus', 'castle', 'circusCastle', 'circus-castle.webp'],
-    ['starwars', 'town_center', 'starwarsTownCenter', 'starwars-town-center.webp'],
-    ['starwars', 'house', 'starwarsHouse', 'starwars-house.webp'],
-    ['starwars', 'mill', 'starwarsMill', 'starwars-mill.webp'],
-    ['starwars', 'lumber_camp', 'starwarsLumberCamp', 'starwars-lumber-camp.webp'],
-    ['starwars', 'mine', 'starwarsMine', 'starwars-mine.webp'],
-    ['starwars', 'barracks', 'starwarsBarracks', 'starwars-barracks.webp'],
-    ['starwars', 'stable', 'starwarsStable', 'starwars-stable.webp'],
-    ['starwars', 'foundry', 'starwarsFoundry', 'starwars-foundry.webp'],
-    ['starwars', 'tower', 'starwarsTower', 'starwars-tower.webp'],
-    ['starwars', 'castle', 'starwarsCastle', 'starwars-castle.webp'],
+    ['hogwarts', 'town_center', 'hogwartsTownCenter', 'hogwarts-town-center.webp', 160_000],
+    ['hogwarts', 'house', 'hogwartsHouse', 'hogwarts-house.webp', 160_000],
+    ['hogwarts', 'mill', 'hogwartsMill', 'hogwarts-mill.webp', 160_000],
+    ['hogwarts', 'lumber_camp', 'hogwartsLumberCamp', 'hogwarts-lumber-camp.webp', 160_000],
+    ['hogwarts', 'mine', 'hogwartsMine', 'hogwarts-mine.webp', 160_000],
+    ['hogwarts', 'barracks', 'hogwartsBarracks', 'hogwarts-barracks.webp', 160_000],
+    ['hogwarts', 'stable', 'hogwartsStable', 'hogwarts-stable.webp', 160_000],
+    ['hogwarts', 'foundry', 'hogwartsFoundry', 'hogwarts-foundry.webp', 160_000],
+    ['hogwarts', 'tower', 'hogwartsTower', 'hogwarts-tower.webp', 160_000],
+    ['hogwarts', 'castle', 'hogwartsCastle', 'hogwarts-castle.webp', 160_000],
+    ['hogwarts', 'school', 'hogwartsGreatHall', 'hogwarts-great-hall.webp', 160_000],
+    ['hogwarts', 'pool', 'hogwartsPool', 'hogwarts-pool.webp', 160_000],
+    ['hogwarts', 'beach', 'hogwartsBeach', 'hogwarts-beach.webp', 160_000],
+    ['nightmare_circus', 'town_center', 'circusTownCenter', 'circus-town-center.webp', 130_000],
+    ['nightmare_circus', 'castle', 'circusCastle', 'circus-castle.webp', 130_000],
+    ['starwars', 'town_center', 'starwarsTownCenter', 'starwars-town-center.webp', 190_000],
+    ['starwars', 'house', 'starwarsHouse', 'starwars-house.webp', 190_000],
+    ['starwars', 'mill', 'starwarsMill', 'starwars-mill.webp', 190_000],
+    ['starwars', 'lumber_camp', 'starwarsLumberCamp', 'starwars-lumber-camp.webp', 190_000],
+    ['starwars', 'mine', 'starwarsMine', 'starwars-mine.webp', 190_000],
+    ['starwars', 'barracks', 'starwarsBarracks', 'starwars-barracks.webp', 190_000],
+    ['starwars', 'stable', 'starwarsStable', 'starwars-stable.webp', 190_000],
+    ['starwars', 'foundry', 'starwarsFoundry', 'starwars-foundry.webp', 190_000],
+    ['starwars', 'tower', 'starwarsTower', 'starwars-tower.webp', 190_000],
+    ['starwars', 'castle', 'starwarsCastle', 'starwars-castle.webp', 190_000],
   ];
-  for (const [nation, type, key, filename] of fixtures) {
+  for (const [nation, type, key, filename, minimumBytes] of fixtures) {
     assert.deepEqual(getBuildingProductionArtSpec(nation, type), { key });
     const metadata = await stat(new URL(`../assets/buildings/${filename}`, import.meta.url));
-    assert.ok(metadata.size > 130_000, `${filename} should retain its source depth`);
+    assert.ok(metadata.size > minimumBytes, `${filename} should retain its source depth`);
   }
 });
 

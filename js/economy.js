@@ -3,7 +3,7 @@
 
 import {
   WORLD, NATIONS, UNIT_TYPES, BUILDING_TYPES, RESOURCE_KEYS, getTrainableUnitTypes,
-  STARTING_RESOURCES, GATHER_RATES, MAX_POPULATION,
+  STARTING_RESOURCES, GATHER_RATES, MAX_POPULATION, canNationBuildBuilding,
 } from './config.js';
 import { countryParkVariant } from './countries.js';
 import { applyMoveOrder } from './formations.js';
@@ -413,6 +413,10 @@ function resolveFieldAttachment(world, side, x, y) {
 export function validatePlacement(world, side, type, x, y, options = {}) {
   const def = BUILDING_TYPES[type];
   if (!def || type === 'town_center') return { ok: false, message: 'That building cannot be placed.' };
+  if (!canNationBuildBuilding(world.sides[side]?.nation, type)) {
+    const nationName = NATIONS[world.sides[side]?.nation]?.name || 'this nation';
+    return { ok: false, message: `${def.label} is not available to ${nationName}.` };
+  }
   const fortification = isFortificationType(type);
   const wallAttachment = Boolean(def.wallAttachment);
   const fieldAttachment = type === 'farm' ? resolveFieldAttachment(world, side, x, y) : null;

@@ -151,6 +151,10 @@ function getProductionFrameSlice(sourceW, sourceFrame, frameXBounds, destW) {
 const ART_URLS = Object.freeze({
   englishTownCenter: new URL('../../assets/buildings/english-town-center.png', import.meta.url).href,
   englishHouse: new URL('../../assets/buildings/english-house.webp', import.meta.url).href,
+  englishCottage: new URL('../../assets/buildings/english-cottage.webp', import.meta.url).href,
+  englishTownhouse: new URL('../../assets/buildings/english-townhouse.webp', import.meta.url).href,
+  englishMansion: new URL('../../assets/buildings/english-mansion.webp', import.meta.url).href,
+  englishSpookyHouse: new URL('../../assets/buildings/english-spooky-house.webp', import.meta.url).href,
   englishMill: new URL('../../assets/buildings/english-mill.webp', import.meta.url).href,
   englishLumberCamp: new URL('../../assets/buildings/english-lumber-camp.webp', import.meta.url).href,
   englishMine: new URL('../../assets/buildings/english-mine.webp', import.meta.url).href,
