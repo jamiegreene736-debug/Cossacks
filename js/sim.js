@@ -444,11 +444,13 @@ function fireSpecialBolt(world, u, target, distance, accMul = 1) {
     dmg: u.dmg, splash: u.splash || 0, target, hit, attackerId: u.id,
   });
   flash(world, muzzleX, muzzleY, u.projectileKind === 'cotton_candy');
+  sfx.specialShot(u.projectileKind, u.x);
 }
 
 function impactSpecialBolt(world, projectile) {
   const attacker = world.units.find(unit => unit.id === projectile.attackerId) || null;
   flash(world, projectile.tx, projectile.ty - 3, projectile.kind === 'cotton_candy');
+  sfx.specialImpact(projectile.kind, projectile.tx);
   if (!projectile.hit) return;
   if (projectile.target?.alive) damage(world, projectile.target, projectile.dmg, attacker);
   if (projectile.splash <= 0) return;

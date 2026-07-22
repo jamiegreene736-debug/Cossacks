@@ -39,6 +39,18 @@ const TRACKS = Object.freeze({
     chords: [[0, 2, 4], [0, 2, 4], [3, 5, 0], [4, 6, 1], [0, 2, 4], [5, 0, 2], [4, 6, 1], [0, 2, 4]],
     motif: [0, 2, 3, 4, 3, 2, 0, 2, 4, 3, 2, 1, 2, 1, 0, null],
   },
+  greatHall: {
+    id: 'greatHall', title: 'Great Hall Lamps', nation: 'hogwarts', tempo: 72,
+    root: 55, scale: [0, 2, 3, 5, 7, 8, 11], color: 'celesta',
+    chords: [[0, 2, 5], [4, 6, 1], [5, 0, 2], [3, 5, 0], [0, 2, 5], [1, 3, 5], [4, 6, 1], [0, 2, 5]],
+    motif: [0, 4, 3, null, 2, 5, 4, null, 0, 2, 3, 5, 4, 2, 1, null],
+  },
+  binarySuns: {
+    id: 'binarySuns', title: 'Outer Rim Dispatch', nation: 'starwars', tempo: 92,
+    root: 43, scale: [0, 2, 3, 5, 7, 9, 10], color: 'wire',
+    chords: [[0, 4, 6], [2, 4, 0], [3, 5, 1], [4, 6, 2], [0, 4, 6], [5, 1, 3], [4, 6, 2], [0, 4, 6]],
+    motif: [0, null, 4, 3, 2, null, 5, 4, 3, 2, 0, null, 2, 4, 3, null],
+  },
 });
 
 function clampVolume(value, fallback) {
@@ -56,10 +68,13 @@ export function normalizeAudioSettings(settings = {}) {
   };
 }
 
-export function campaignTrackOrder(playerNation) {
+export function campaignTrackOrder(playerNation, sideNations = []) {
   const factionTrack = playerNation === 'ottoman' ? 'bosphorus' : 'greenwich';
   const rivalTrack = factionTrack === 'greenwich' ? 'bosphorus' : 'greenwich';
-  return [factionTrack, 'lanterns', rivalTrack];
+  const accents = [];
+  if (sideNations.includes('hogwarts')) accents.push('greatHall');
+  if (sideNations.includes('starwars')) accents.push('binarySuns');
+  return [factionTrack, 'lanterns', ...accents, rivalTrack];
 }
 
 export function pausedMusicMultiplier(paused, pauseMusic) {
@@ -82,6 +97,29 @@ export function workerSoundKind(worker, target) {
   if (worker?.job?.kind !== 'gather' && worker?.job?.kind !== 'workplace') return null;
   const kind = worker.job.resourceType || target?.resourceType;
   return kind === 'food' ? 'harvest' : ['wood', 'gold', 'stone'].includes(kind) ? kind : null;
+}
+
+export function commandSoundProfile(kind = 'move') {
+  return {
+    move: { body: 760, snap: 2100, low: 118, volume: 0.028 },
+    select: { body: 980, snap: 2600, low: 154, volume: 0.022 },
+    gather: { body: 640, snap: 1550, low: 132, volume: 0.03 },
+    build: { body: 520, snap: 1320, low: 102, volume: 0.034 },
+    rally: { body: 880, snap: 2350, low: 146, volume: 0.027 },
+    train: { body: 720, snap: 1900, low: 128, volume: 0.026 },
+    attack: { body: 420, snap: 1450, low: 82, volume: 0.041 },
+  }[kind] || { body: 760, snap: 2100, low: 118, volume: 0.028 };
+}
+
+export function specialProjectileProfile(kind) {
+  return {
+    plasma: { body: 1850, end: 520, snap: 3900, volume: 0.105, twang: true },
+    ion: { body: 620, end: 110, snap: 2450, volume: 0.22, twang: true, heavy: true },
+    arcane: { body: 1568, end: 2350, snap: 5200, volume: 0.08, chime: true },
+    spectral: { body: 740, end: 420, snap: 1800, volume: 0.075, whisper: true },
+    nightmare: { body: 180, end: 96, snap: 850, volume: 0.09 },
+    cotton_candy: { body: 420, end: 220, snap: 1250, volume: 0.13, heavy: true },
+  }[kind] || { body: 1200, end: 520, snap: 2600, volume: 0.08 };
 }
 
 export function findNearestAudibleMatch(entities, listenerX, predicate) {
@@ -177,6 +215,7 @@ export class Soundscape {
     this.scheduledTrack = null;
     this.lastScheduledTrack = null;
     this.playerNation = 'england';
+    this.sideNations = [];
     this.musketQueue = 0;
     this.musketX = 0;
     this.workCooldown = 0;
@@ -369,6 +408,7 @@ export class Soundscape {
     if (!this.ctx) return;
     this.stopScheduledMusic();
     this.playerNation = world?.sides?.[0]?.nation || 'england';
+    this.sideNations = [...new Set((world?.sides || []).map(side => side.nation).filter(Boolean))];
     this.trackBag = [];
     this.currentTrack = null;
     this.pendingTrack = null;
@@ -537,10 +577,68 @@ export class Soundscape {
     const pan = this.spatialPan(this.musketX);
     const level = this.spatialLevel(this.musketX);
     const volume = Math.min(0.46, (0.07 + Math.log2(count + 1) * 0.075) * level);
-    this.noiseBurst(time, 0.035, { filter: 2800, q: 0.48, volume, pan, reverb: 0.1 });
-    this.noiseBurst(time + 0.012, 0.14, { filter: 820, q: 0.55, volume: volume * 0.58, pan, reverb: 0.24 });
+    this.noiseBurst(time, 0.028, { filter: 3400, q: 0.42, volume: volume * 1.08, pan, reverb: 0.08 });
+    this.noiseBurst(time + 0.009, 0.16, { filter: 760, q: 0.48, volume: volume * 0.62, pan, reverb: 0.26 });
     this.tone(96, time, 0.16, { type: 'triangle', endFrequency: 48, volume: volume * 0.22, pan, reverb: 0.18 });
-    this.noiseBurst(time + 0.075, 0.48, { filter: 1250, q: 0.24, volume: volume * 0.13, pan, reverb: 0.55 });
+    this.noiseBurst(time + 0.07, 0.54, { filter: 1180, q: 0.22, volume: volume * 0.15, pan, reverb: 0.58 });
+    if (count >= 5) this.noiseBurst(time + 0.16, 0.26, { filter: 2200, q: 0.7, volume: volume * 0.08, pan, reverb: 0.42 });
+  }
+
+  specialShot(kind, x) {
+    if (!this.ctx || this.muted) return;
+    const profile = specialProjectileProfile(kind);
+    const time = this.ctx.currentTime;
+    const pan = this.spatialPan(x);
+    const level = this.spatialLevel(x);
+    this.noiseBurst(time, profile.heavy ? 0.16 : 0.055, {
+      filter: profile.snap, q: profile.twang ? 1.8 : 1.1,
+      volume: profile.volume * level, pan, reverb: profile.chime ? 0.38 : 0.18,
+    });
+    this.tone(profile.body, time, profile.heavy ? 0.36 : 0.18, {
+      type: profile.twang ? 'sawtooth' : profile.chime ? 'triangle' : 'square',
+      endFrequency: profile.end,
+      filterType: 'bandpass',
+      filter: profile.twang ? 1900 : profile.snap,
+      q: profile.twang ? 2.1 : 1,
+      volume: profile.volume * (profile.heavy ? 0.52 : 0.42) * level,
+      pan,
+      reverb: profile.chime ? 0.48 : 0.22,
+    });
+    if (profile.chime) {
+      this.tone(profile.body * 1.5, time + 0.04, 0.42, {
+        type: 'sine', volume: profile.volume * 0.18 * level, pan, reverb: 0.65,
+      });
+    }
+    if (profile.twang) {
+      this.tone(profile.body * 0.48, time + 0.018, 0.28, {
+        type: 'triangle', endFrequency: profile.end * 0.55,
+        volume: profile.volume * 0.18 * level, pan, reverb: 0.28,
+      });
+    }
+  }
+
+  specialImpact(kind, x) {
+    if (!this.ctx || this.muted) return;
+    const profile = specialProjectileProfile(kind);
+    const time = this.ctx.currentTime;
+    const pan = this.spatialPan(x);
+    const level = this.spatialLevel(x);
+    this.noiseBurst(time, profile.heavy ? 0.22 : 0.08, {
+      filterType: profile.heavy ? 'lowpass' : 'bandpass',
+      filter: profile.heavy ? 720 : profile.snap * 0.74,
+      q: profile.heavy ? 0.42 : 1.3,
+      volume: profile.volume * (profile.heavy ? 1.15 : 0.72) * level,
+      pan,
+      reverb: profile.chime ? 0.42 : 0.2,
+    });
+    this.tone(profile.end, time, profile.heavy ? 0.42 : 0.16, {
+      type: profile.chime ? 'triangle' : 'sine',
+      endFrequency: Math.max(48, profile.end * 0.52),
+      volume: profile.volume * 0.28 * level,
+      pan,
+      reverb: profile.whisper ? 0.75 : 0.28,
+    });
+    if (profile.whisper) this.noiseBurst(time + 0.06, 0.38, { filter: 1250, q: 0.65, volume: 0.028 * level, pan, reverb: 0.7 });
   }
 
   melee(x, heavy = false) {
@@ -651,16 +749,18 @@ export class Soundscape {
     const pan = this.spatialPan(x);
     const level = this.spatialLevel(x);
     if (kind === 'wood') {
-      this.noiseBurst(time, 0.06, { filter: 740, q: 1.1, volume: 0.1 * level, pan, reverb: 0.08 });
-      this.tone(122, time, 0.11, { type: 'triangle', endFrequency: 82, volume: 0.085 * level, pan, reverb: 0.08 });
+      this.noiseBurst(time, 0.045, { filterType: 'lowpass', filter: 620, q: 0.75, volume: 0.12 * level, pan, reverb: 0.07 });
+      this.noiseBurst(time + 0.018, 0.055, { filter: 1850, q: 1.2, volume: 0.055 * level, pan, reverb: 0.06 });
+      this.tone(108, time, 0.13, { type: 'triangle', endFrequency: 68, volume: 0.095 * level, pan, reverb: 0.08 });
     } else if (kind === 'stone' || kind === 'gold') {
       const ring = kind === 'gold' ? 1480 : 1040;
       this.noiseBurst(time, 0.045, { filter: 2200, q: 1.4, volume: 0.075 * level, pan, reverb: 0.13 });
       this.tone(ring, time, kind === 'gold' ? 0.25 : 0.16, { type: 'triangle', endFrequency: ring * 0.72, volume: 0.055 * level, pan, reverb: 0.24 });
       this.tone(ring * 1.42, time, 0.13, { type: 'sine', volume: 0.024 * level, pan, reverb: 0.2 });
     } else if (kind === 'build') {
-      this.noiseBurst(time, 0.045, { filter: 1180, q: 0.9, volume: 0.075 * level, pan, reverb: 0.09 });
-      this.tone(178, time, 0.1, { type: 'triangle', endFrequency: 112, volume: 0.07 * level, pan, reverb: 0.1 });
+      this.noiseBurst(time, 0.04, { filter: 980, q: 0.85, volume: 0.085 * level, pan, reverb: 0.08 });
+      this.noiseBurst(time + 0.026, 0.055, { filter: 2100, q: 1.0, volume: 0.04 * level, pan, reverb: 0.08 });
+      this.tone(164, time, 0.11, { type: 'triangle', endFrequency: 96, volume: 0.072 * level, pan, reverb: 0.1 });
     } else {
       this.noiseBurst(time, 0.18, { filter: 2100, q: 0.35, volume: 0.05 * level, pan, reverb: 0.04 });
       this.noiseBurst(time + 0.07, 0.12, { filter: 3200, q: 0.4, volume: 0.03 * level, pan, reverb: 0.03 });
@@ -739,14 +839,25 @@ export class Soundscape {
     this.tone(92, time, 0.16, { endFrequency: 58, volume: 0.09, pan, reverb: 0.08 });
   }
 
-  buildingComplete(_type, x) {
+  buildingComplete(_type, x, nation = 'england') {
     if (!this.ctx || this.muted) return;
     const time = this.ctx.currentTime;
     const pan = this.spatialPan(x);
     const level = this.spatialLevel(x);
     this.work('build', x);
-    this.tone(392, time + 0.08, 0.28, { type: 'triangle', volume: 0.045 * level, pan, reverb: 0.36 });
-    this.tone(523.25, time + 0.19, 0.42, { type: 'triangle', volume: 0.04 * level, pan, reverb: 0.42 });
+    if (nation === 'ottoman') {
+      this.noiseBurst(time + 0.08, 0.09, { filterType: 'lowpass', filter: 340, volume: 0.07 * level, pan, reverb: 0.26 });
+      this.tone(392, time + 0.09, 0.32, { type: 'square', filter: 1450, volume: 0.027 * level, pan, reverb: 0.42 });
+    } else if (nation === 'hogwarts') {
+      this.tone(784, time + 0.06, 0.42, { type: 'sine', volume: 0.024 * level, pan, reverb: 0.7 });
+      this.tone(1175, time + 0.15, 0.5, { type: 'triangle', volume: 0.018 * level, pan, reverb: 0.75 });
+    } else if (nation === 'starwars') {
+      this.tone(740, time + 0.06, 0.18, { type: 'sawtooth', endFrequency: 210, filter: 1800, volume: 0.035 * level, pan, reverb: 0.28 });
+      this.noiseBurst(time + 0.1, 0.08, { filter: 3600, q: 1.7, volume: 0.036 * level, pan, reverb: 0.18 });
+    } else {
+      this.noiseBurst(time + 0.08, 0.08, { filterType: 'lowpass', filter: 420, volume: 0.055 * level, pan, reverb: 0.22 });
+      this.tone(784, time + 0.1, 0.12, { type: 'sine', filter: 3200, volume: 0.015 * level, pan, reverb: 0.3 });
+    }
   }
 
   buildingDestroyed(_type, x) {
@@ -778,19 +889,37 @@ export class Soundscape {
     if (!this.ctx || this.muted || this.commandCooldown > 0) return;
     this.commandCooldown = 0.035;
     const time = this.ctx.currentTime;
-    const frequencies = { attack: 176, gather: 330, rally: 294, build: 247, train: 262, select: 392, move: 220 };
-    const frequency = frequencies[kind] || frequencies.move;
-    this.tone(frequency, time, 0.08, { type: 'triangle', endFrequency: frequency * 0.86, volume: 0.027, reverb: 0.08 });
-    if (kind === 'attack') this.tone(frequency * 0.75, time + 0.045, 0.11, { type: 'triangle', volume: 0.025, reverb: 0.08 });
+    const profile = commandSoundProfile(kind);
+    this.noiseBurst(time, 0.045, { filterType: 'lowpass', filter: profile.body, volume: profile.volume, reverb: 0.045 });
+    this.noiseBurst(time + 0.012, 0.026, { filter: profile.snap, q: 0.9, volume: profile.volume * 0.58, reverb: 0.055 });
+    if (kind === 'attack' || kind === 'build' || kind === 'gather') {
+      this.tone(profile.low, time, 0.09, {
+        type: 'triangle', endFrequency: profile.low * 0.58,
+        volume: profile.volume * 0.55, reverb: 0.07,
+      });
+    }
   }
 
-  unitReady(x) {
+  unitReady(x, nation = 'england', unitType = 'villager') {
     if (!this.ctx || this.muted) return;
     const time = this.ctx.currentTime;
     const pan = this.spatialPan(x);
     const level = this.spatialLevel(x);
-    this.tone(294, time, 0.14, { type: 'triangle', volume: 0.038 * level, pan, reverb: 0.2 });
-    this.tone(440, time + 0.09, 0.24, { type: 'triangle', volume: 0.034 * level, pan, reverb: 0.25 });
+    this.noiseBurst(time, 0.07, { filterType: 'lowpass', filter: 720, volume: 0.035 * level, pan, reverb: 0.08 });
+    if (nation === 'ottoman') {
+      this.noiseBurst(time + 0.05, 0.08, { filterType: 'lowpass', filter: 300, volume: 0.05 * level, pan, reverb: 0.2 });
+      this.tone(523, time + 0.055, 0.19, { type: 'square', filter: 1700, volume: 0.018 * level, pan, reverb: 0.34 });
+    } else if (nation === 'hogwarts') {
+      this.tone(988, time + 0.025, 0.36, { type: 'sine', volume: 0.02 * level, pan, reverb: 0.75 });
+      this.tone(1319, time + 0.12, 0.4, { type: 'triangle', volume: 0.014 * level, pan, reverb: 0.8 });
+    } else if (nation === 'starwars') {
+      this.tone(1040, time + 0.025, 0.16, { type: 'sawtooth', endFrequency: 260, filter: 2500, volume: 0.032 * level, pan, reverb: 0.22 });
+      this.noiseBurst(time + 0.05, 0.045, { filter: 4200, q: 1.8, volume: 0.025 * level, pan, reverb: 0.14 });
+    } else {
+      const military = !unitType.includes('villager') && unitType !== 'wizard_worker' && unitType !== 'starwars_mechanic';
+      this.noiseBurst(time + 0.05, 0.08, { filter: military ? 1220 : 940, q: 0.7, volume: 0.036 * level, pan, reverb: 0.12 });
+      this.tone(military ? 330 : 247, time + 0.06, 0.12, { type: 'triangle', endFrequency: military ? 294 : 196, volume: 0.019 * level, pan, reverb: 0.16 });
+    }
   }
 
   updateWorkSounds(dt, world) {
@@ -911,7 +1040,7 @@ export class Soundscape {
     const battle = this.combatIntensity(world) >= 10;
     if (battle) return 'banners';
     if (!this.trackBag.length) {
-      const order = campaignTrackOrder(this.playerNation);
+      const order = campaignTrackOrder(this.playerNation, this.sideNations);
       this.trackBag = this.lastScheduledTrack ? shuffled(order) : order;
       if (this.trackBag.length > 1 && this.trackBag[0] === this.lastScheduledTrack) {
         [this.trackBag[0], this.trackBag[1]] = [this.trackBag[1], this.trackBag[0]];
@@ -928,9 +1057,9 @@ export class Soundscape {
     const chord = track.chords[barIndex];
     for (let voice = 0; voice < chord.length; voice++) {
       const degree = chord[voice];
-      const options = track.color === 'lute'
+      const options = track.color === 'lute' || track.color === 'celesta'
         ? { type: 'triangle', attack: 0.006, release: bar * 0.7, filter: 1900, volume: 0.017 }
-        : { type: 'sawtooth', attack: 0.32, release: 0.75, filter: track.color === 'march' ? 1250 : 980, volume: 0.011 };
+        : { type: 'sawtooth', attack: track.color === 'wire' ? 0.018 : 0.32, release: 0.75, filter: track.color === 'march' ? 1250 : track.color === 'wire' ? 1650 : 980, volume: 0.011 };
       this.tone(scaleNote(degree, voice === 2 ? 0 : -1), startTime, bar * 0.96, {
         ...options, bus: this.music, pan: (voice - 1) * 0.28, reverb: 0.56,
       });
@@ -948,14 +1077,28 @@ export class Soundscape {
       if (degree === null) continue;
       const noteTime = startTime + step * beat / 2;
       const isLute = track.color === 'lute';
+      const isCelesta = track.color === 'celesta';
+      const isWire = track.color === 'wire';
       this.tone(scaleNote(degree, 0), noteTime, isLute ? beat * 0.72 : beat * 0.92, {
-        type: isLute ? 'triangle' : track.color === 'reed' ? 'square' : 'triangle',
-        attack: isLute ? 0.005 : 0.045,
-        release: isLute ? 0.48 : 0.28,
-        filter: isLute ? 2400 : track.color === 'reed' ? 1250 : 1800,
-        volume: isLute ? 0.028 : 0.021,
-        bus: this.music, pan: step % 2 ? 0.2 : -0.2, reverb: isLute ? 0.36 : 0.5,
+        type: isLute || isCelesta ? 'triangle' : track.color === 'reed' || isWire ? 'square' : 'triangle',
+        attack: isLute || isCelesta ? 0.005 : isWire ? 0.012 : 0.045,
+        release: isLute ? 0.48 : isCelesta ? 0.62 : 0.28,
+        filter: isLute ? 2400 : isCelesta ? 5200 : track.color === 'reed' ? 1250 : isWire ? 1750 : 1800,
+        volume: isLute ? 0.028 : isCelesta ? 0.019 : isWire ? 0.017 : 0.021,
+        bus: this.music, pan: step % 2 ? 0.2 : -0.2, reverb: isCelesta ? 0.72 : isLute ? 0.36 : isWire ? 0.28 : 0.5,
       });
+      if (isCelesta && step % 3 === 0) {
+        this.tone(scaleNote(degree, 1), noteTime + beat * 0.08, beat * 0.8, {
+          type: 'sine', attack: 0.004, release: 0.7, filter: 6200,
+          volume: 0.009, bus: this.music, pan: step % 2 ? 0.28 : -0.28, reverb: 0.78,
+        });
+      }
+      if (isWire && step % 4 === 0) {
+        this.noiseBurst(noteTime + beat * 0.04, 0.045, {
+          filter: 3100, q: 1.8, volume: 0.0085, bus: this.music,
+          pan: step % 2 ? 0.32 : -0.32, reverb: 0.2,
+        });
+      }
     }
     if (track.color === 'lute' || track.color === 'march') {
       for (const drumBeat of track.color === 'march' ? [0, 1, 2, 3] : [0, 1.5, 2.75]) {
