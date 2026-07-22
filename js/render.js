@@ -513,10 +513,7 @@ function paintFallbackWorkerMusket(g, phase, w, h) {
 }
 
 function paintFallbackWomanWorker(g, nat, pose, leg, action) {
-  g.save();
-  g.translate(29, 20);
   drawWorker(g, nat, pose, leg, action);
-  g.restore();
 }
 
 function paintFallbackWomanCannon(g, nat, pose, side) {
@@ -535,21 +532,30 @@ function buildFactionCharacterDefs(nationKey, side, nat) {
   const image = spec ? getProductionArt(spec.key) : null;
   if (!spec || !image) return {};
   const defs = {};
+  const normalizeScale = nationKey === 'hogwarts' || nationKey === 'starwars';
   for (const [unitType, sourceRow] of Object.entries(spec.unitRows)) {
     const worker = Boolean(UNIT_TYPES[unitType]?.worker);
     const isGhost = unitType === 'moaning_myrtle';
     const isHeavy = unitType === 'killer_klown' || unitType === 'starwars_pulse_cannon';
     const isMounted = unitType === 'starwars_skiff_rider';
-    const w = isHeavy ? 78 : isMounted ? 72 : isGhost ? 68 : 58;
-    const h = isHeavy ? 66 : isMounted ? 62 : isGhost ? 64 : 62;
+    const frame = normalizeScale
+      ? worker ? PRODUCTION_WORKER
+        : isHeavy ? MILITARY_ART_SPECS.gun
+          : isMounted ? MILITARY_ART_SPECS.cav
+            : MILITARY_ART_SPECS.musk
+      : null;
+    const w = frame?.w ?? (isHeavy ? 78 : isMounted ? 72 : isGhost ? 68 : 58);
+    const h = frame?.h ?? (isHeavy ? 66 : isMounted ? 62 : isGhost ? 64 : 62);
+    const ax = frame?.ax ?? w / 2;
+    const ay = frame?.ay ?? h - 5;
     const sourceFrames = worker
       ? [0, 1, 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 0, 1, 2, 3, 1, 1, 1, 1, 1, 1, 1, 1]
       : [0, 1, 1, 1, 1, 1, 1, 2];
     defs[unitType] = {
-      w, h, ax: w / 2, ay: h - 5,
+      w, h, ax, ay,
       military: !worker,
-      baseRadiusX: isHeavy ? 23 : 15,
-      baseRadiusY: isHeavy ? 4.2 : 3.1,
+      baseRadiusX: frame?.baseRadiusX ?? (isHeavy ? 23 : 15),
+      baseRadiusY: frame?.baseRadiusY ?? (isHeavy ? 4.2 : 3.1),
       production: {
         image, sourceW: spec.sourceW, sourceH: spec.sourceH, sourceRow,
       },
@@ -644,7 +650,7 @@ function buildNationSprites(nationKey, side = 0) {
     ['reload', 0, null, 3, 'combat'],
   ];
   const womanWorkerDef = {
-    w: 86, h: 58, ax: 43, ay: 53,
+    w: workerDefBase.w, h: workerDefBase.h, ax: workerDefBase.ax, ay: workerDefBase.ay,
     frames: womanWorkerFrames,
     cannonWorker: true,
     production: productionWomanWorker && womanArtSpec ? {

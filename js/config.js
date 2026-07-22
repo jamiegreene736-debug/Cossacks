@@ -212,7 +212,7 @@ export const UNIT_TYPES = {
     cost: { food: 50 }, trainTime: 6, pop: 1,
   },
   woman_villager: {
-    label: 'Women Villagers', short: 'Woman Villager', hp: 38, speed: 52, radius: 6,
+    label: 'Women Villagers', short: 'Woman Villager', hp: 38, speed: 52, radius: 5,
     // Women share the full economy/construction role while their explicit
     // combat order wheels out a compact falconet. The projectile owns the
     // soldier-only lethal rule; these baseline numbers cover buildings and
