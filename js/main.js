@@ -161,6 +161,7 @@ async function startBattle(opts) {
   setupLocalEnglandHousePreview(world);
   setupLocalThemedArchitecturePreview(world);
   setupLocalSettlementVarietyPreview(world);
+  setupLocalResourceLandscapePreview(world);
   setupLocalVictoryRainbowPreview(world);
   ui.showBattleHud(world);
   ui.setPauseLabel(false);
@@ -334,6 +335,53 @@ function setupLocalSettlementVarietyPreview(activeWorld) {
 
   camera.x = 2600;
   camera.y = 1690;
+  camera.zoom = 0.72;
+  clampCamera();
+}
+
+function setupLocalResourceLandscapePreview(activeWorld) {
+  const debugName = new URLSearchParams(window.location.search).get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'resource-landscape') return;
+
+  const previewBounds = { left: 1250, right: 3950, top: 760, bottom: 2520 };
+  activeWorld.resources = activeWorld.resources.filter(resource => (
+    resource.x < previewBounds.left || resource.x > previewBounds.right
+    || resource.y < previewBounds.top || resource.y > previewBounds.bottom
+  ));
+  activeWorld.buildings = activeWorld.buildings.filter(building => (
+    building.x < previewBounds.left || building.x > previewBounds.right
+    || building.y < previewBounds.top || building.y > previewBounds.bottom
+  ));
+
+  const deposits = [
+    ['wood', 'oak_copse', 2000, 1600, 22000, 88, 1],
+    ['wood', 'birch_grove', 2600, 1600, 22000, 88, 1],
+    ['wood', 'pine_stand', 3200, 1600, 22000, 88, 1],
+    ['food', 'berry_garden', 2300, 2070, 7200, 58, 1],
+    ['food', 'apple_orchard', 2900, 2070, 7200, 58, 1],
+    ['wood', 'oak_copse', 3500, 2070, 22000, 72, 0.24],
+  ];
+  deposits.forEach(([type, visualVariant, x, y, maxAmount, radius, fraction], index) => {
+    activeWorld.resources.push({
+      id: 225000 + index,
+      entityKind: 'resource',
+      type,
+      resourceType: type,
+      visualVariant,
+      x,
+      y,
+      amount: maxAmount * fraction,
+      maxAmount,
+      radius,
+      alive: true,
+      seed: 1700 + index * 101.7,
+    });
+  });
+
+  camera.x = 2600;
+  camera.y = new URLSearchParams(window.location.search).get('focus') === 'food' ? 2070 : 1600;
   camera.zoom = 0.72;
   clampCamera();
 }
