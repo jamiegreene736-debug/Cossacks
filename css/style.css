@@ -125,6 +125,53 @@ button, select { font: inherit; }
 }
 #time-controls button:hover { background: #4a452d; }
 
+#btn-idle-villager {
+  top: 65px; right: 13px; z-index: 12;
+  display: grid; grid-template-columns: 34px minmax(52px, 1fr) minmax(48px, .85fr) 12px;
+  align-items: center; gap: 7px; min-width: 190px; min-height: 49px; padding: 5px 9px 6px;
+  color: #e9dfc5; text-align: left;
+  background: linear-gradient(155deg, rgba(47, 49, 33, .97), rgba(20, 23, 15, .96));
+  border: 1px solid #716749; border-radius: 4px;
+  box-shadow: 0 5px 16px rgba(0, 0, 0, .34), inset 0 1px rgba(245, 226, 161, .08);
+  cursor: pointer; pointer-events: auto;
+  transition: border-color .15s ease, background .15s ease, transform .15s ease;
+}
+#btn-idle-villager:not(:disabled):hover {
+  border-color: #c4aa5e;
+  background: linear-gradient(155deg, rgba(73, 69, 40, .98), rgba(30, 34, 20, .97));
+  transform: translateY(-1px);
+}
+#btn-idle-villager:focus-visible {
+  outline: 2px solid #e2c96f; outline-offset: 2px;
+}
+#btn-idle-villager:disabled {
+  color: #a79f89; border-color: #4d4936; cursor: default;
+  filter: saturate(.7);
+}
+.villager-status-mark {
+  display: grid; place-items: center; width: 32px; height: 34px;
+  color: #e3ca73; background: #1d2117; border: 1px solid #57513b; border-radius: 3px;
+  font: 20px/1 Georgia, serif;
+}
+#btn-idle-villager:disabled .villager-status-mark { color: #8d866d; }
+.villager-status-count {
+  display: grid; grid-template-rows: 11px 20px; min-width: 0;
+}
+.villager-status-count small {
+  color: #91886e; font: 700 8px/11px Arial, sans-serif;
+  letter-spacing: .9px; text-transform: uppercase;
+}
+.villager-status-count b {
+  color: #f0e6cb; font: 700 17px/20px Arial, sans-serif;
+}
+.villager-status-count.idle {
+  padding-left: 9px; border-left: 1px solid #514b36;
+}
+.villager-status-count.idle b { color: #d8c261; }
+#btn-idle-villager:disabled .villager-status-count.idle b { color: #817b68; }
+.villager-status-next { color: #bba65c; font: 25px/1 Arial, sans-serif; }
+#btn-idle-villager:disabled .villager-status-next { visibility: hidden; }
+
 /* Bottom command deck */
 
 #panel {
@@ -544,6 +591,12 @@ button, select { font: inherit; }
   .resource.population { min-width: 108px; }
   .nation-badge small, .army-total small { display: none; }
   .nation-badge b { font-size: 13px; }
+  #btn-idle-villager {
+    grid-template-columns: 30px 45px 44px 10px;
+    min-width: 151px; gap: 5px; padding-left: 6px; padding-right: 6px;
+  }
+  .villager-status-mark { width: 29px; }
+  .villager-status-count.idle { padding-left: 6px; }
   #panel { grid-template-columns: 240px 1fr 220px; }
   #command-grid { grid-template-columns: repeat(3, minmax(92px, 1fr)); }
 }

@@ -13,6 +13,7 @@ import {
 } from './economy.js';
 import { formatPeaceTime, isPeaceTime } from './truce.js';
 import { isPlayerTeam, playerTeam } from './teams.js';
+import { getVillagerStatus } from './villager-status.js';
 
 const $ = id => document.getElementById(id);
 let callbacks = {};
@@ -147,6 +148,7 @@ export function bindControls(cbs) {
   $('btn-view-right').addEventListener('click', () => cbs.onView?.(1));
   $('btn-zoom-out').addEventListener('click', () => cbs.onZoom?.(-1));
   $('btn-zoom-in').addEventListener('click', () => cbs.onZoom?.(1));
+  $('btn-idle-villager').addEventListener('click', () => cbs.onSelectIdleVillager?.());
   $('btn-halt').addEventListener('click', cbs.onHalt);
   $('btn-again').addEventListener('click', cbs.onAgain);
   $('btn-resume').addEventListener('click', cbs.onPause);
@@ -183,7 +185,9 @@ export function showBattleHud(world) {
   $('overlay-start').classList.add('hidden');
   $('overlay-end').classList.add('hidden');
   hidePauseMenu();
-  for (const id of ['hud-top', 'time-controls', 'panel', 'minimap', 'hint-bar']) $(id).classList.remove('hidden');
+  for (const id of ['hud-top', 'btn-idle-villager', 'time-controls', 'panel', 'minimap', 'hint-bar']) {
+    $(id).classList.remove('hidden');
+  }
   const localTeam = world.sides[localSide]?.team ?? playerTeam(world);
   const playerAllies = world.sides
     .filter((_side, sideIndex) => sideIndex !== localSide && world.sides[sideIndex]?.team === localTeam)
@@ -336,6 +340,18 @@ export function updateHud(world, selection) {
   if (now - hudTime < 200) return;
   hudTime = now;
   const player = world.sides[localSide] || world.sides[0];
+  const villagerStatus = getVillagerStatus(world, localSide);
+  const idleButton = $('btn-idle-villager');
+  $('hud-villager-total').textContent = villagerStatus.total.toLocaleString();
+  $('hud-villager-idle').textContent = villagerStatus.idle.toLocaleString();
+  idleButton.disabled = villagerStatus.idle === 0;
+  const idleDescription = villagerStatus.idle
+    ? `Select and center the next idle villager; click again to cycle. ${villagerStatus.idle} of ${villagerStatus.total} idle.`
+    : villagerStatus.total
+      ? `All ${villagerStatus.total} villagers are assigned or moving.`
+      : 'No villagers have been trained yet.';
+  idleButton.title = idleDescription;
+  idleButton.setAttribute('aria-label', idleDescription);
   $('hud-player-count').textContent = countTeamMilitary(world, true).toLocaleString();
   $('hud-enemy-count').textContent = countTeamMilitary(world, false).toLocaleString();
   for (const key of RESOURCE_KEYS) {
@@ -834,7 +850,9 @@ export function showEnd(world) {
 }
 
 export function showStartMenu() {
-  for (const id of ['hud-top', 'time-controls', 'panel', 'minimap', 'hint-bar', 'placement-tip']) $(id).classList.add('hidden');
+  for (const id of [
+    'hud-top', 'btn-idle-villager', 'time-controls', 'panel', 'minimap', 'hint-bar', 'placement-tip',
+  ]) $(id).classList.add('hidden');
   $('overlay-end').classList.add('hidden');
   $('overlay-end').classList.remove('victory');
   hidePauseMenu();

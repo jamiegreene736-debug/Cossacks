@@ -30,6 +30,7 @@ import {
   createMultiplayerSession, createMultiplayerSnapshot, encodeMultiplayerSnapshot,
   makeInviteUrl, readInviteFromLocation, restoreMultiplayerSnapshot,
 } from './multiplayer.js';
+import { getNextIdleVillager, getVillagerStatus } from './villager-status.js';
 
 let world = null;
 let commanders = [];
@@ -104,6 +105,7 @@ ui.bindControls({
   onView: turnBattleView,
   onZoom: changeBattleZoom,
   onSpeed: toggleSpeed,
+  onSelectIdleVillager: selectNextIdleVillager,
   onHalt: () => {
     haltSelection();
     sfx.command('move');
@@ -170,6 +172,22 @@ function setLocalPlayerSide(sideIndex = 0) {
   localSide = Number.isInteger(sideIndex) && sideIndex >= 0 ? sideIndex : 0;
   setControlledSide(localSide);
   ui.setLocalSide(localSide);
+}
+
+function selectNextIdleVillager() {
+  if (!world) return;
+  const current = getSelection();
+  const currentId = current.length === 1 ? current[0].id : null;
+  const villager = getNextIdleVillager(world, localSide, currentId);
+  if (!villager) {
+    const { total } = getVillagerStatus(world, localSide);
+    ui.toast(total ? 'Every villager is assigned or moving.' : 'No villagers have been trained yet.');
+    return;
+  }
+  selectEntitiesById(world, [villager.id]);
+  camera.x = villager.x;
+  camera.y = villager.y;
+  clampCamera();
 }
 
 async function createMultiplayerInvite(role) {
