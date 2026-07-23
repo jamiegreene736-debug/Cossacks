@@ -5699,6 +5699,332 @@ function bdProductionBuildingSprite(type, def, image, side, damageStage, seed) {
   });
 }
 
+function bdLoop(value) {
+  return ((value % 1) + 1) % 1;
+}
+
+function bdLerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function bdEaseInOut(t) {
+  return t * t * (3 - 2 * t);
+}
+
+function bdPlayPathPoint(points, progress) {
+  const wrapped = bdLoop(progress);
+  const scaled = wrapped * points.length;
+  const index = Math.floor(scaled);
+  const next = (index + 1) % points.length;
+  const mix = bdEaseInOut(scaled - index);
+  const a = points[index], b = points[next];
+  return {
+    x: bdLerp(a[0], b[0], mix),
+    y: bdLerp(a[1], b[1], mix),
+    facing: b[0] >= a[0] ? 1 : -1,
+  };
+}
+
+export function getWizardPlaygroundChildLayout(worldTime = 0, buildingId = 0) {
+  const t = Number(worldTime) || 0;
+  const seed = (Number(buildingId) || 0) * 0.173;
+  const chaseA = bdPlayPathPoint([
+    [-44, 18], [-18, 5], [8, 15], [-3, 35], [-36, 34],
+  ], t * 0.080 + seed);
+  const chaseB = bdPlayPathPoint([
+    [30, 8], [52, 20], [35, 40], [9, 32], [18, 12],
+  ], t * 0.092 + seed + 0.42);
+  const bridge = bdPlayPathPoint([
+    [-14, -25], [14, -28], [38, -20], [7, -18],
+  ], t * 0.052 + seed + 0.18);
+  const sandbox = bdPlayPathPoint([
+    [-8, 32], [8, 36], [19, 28], [4, 24],
+  ], t * 0.060 + seed + 0.62);
+  const slide = bdLoop(t * 0.105 + seed + 0.27);
+  const slideEase = slide < 0.46
+    ? slide / 0.46
+    : bdEaseInOut((slide - 0.46) / 0.54);
+  const slider = slide < 0.46
+    ? { x: 43 - slideEase * 14, y: -18 + slideEase * 18, facing: -1 }
+    : { x: 29 + slideEase * 23, y: 0 + slideEase * 24, facing: 1 };
+  const swingPhase = Math.sin(t * 2.6 + seed * 11);
+  const spinnerPhase = t * 1.8 + seed * 7;
+  return [
+    {
+      id: 'chaser-girl', gender: 'girl', play: 'wand-chase',
+      x: chaseA.x, y: chaseA.y, facing: chaseA.facing,
+      robe: '#4a315f', trim: '#d8b457', hat: '#251c35',
+      hair: '#6d4425', skin: '#c9936f', scale: 1.00,
+      bob: Math.sin(t * 8.2 + seed) * 1.5, wandAngle: -0.65,
+      sparkle: bdLoop(t * 0.9 + 0.10),
+    },
+    {
+      id: 'chaser-boy', gender: 'boy', play: 'wand-chase',
+      x: chaseB.x, y: chaseB.y, facing: chaseB.facing,
+      robe: '#273f62', trim: '#bfcfe2', hat: '#1f2a3a',
+      hair: '#2f2117', skin: '#d6a67e', scale: 0.98,
+      bob: Math.sin(t * 8.8 + 1.7 + seed) * 1.45, wandAngle: -0.40,
+      sparkle: bdLoop(t * 0.85 + 0.34),
+    },
+    {
+      id: 'bridge-girl', gender: 'girl', play: 'rope-bridge',
+      x: bridge.x, y: bridge.y, facing: bridge.facing,
+      robe: '#31583f', trim: '#d8c96a', hat: '#223528',
+      hair: '#8a6039', skin: '#b77b57', scale: 0.94,
+      bob: Math.sin(t * 6.5 + 0.8) * 0.9, wandAngle: -0.95,
+      sparkle: bdLoop(t * 0.72 + 0.56),
+    },
+    {
+      id: 'slide-boy', gender: 'boy', play: 'slide',
+      x: slider.x, y: slider.y, facing: slider.facing,
+      robe: '#6a3b2b', trim: '#f0c878', hat: '#3b231f',
+      hair: '#583823', skin: '#c68663', scale: 0.96,
+      bob: slide < 0.46 ? Math.sin(slideEase * Math.PI) * 0.7
+        : -Math.sin(slideEase * Math.PI) * 1.7,
+      wandAngle: slide < 0.46 ? -1.0 : 0.35,
+      sparkle: bdLoop(t * 1.12 + 0.72),
+    },
+    {
+      id: 'swing-girl', gender: 'girl', play: 'swing',
+      x: -54 + swingPhase * 2.2, y: 9 + Math.abs(swingPhase) * 6.8,
+      facing: swingPhase >= 0 ? 1 : -1,
+      robe: '#5f3147', trim: '#f0d6df', hat: '#332030',
+      hair: '#3d271a', skin: '#a96f52', scale: 0.92,
+      bob: -Math.abs(swingPhase) * 2.4, wandAngle: swingPhase * 0.55,
+      swing: swingPhase, sparkle: bdLoop(t * 0.78 + 0.22),
+    },
+    {
+      id: 'sandbox-boy', gender: 'boy', play: 'sandbox-spell',
+      x: sandbox.x, y: sandbox.y, facing: sandbox.facing,
+      robe: '#3c4758', trim: '#d0b679', hat: '#202736',
+      hair: '#17120e', skin: '#7f513d', scale: 0.90,
+      bob: Math.sin(t * 5.0 + 1.1) * 0.45, wandAngle: -1.2,
+      sparkle: bdLoop(t * 1.05 + 0.48),
+    },
+    {
+      id: 'spinner-girl', gender: 'girl', play: 'spell-circle',
+      x: 56 + Math.cos(spinnerPhase) * 7.4,
+      y: -8 + Math.sin(spinnerPhase) * 4.5,
+      facing: Math.cos(spinnerPhase) >= 0 ? 1 : -1,
+      robe: '#654778', trim: '#ddd0ff', hat: '#352543',
+      hair: '#c08a44', skin: '#d2a174', scale: 0.86,
+      bob: Math.sin(t * 7.2) * 1.0, wandAngle: -0.7 + Math.sin(spinnerPhase) * 0.55,
+      sparkle: bdLoop(t * 1.35 + 0.05),
+    },
+    {
+      id: 'lookout-boy', gender: 'boy', play: 'tower-lookout',
+      x: 57 + Math.sin(t * 1.4 + seed) * 4.8,
+      y: -31 + Math.sin(t * 3.2 + 0.6) * 1.2,
+      facing: Math.sin(t * 1.4 + seed) >= 0 ? 1 : -1,
+      robe: '#2f4f59', trim: '#a7e1d7', hat: '#21333a',
+      hair: '#5b3b22', skin: '#c79268', scale: 0.76,
+      bob: Math.sin(t * 5.2 + 0.3) * 0.6, wandAngle: -0.25,
+      sparkle: bdLoop(t * 0.95 + 0.81),
+    },
+  ].sort((a, b) => a.y - b.y);
+}
+
+function bdWizardChildShadow(g, child) {
+  g.fillStyle = bdShadow(0.30);
+  g.beginPath();
+  g.ellipse(child.x + 1.0, child.y + 2.4, 4.9 * child.scale, 1.8 * child.scale, 0, 0, BD_TAU);
+  g.fill();
+}
+
+function bdWizardSpark(g, child, worldTime) {
+  const pulse = Math.sin((worldTime || 0) * 8 + child.sparkle * BD_TAU) * 0.5 + 0.5;
+  const facing = child.facing >= 0 ? 1 : -1;
+  const sx = child.x + facing * (5.2 + Math.cos(child.wandAngle) * 3.2) * child.scale;
+  const sy = child.y - (12.5 + Math.sin(child.wandAngle) * 2.8) * child.scale + child.bob;
+  g.save();
+  g.globalCompositeOperation = 'lighter';
+  g.strokeStyle = bdRgba(child.trim, 0.28 + pulse * 0.34);
+  g.lineWidth = 0.55 * child.scale;
+  for (let index = 0; index < 3; index++) {
+    const a = child.sparkle * BD_TAU + index * 2.1 + worldTime * 1.7;
+    const r = (2.1 + index * 0.8 + pulse * 1.2) * child.scale;
+    g.beginPath();
+    g.moveTo(sx + Math.cos(a) * r * 0.35, sy + Math.sin(a) * r * 0.35);
+    g.lineTo(sx + Math.cos(a) * r, sy + Math.sin(a) * r);
+    g.stroke();
+  }
+  g.fillStyle = bdRgba('#fff6d8', 0.72 + pulse * 0.22);
+  g.beginPath();
+  g.arc(sx, sy, (0.9 + pulse * 0.6) * child.scale, 0, BD_TAU);
+  g.fill();
+  g.restore();
+}
+
+function bdDrawWizardChild(g, child, side, worldTime) {
+  const s = child.scale;
+  const facing = child.facing >= 0 ? 1 : -1;
+  const robe = bdRamp(child.robe);
+  const trim = bdRamp(child.trim);
+  const skin = bdRamp(child.skin);
+  const hair = bdRamp(child.hair);
+  const hat = bdRamp(child.hat);
+  const stride = Math.sin((worldTime || 0) * 8.4 + child.x * 0.07);
+  const bob = child.bob || 0;
+  const baseX = child.x;
+  const baseY = child.y + bob;
+
+  bdWizardChildShadow(g, child);
+  if (child.play === 'swing') {
+    g.save();
+    g.strokeStyle = bdRgba(BMAT.TIMBER_DARK, 0.65);
+    g.lineWidth = 0.55;
+    g.beginPath();
+    g.moveTo(-58, -29);
+    g.lineTo(baseX - 2, baseY - 7);
+    g.moveTo(-48, -29);
+    g.lineTo(baseX + 2, baseY - 7);
+    g.stroke();
+    g.restore();
+  }
+
+  g.save();
+  g.translate(baseX, baseY);
+  g.scale(facing * s, s);
+  g.lineJoin = 'round';
+  g.lineCap = 'round';
+
+  g.strokeStyle = robe.line;
+  g.lineWidth = 1.6;
+  g.beginPath();
+  g.moveTo(-2.6, -7.0);
+  g.lineTo(-4.2 - stride * 0.8, 0.2);
+  g.moveTo(2.5, -7.0);
+  g.lineTo(4.0 + stride * 0.8, 0.2);
+  g.stroke();
+  g.strokeStyle = bdMix(robe.base, BMAT.TIMBER_DARK, 0.16);
+  g.lineWidth = 0.9;
+  g.stroke();
+
+  g.fillStyle = robe.shade;
+  g.strokeStyle = robe.line;
+  g.lineWidth = 0.85;
+  g.beginPath();
+  if (child.gender === 'girl') {
+    g.moveTo(-4.8, -13.2);
+    g.lineTo(4.4, -13.2);
+    g.lineTo(6.1, -2.4);
+    g.lineTo(-6.0, -2.4);
+  } else {
+    g.moveTo(-4.3, -13.1);
+    g.lineTo(4.3, -13.1);
+    g.lineTo(4.7, -2.7);
+    g.lineTo(-4.8, -2.7);
+  }
+  g.closePath();
+  g.fill();
+  g.stroke();
+  g.fillStyle = robe.base;
+  g.beginPath();
+  g.moveTo(-3.1, -12.2);
+  g.lineTo(3.4, -12.4);
+  g.lineTo(3.2, -3.6);
+  g.lineTo(-3.8, -3.8);
+  g.closePath();
+  g.fill();
+  g.fillStyle = bdRgba(trim.base, 0.88);
+  g.fillRect(-4.4, -8.1, 8.8, 1.05);
+  g.strokeStyle = bdRgba(trim.edge, 0.82);
+  g.lineWidth = 0.42;
+  g.beginPath();
+  g.moveTo(0, -12.5);
+  g.lineTo(0, -3.8);
+  g.stroke();
+
+  const wandAngle = child.wandAngle || -0.5;
+  const wandHandX = 4.0;
+  const wandHandY = -10.8;
+  g.strokeStyle = skin.line;
+  g.lineWidth = 1.45;
+  g.beginPath();
+  g.moveTo(-3.8, -11.2);
+  g.lineTo(-6.1, -7.9 + stride * 0.35);
+  g.moveTo(3.8, -11.2);
+  g.lineTo(wandHandX, wandHandY);
+  g.stroke();
+  g.strokeStyle = skin.base;
+  g.lineWidth = 0.82;
+  g.stroke();
+  g.strokeStyle = '#2c2117';
+  g.lineWidth = 0.58;
+  g.beginPath();
+  g.moveTo(wandHandX, wandHandY);
+  g.lineTo(wandHandX + Math.cos(wandAngle) * 8.0, wandHandY + Math.sin(wandAngle) * 8.0);
+  g.stroke();
+
+  g.fillStyle = skin.base;
+  g.strokeStyle = skin.line;
+  g.lineWidth = 0.72;
+  g.beginPath();
+  g.ellipse(0.15, -17.1, 3.2, 3.45, 0, 0, BD_TAU);
+  g.fill();
+  g.stroke();
+  g.fillStyle = hair.shade;
+  if (child.gender === 'girl') {
+    g.beginPath();
+    g.ellipse(-2.9, -15.6, 1.2, 3.9, -0.25, 0, BD_TAU);
+    g.ellipse(2.8, -15.7, 1.0, 3.4, 0.22, 0, BD_TAU);
+    g.fill();
+  } else {
+    g.beginPath();
+    g.arc(0, -18.2, 3.1, Math.PI * 1.03, Math.PI * 1.95);
+    g.lineTo(2.9, -16.5);
+    g.quadraticCurveTo(0, -15.4, -3.0, -16.5);
+    g.closePath();
+    g.fill();
+  }
+  g.fillStyle = '#201712';
+  g.beginPath(); g.arc(-1.1, -17.0, 0.34, 0, BD_TAU); g.fill();
+  g.beginPath(); g.arc(1.3, -17.0, 0.34, 0, BD_TAU); g.fill();
+  g.strokeStyle = bdRgba(skin.shade, 0.72);
+  g.lineWidth = 0.35;
+  g.beginPath();
+  g.arc(0.2, -15.8, 1.2, 0.2, Math.PI - 0.2);
+  g.stroke();
+
+  g.fillStyle = hat.shade;
+  g.strokeStyle = hat.line;
+  g.lineWidth = 0.8;
+  g.beginPath();
+  g.ellipse(0.1, -20.1, 5.5, 1.25, 0.03, 0, BD_TAU);
+  g.fill();
+  g.stroke();
+  g.beginPath();
+  g.moveTo(-3.3, -20.4);
+  g.quadraticCurveTo(-1.3, -26.6, 1.8, -29.9);
+  g.quadraticCurveTo(3.8, -25.0, 2.6, -20.4);
+  g.closePath();
+  g.fill();
+  g.stroke();
+  g.fillStyle = hat.lit;
+  g.beginPath();
+  g.moveTo(-1.6, -21.0);
+  g.quadraticCurveTo(-0.6, -25.1, 1.1, -27.5);
+  g.quadraticCurveTo(1.7, -24.2, 1.2, -20.9);
+  g.closePath();
+  g.fill();
+  g.fillStyle = BD_SIDE[side]?.lit || '#e8dca8';
+  g.globalAlpha = 0.82;
+  g.fillRect(-3.2, -20.4, 6.2, 0.72);
+  g.globalAlpha = 1;
+  g.restore();
+
+  bdWizardSpark(g, child, worldTime || 0);
+}
+
+function bdDrawWizardPlaygroundChildren(g, building, worldTime) {
+  if (building.type !== 'playground' || !building.complete) return;
+  const children = getWizardPlaygroundChildLayout(worldTime, building.id);
+  g.save();
+  g.globalAlpha = 0.98;
+  for (const child of children) bdDrawWizardChild(g, child, building.side, worldTime);
+  g.restore();
+}
+
 function bdBuildingSprite(type, def, side, nation, natRoof, variant, damageStage, animFrame) {
   const art = getBuildingProductionArtSpec(nation, type, variant);
   const image = art ? getProductionArt(art.key) : null;
@@ -6900,6 +7226,8 @@ function drawCompleteBuilding(building, nation, worldTime, world = null) {
   const s = bdBuildingSprite(building.type, def, building.side, nation,
     (nat && nat.roof) || BMAT.SLATE, variant, damageStage, animFrame);
   if (s) ctx.drawImage(s.c, s.x, s.y, s.w, s.h);
+
+  bdDrawWizardPlaygroundChildren(ctx, building, worldTime || 0);
 
   if (building.type === 'town_center' && nation === 'england') {
     bdDrawWavingBritishFlag(ctx, worldTime || 0);
