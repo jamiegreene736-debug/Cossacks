@@ -58,6 +58,21 @@ const SIDE_RIM = ['#3E78B8', '#B8483E', '#4FAE8B', '#C67A2F', '#7365D6'];
 const PRODUCTION_WORKER = Object.freeze({
   w: 38, h: 44, ax: 19, ay: 36.5, sourceW: 384, sourceH: 448,
 });
+export const CHARACTER_SCALE_TIERS = Object.freeze({
+  worker: Object.freeze({ width: PRODUCTION_WORKER.w, height: PRODUCTION_WORKER.h }),
+  infantry: Object.freeze({
+    width: MILITARY_ART_SPECS.musk.w,
+    height: MILITARY_ART_SPECS.musk.h,
+  }),
+  mounted: Object.freeze({
+    width: MILITARY_ART_SPECS.cav.w,
+    height: MILITARY_ART_SPECS.cav.h,
+  }),
+  equipment: Object.freeze({
+    width: MILITARY_ART_SPECS.gun.w,
+    height: MILITARY_ART_SPECS.gun.h,
+  }),
+});
 const PRODUCTION_WORKER_ART = Object.freeze({
   england: 'englishVillager',
   ottoman: 'ottomanVillager',
@@ -619,24 +634,12 @@ function buildFactionCharacterDefs(nationKey, side, nat) {
   const broomImage = getProductionArt(WITCH_BROOM_ART_SPEC.key);
   if (!spec || !image) return {};
   const defs = {};
-  const normalizeScale = nationKey === 'hogwarts' || nationKey === 'starwars';
   for (const [unitType, sourceRow] of Object.entries(spec.unitRows)) {
-    const worker = Boolean(UNIT_TYPES[unitType]?.worker);
-    const broomWitch = unitType === 'witch_worker' || unitType === 'witch_duelist'
-      || unitType === 'broom_rider';
-    const isGhost = unitType === 'moaning_myrtle';
-    const isHeavy = unitType === 'killer_klown' || unitType === 'starwars_pulse_cannon';
-    const isMounted = unitType === 'starwars_skiff_rider' || unitType === 'broom_rider';
-    const frame = normalizeScale
-      ? worker ? PRODUCTION_WORKER
-        : isHeavy ? MILITARY_ART_SPECS.gun
-          : isMounted ? MILITARY_ART_SPECS.cav
-            : MILITARY_ART_SPECS.musk
-      : null;
-    const w = broomWitch ? 72 : frame?.w ?? (isHeavy ? 78 : isMounted ? 72 : isGhost ? 68 : 58);
-    const h = broomWitch ? 54 : frame?.h ?? (isHeavy ? 66 : isMounted ? 62 : isGhost ? 64 : 62);
-    const ax = broomWitch ? 36 : frame?.ax ?? w / 2;
-    const ay = broomWitch ? 49 : frame?.ay ?? h - 5;
+    const presentation = getFactionCharacterPresentation(unitType);
+    const {
+      worker, broomWitch, frame, w, h, ax, ay,
+      productionDestW, productionDestH,
+    } = presentation;
     const sourceFrames = getFactionCharacterFrameSources(unitType, worker);
     const flightFrameStart = broomWitch && broomImage ? sourceFrames.length : null;
     const frames = sourceFrames.map(sourceFrame => ['idle', 0, null, sourceFrame]);
@@ -649,12 +652,12 @@ function buildFactionCharacterDefs(nationKey, side, nat) {
       w, h, ax, ay,
       flightFrameStart,
       military: !worker,
-      baseRadiusX: frame?.baseRadiusX ?? (isHeavy ? 23 : 15),
-      baseRadiusY: frame?.baseRadiusY ?? (isHeavy ? 4.2 : 3.1),
+      baseRadiusX: frame.baseRadiusX,
+      baseRadiusY: frame.baseRadiusY,
       production: {
         image, sourceW: spec.sourceW, sourceH: spec.sourceH, sourceRow,
-        destW: broomWitch ? (worker ? 38 : 44) : undefined,
-        destH: broomWitch ? (worker ? 44 : 50) : undefined,
+        destW: productionDestW,
+        destH: productionDestH,
       },
       flightProduction: flightFrameStart !== null ? {
         image: broomImage,
@@ -671,6 +674,41 @@ function buildFactionCharacterDefs(nationKey, side, nat) {
     };
   }
   return defs;
+}
+
+export function getFactionCharacterPresentation(unitType) {
+  const worker = Boolean(UNIT_TYPES[unitType]?.worker);
+  const broomWitch = unitType === 'witch_worker' || unitType === 'witch_duelist'
+    || unitType === 'broom_rider';
+  const equipment = unitType === 'killer_klown' || unitType === 'starwars_pulse_cannon';
+  const mounted = unitType === 'starwars_skiff_rider' || unitType === 'broom_rider';
+  const frame = worker ? {
+    ...PRODUCTION_WORKER,
+    baseRadiusX: 12,
+    baseRadiusY: 2.8,
+  } : equipment ? MILITARY_ART_SPECS.gun
+    : mounted ? MILITARY_ART_SPECS.cav
+      : MILITARY_ART_SPECS.musk;
+  const w = broomWitch ? 72 : frame.w;
+  const h = broomWitch ? 54 : frame.h;
+  const ax = broomWitch ? 36 : frame.ax;
+  const ay = broomWitch ? 49 : frame.ay;
+
+  return {
+    worker,
+    broomWitch,
+    equipment,
+    mounted,
+    frame,
+    w,
+    h,
+    ax,
+    ay,
+    productionDestW: broomWitch ? frame.w : undefined,
+    productionDestH: broomWitch ? frame.h : undefined,
+    standingWidth: frame.w,
+    standingHeight: frame.h,
+  };
 }
 
 export function getFactionCharacterFrameSources(unitType, worker = Boolean(UNIT_TYPES[unitType]?.worker)) {

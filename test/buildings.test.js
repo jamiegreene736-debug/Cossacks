@@ -4,7 +4,8 @@ import { readFile, stat } from 'node:fs/promises';
 
 import { BUILDING_TYPES } from '../js/config.js';
 import {
-  bdConstructionArtFrame, getBuildingPresentation, getFortificationConstructionStage,
+  bdConstructionArtFrame, BUILDING_HUMAN_REFERENCE_HEIGHT,
+  getBuildingConstructionArtWidth, getBuildingPresentation, getFortificationConstructionStage,
   getFortificationMasonryDetailProfile, getFortificationRenderProfile,
   getProductionBuildingVisibleSize, usesFixedFortificationFrameArt,
 } from '../js/gfx/buildings.js';
@@ -91,9 +92,69 @@ test('themed production silhouettes preserve human-readable architectural propor
   for (const [nation, sizes] of Object.entries({ hogwarts, starwars })) {
     assert.ok(sizes.house.height >= 85, `${nation} housing should exceed a human-scale unit`);
     assert.ok(sizes.tower.height > sizes.house.height * 1.1, `${nation} tower should rise above housing`);
-    assert.ok(sizes.stable.width > sizes.house.width * 1.75, `${nation} stable should span more than housing`);
-    assert.ok(sizes.townCenter.width > sizes.stable.width * 1.15, `${nation} civic core should dominate a stable`);
+    assert.ok(sizes.stable.width > sizes.house.width * 1.5, `${nation} stable should span more than housing`);
+    assert.ok(sizes.townCenter.width > sizes.stable.width * 1.05, `${nation} civic core should dominate a stable`);
     assert.ok(sizes.castle.width > sizes.townCenter.width * 1.55, `${nation} fortress should dominate the civic core`);
+  }
+});
+
+test('production buildings enforce role-based human height floors across every faction', () => {
+  const smallestFactionBuildings = [
+    ['england', 'house', 1024, 1024],
+    ['ottoman', 'house', 1278, 1230],
+    ['hogwarts', 'house', 335, 424],
+    ['starwars', 'house', 720, 560],
+    ['nightmare_circus', 'house', 350, 439],
+    ['hogwarts', 'tower', 378, 465],
+    ['starwars', 'barracks', 720, 560],
+    ['nightmare_circus', 'barracks', 391, 437],
+    ['hogwarts', 'castle', 768, 1024],
+    ['nightmare_circus', 'castle', 380, 461],
+  ];
+
+  for (const [nation, type, naturalWidth, naturalHeight] of smallestFactionBuildings) {
+    const presentation = getBuildingPresentation(type, undefined, nation);
+    const visible = getProductionBuildingVisibleSize(type, nation, naturalWidth, naturalHeight);
+    assert.ok(
+      visible.height >= presentation.minimumDisplayHeight,
+      `${nation} ${type} should stand at least ${presentation.minimumHumanHeights} people high`,
+    );
+    assert.ok(
+      visible.humanHeightRatio >= presentation.minimumHumanHeights,
+      `${nation} ${type} should report its enforced human-height ratio`,
+    );
+    assert.equal(
+      presentation.minimumDisplayHeight,
+      presentation.minimumHumanHeights * BUILDING_HUMAN_REFERENCE_HEIGHT,
+    );
+  }
+});
+
+test('construction art uses the completed building geometry instead of a fixed global minimum', () => {
+  const cases = [
+    ['england', 'house', 1024, 1024],
+    ['hogwarts', 'tower', 378, 465],
+    ['starwars', 'house', 720, 560],
+    ['nightmare_circus', 'barracks', 391, 437],
+  ];
+
+  for (const [nation, type, naturalWidth, naturalHeight] of cases) {
+    const presentation = getBuildingPresentation(type, undefined, nation);
+    const visible = getProductionBuildingVisibleSize(type, nation, naturalWidth, naturalHeight);
+    const constructionDisplayWidth = getBuildingConstructionArtWidth(
+      type,
+      nation,
+      naturalWidth,
+      naturalHeight,
+    ) * presentation.visualScale;
+    assert.ok(
+      constructionDisplayWidth >= visible.width,
+      `${nation} ${type} construction should cover the finished silhouette`,
+    );
+    assert.ok(
+      constructionDisplayWidth <= visible.width * 1.16,
+      `${nation} ${type} construction should not dwarf its finished silhouette`,
+    );
   }
 });
 

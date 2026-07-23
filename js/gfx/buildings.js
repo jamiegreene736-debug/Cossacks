@@ -5293,6 +5293,10 @@ export function getArchitectureProductionArtSpec(nation) {
 // tower nearly as wide as the stable. These profiles derive visible width and
 // paving from the gameplay footprint, preserving the intended hierarchy for
 // every building type while still allowing roof overhang and vertical mass.
+// The tallest ordinary infantry frame is the shared yardstick: architecture
+// must read as usable space around people, regardless of the source-art canvas.
+export const BUILDING_HUMAN_REFERENCE_HEIGHT = 50;
+
 const BD_BUILDING_PRESENTATION = Object.freeze({
   town_center: { artWidthScale: 1.48, apronWidthScale: 0.98, apronDepthScale: 0.62 },
   house: { artWidthScale: 1.36, apronWidthScale: 1.12, apronDepthScale: 0.66 },
@@ -5319,6 +5323,30 @@ const BD_BUILDING_PRESENTATION = Object.freeze({
   park: { artWidthScale: 1.44, apronWidthScale: 0.96, apronDepthScale: 0.66 },
   playground: { artWidthScale: 1.44, apronWidthScale: 0.96, apronDepthScale: 0.66 },
   wall_stairs: { artWidthScale: 1.58, apronWidthScale: 0.94, apronDepthScale: 0.62 },
+});
+
+const BD_MINIMUM_HUMAN_HEIGHTS = Object.freeze({
+  town_center: 3.25,
+  house: 2.35,
+  english_cottage: 2.35,
+  english_townhouse: 2.75,
+  english_mansion: 3,
+  spooky_house: 3,
+  mill: 2.35,
+  lumber_camp: 2.35,
+  mine: 2.35,
+  marketplace: 3,
+  barracks: 2.8,
+  stable: 2.8,
+  foundry: 2.8,
+  tower: 4,
+  castle: 5,
+  school: 3.5,
+  pool: 0.8,
+  beach: 1.5,
+  park: 1.8,
+  playground: 1.5,
+  wall_stairs: 1.4,
 });
 
 const BD_NATION_PRESENTATION_SCALE = Object.freeze({
@@ -5368,10 +5396,13 @@ function getBuildingPresentation(type, def = BUILDING_TYPES[type], nation = null
   const nationScale = nationProfile?.[type] ?? nationProfile?.default ?? 1;
   const visualScale = Math.max(1, (def.visualScale || 1) * nationScale);
   const artWidth = def.w * profile.artWidthScale;
+  const minimumHumanHeights = BD_MINIMUM_HUMAN_HEIGHTS[type] || 0;
   return {
     visualScale,
     artWidth,
     displayArtWidth: artWidth * visualScale,
+    minimumHumanHeights,
+    minimumDisplayHeight: minimumHumanHeights * BUILDING_HUMAN_REFERENCE_HEIGHT,
     apronRx: def.w * profile.apronWidthScale,
     apronRy: def.h * profile.apronDepthScale,
     // The selection footprint is the shared visual centre of the structure
@@ -5403,11 +5434,28 @@ function getProductionBuildingVisibleSize(type, nation, naturalWidth, naturalHei
   if (!def || !(naturalWidth > 0) || !(naturalHeight > 0)) return null;
   const source = bdProductionSourceRect(nation, type, naturalWidth, naturalHeight);
   const presentation = getBuildingPresentation(type, def, nation);
+  const aspect = source.height / source.width;
+  const displayWidth = Math.max(
+    presentation.displayArtWidth,
+    presentation.minimumDisplayHeight / aspect,
+  );
   return {
-    width: presentation.displayArtWidth,
-    height: presentation.displayArtWidth * source.height / source.width,
+    width: displayWidth,
+    height: displayWidth * aspect,
+    unscaledWidth: displayWidth / presentation.visualScale,
+    unscaledHeight: displayWidth * aspect / presentation.visualScale,
+    minimumDisplayHeight: presentation.minimumDisplayHeight,
+    humanHeightRatio: displayWidth * aspect / BUILDING_HUMAN_REFERENCE_HEIGHT,
     sourceRect: source,
   };
+}
+
+function getBuildingConstructionArtWidth(type, nation, naturalWidth, naturalHeight) {
+  const def = BUILDING_TYPES[type];
+  if (!def) return 0;
+  const visible = getProductionBuildingVisibleSize(type, nation, naturalWidth, naturalHeight);
+  const targetWidth = visible?.unscaledWidth || getBuildingPresentation(type, def, nation).artWidth;
+  return Math.max(def.w * 1.12, targetWidth * 1.04);
 }
 
 function bdVisualGroundY(building) {
@@ -5472,9 +5520,20 @@ function bdDrawHorizontalSheetCell(g, image, index, x, y, width, height, alpha, 
   g.restore();
 }
 
-function bdDrawConstructionSheet(g, image, building, alpha) {
-  const presentation = getBuildingPresentation(building.type);
-  const artWidth = Math.max(126, presentation.artWidth * 1.16);
+function bdTargetConstructionArtWidth(building, nation) {
+  const variant = Number.isInteger(building.visualVariant) ? building.visualVariant : 0;
+  const completedSpec = getBuildingProductionArtSpec(nation, building.type, variant);
+  const completedImage = completedSpec ? getProductionArt(completedSpec.key) : null;
+  return getBuildingConstructionArtWidth(
+    building.type,
+    nation,
+    completedImage?.naturalWidth || 0,
+    completedImage?.naturalHeight || 0,
+  );
+}
+
+function bdDrawConstructionSheet(g, image, building, nation, alpha) {
+  const artWidth = bdTargetConstructionArtWidth(building, nation);
   const ground = building.h * 0.46 + 15;
   const top = ground - artWidth * 0.89;
   const frame = bdConstructionArtFrame(building.progress);
@@ -5754,9 +5813,15 @@ function bdProductionHouseSprite(def, image, side, variant, damageStage, seed) {
 
 function bdProductionBuildingSprite(type, def, image, nation, side, damageStage, seed) {
   const presentation = getBuildingPresentation(type, def, nation);
-  const source = bdProductionSourceRect(nation, type, image.naturalWidth, image.naturalHeight);
-  const imageW = presentation.artWidth;
-  const imageH = imageW * source.height / source.width;
+  const visible = getProductionBuildingVisibleSize(
+    type,
+    nation,
+    image.naturalWidth,
+    image.naturalHeight,
+  );
+  const source = visible.sourceRect;
+  const imageW = visible.unscaledWidth;
+  const imageH = visible.unscaledHeight;
   const bottom = def.h * 0.48 + 8;
   const left = -imageW / 2;
   const top = bottom - imageH;
@@ -7105,14 +7170,14 @@ function drawFoundation(building, nation, worldTime, world) {
   const constructionArt = artSpec ? getProductionArt(artSpec.construction) : null;
   if (constructionArt) {
     const finish = sprite && p > 0.84 ? bdClamp((p - 0.84) / 0.16, 0, 1) : 0;
-    bdDrawConstructionSheet(g, constructionArt, building, 1 - finish);
+    bdDrawConstructionSheet(g, constructionArt, building, nation, 1 - finish);
     if (sprite && finish > 0) {
       g.save();
       g.globalAlpha = finish;
       g.drawImage(sprite.c, sprite.x, sprite.y, sprite.w, sprite.h);
       g.restore();
     }
-    const artWidth = Math.max(126, getBuildingPresentation(building.type).artWidth * 1.16);
+    const artWidth = bdTargetConstructionArtWidth(building, nation);
     const bannerTop = building.h * 0.46 + 15 - artWidth * 0.82;
     bdBanner(g, -artWidth * 0.39, bannerTop, Math.max(16, building.h * 0.18), building.side,
       { w: 11, h: 8, dir: building.side === 0 ? -1 : 1 });
@@ -7647,7 +7712,7 @@ function drawBuildingCollapse(destruction, worldTime) {
 
 export {
   setBuildingRefs, bdResetCaches, getBuildingPresentation, getBuildingPavingLayout,
-  getProductionBuildingVisibleSize,
+  getProductionBuildingVisibleSize, getBuildingConstructionArtWidth,
   bdConstructionArtFrame,
   drawResourceNode, drawFarm, drawFarmForeground, drawFoundation,
   drawCompleteBuilding, drawBuilding, drawBuildingCollapse,
