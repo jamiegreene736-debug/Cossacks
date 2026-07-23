@@ -236,6 +236,7 @@ async function startBattle(opts) {
   setupLocalCastlePreview(world);
   setupLocalOttomanArchitecturePreview(world);
   setupLocalFormationMovementPreview(world);
+  setupLocalVillagerWalkPreview(world);
   setupLocalVillagerCarryPreview(world);
   setupLocalWomanVillagerPreview(world);
   setupLocalOpeningTrucePreview(world);
@@ -1100,6 +1101,86 @@ function setupLocalFormationMovementPreview(activeWorld) {
   camera.x = 2650;
   camera.y = debugParams.get('focus') === 'rear' ? 1860 : 1590;
   camera.zoom = 1.65;
+  clampCamera();
+}
+
+function setupLocalVillagerWalkPreview(activeWorld) {
+  const debugName = new URLSearchParams(window.location.search).get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'villager-walk') return;
+
+  activeWorld.sides[0].nation = 'england';
+  activeWorld.sides[1].nation = 'england';
+  activeWorld.buildings.length = 0;
+  activeWorld.resources.length = 0;
+
+  const townCenter = createBuilding(0, 'town_center', 1420, 1520, true);
+  const house = createBuilding(0, 'house', 1080, 1745, false);
+  const rivalTownCenter = createBuilding(1, 'town_center', 3150, 1520, true);
+  house.progress = 0.42;
+  house.hp = Math.max(1, house.maxHp * house.progress);
+  activeWorld.buildings.push(townCenter, house, rivalTownCenter);
+  activeWorld.sides[0].townCenterId = townCenter.id;
+  activeWorld.sides[1].townCenterId = rivalTownCenter.id;
+
+  const resource = {
+    id: 991001,
+    entityKind: 'resource',
+    type: 'wood',
+    resourceType: 'wood',
+    alive: true,
+    x: 835,
+    y: 1425,
+    amount: 4000,
+    maxAmount: 4000,
+    radius: 54,
+  };
+  activeWorld.resources.push(resource);
+
+  for (let index = 0; index < 6; index++) {
+    const worker = spawnUnit(activeWorld, 0, 'villager', 520, 1280 + index * 44);
+    worker.speed = 42 + index * 2;
+    worker.gaitDistance = index * 4.8;
+    worker.walkPhaseOffset = index % 3;
+    worker.facing = 1;
+    worker.visualFacing = 1;
+    applyMoveOrder([worker], 1280, 1280 + index * 44, 'line');
+  }
+
+  const gatherers = [];
+  for (let index = 0; index < 4; index++) {
+    const worker = spawnUnit(activeWorld, 0, 'villager', 610 + index * 28, 1600 + index * 24);
+    worker.gaitDistance = index * 7.2;
+    gatherers.push(worker);
+  }
+  assignGatherers(activeWorld, gatherers, resource);
+
+  const builders = [];
+  for (let index = 0; index < 3; index++) {
+    const worker = spawnUnit(activeWorld, 0, 'villager', 780 + index * 34, 1840 + index * 18);
+    worker.gaitDistance = index * 8.3;
+    builders.push(worker);
+  }
+  assignBuilders(activeWorld, builders, house);
+
+  const carrier = spawnUnit(activeWorld, 0, 'villager', 800, 1515);
+  carrier.job = {
+    kind: 'gather',
+    targetId: resource.id,
+    phase: 'deliver',
+    resourceType: 'wood',
+    dropoffId: townCenter.id,
+    carriedAmount: 10,
+  };
+  carrier.speed = 34;
+  carrier.facing = 1;
+  carrier.visualFacing = 1;
+  carrier.state = 'move';
+
+  camera.x = 990;
+  camera.y = 1570;
+  camera.zoom = 1.75;
   clampCamera();
 }
 

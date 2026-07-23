@@ -134,6 +134,7 @@ function makeUnit(side, nationKey, type, x, y, team = null) {
     target: null, acquireT: Math.random() * 0.5,
     formation: 'line',
     facing: team === RIVAL_TEAM ? -1 : 1,
+    visualFacing: team === RIVAL_TEAM ? -1 : 1,
     moving: false, animT: Math.random() * 10, gaitDistance: Math.random() * 31,
     walkPhaseOffset: 0,
     fireT: 0, torchT: 0,
@@ -141,6 +142,14 @@ function makeUnit(side, nationKey, type, x, y, team = null) {
     job: null,
     workAction: null,
   };
+}
+
+function setMovementFacing(unit, directionX, dt) {
+  if (Math.abs(directionX) > 0.28) unit.facing = directionX > 0 ? 1 : -1;
+  const target = unit.facing >= 0 ? 1 : -1;
+  const current = Number.isFinite(unit.visualFacing) ? unit.visualFacing : target;
+  const blend = Math.min(1, Math.max(0.18, dt * 12));
+  unit.visualFacing = current + (target - current) * blend;
 }
 
 function clampPos(u) {
@@ -644,7 +653,7 @@ function updateUnit(world, u, dt) {
     advanceCharacterGait(u, Math.hypot(u.x - oldX, u.y - oldY));
     u.moving = true;
     u.animT += dt * 1.4;
-    u.facing = dirX > 0 ? 1 : -1;
+    setMovementFacing(u, dirX, dt);
     u.morale += 8 * dt;
     if (u.morale > 60) { u.state = 'idle'; u.morale = 60; }
     return;
@@ -805,7 +814,7 @@ function updateUnit(world, u, dt) {
       advanceCharacterGait(u, Math.hypot(u.x - oldX, u.y - oldY));
       u.moving = true;
       u.animT += dt;
-      if (Math.abs(nx) > 0.25) u.facing = nx > 0 ? 1 : -1;
+      setMovementFacing(u, nx, dt);
       if (u.type === 'cav') u.charge = Math.min(1, u.charge + dt / 1.4);
     } else if (!Number.isNaN(u.orderX)) {
       const hasNextWaypoint = u.type === 'villager' && u.navigationPath?.length

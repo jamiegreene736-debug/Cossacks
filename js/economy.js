@@ -18,7 +18,7 @@ import {
 } from './fortifications.js';
 import { resolveWorkerAction } from './worker-animation.js';
 import { sfx } from './audio.js';
-import { assignVillagerPath, clearVillagerPath } from './navigation.js';
+import { assignVillagerPath, clearVillagerPath, pointBlocksVillager } from './navigation.js';
 import { isPeaceTime } from './truce.js';
 import { areHostileSides, sideFrontDirection } from './teams.js';
 
@@ -65,6 +65,7 @@ const FIELD_WORK_POSITIONS = Object.freeze([
   [-0.36, 0.18], [-0.12, 0.17], [0.12, 0.19], [0.35, 0.20],
   [-0.30, 0.30], [-0.08, 0.28], [0.16, 0.31], [0.34, 0.27],
 ]);
+const WORK_APPROACH_SLOT_COUNT = 12;
 
 export function reserveEntityIds(maxId) {
   if (Number.isFinite(maxId)) nextEntityId = Math.max(nextEntityId, Math.floor(maxId) + 1);
@@ -1052,15 +1053,41 @@ function nearestPoint(world, target, worker) {
       arrivalDistance: 4.5,
     };
   }
+
   const dx = worker.x - target.x;
   const dy = worker.y - target.y;
   const d = Math.hypot(dx, dy) || 1;
-  const reach = target.radius + 7;
+  if (d <= target.radius + 16) {
+    return {
+      x: worker.x,
+      y: worker.y,
+      distance: 0,
+      arrivalDistance: 0,
+    };
+  }
+
+  const reach = target.radius + 10;
+  const baseSlot = Math.abs(((worker.id || 0) * 7 + (target.id || 0) * 3)
+    % WORK_APPROACH_SLOT_COUNT);
+  for (let offset = 0; offset < WORK_APPROACH_SLOT_COUNT; offset++) {
+    const slot = (baseSlot + offset) % WORK_APPROACH_SLOT_COUNT;
+    const angle = slot / WORK_APPROACH_SLOT_COUNT * Math.PI * 2;
+    const x = target.x + Math.cos(angle) * reach;
+    const y = target.y + Math.sin(angle) * reach;
+    if (pointBlocksVillager(world, x, y, worker.radius + 2)) continue;
+    return {
+      x,
+      y,
+      distance: Math.hypot(worker.x - x, worker.y - y),
+      arrivalDistance: 5.5,
+    };
+  }
+
   return {
     x: target.x + dx / d * reach,
     y: target.y + dy / d * reach,
-    distance: d,
-    arrivalDistance: target.radius + 16,
+    distance: Math.max(0, d - reach),
+    arrivalDistance: 5.5,
   };
 }
 

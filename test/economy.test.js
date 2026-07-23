@@ -262,6 +262,29 @@ test('villagers carry gathered resources to the Town Center before the stockpile
   assert.ok(Number.isFinite(worker.orderX));
 });
 
+test('workers keep a stable approach slot while walking to a resource', () => {
+  const world = makeWorld();
+  advance(world, 4.1);
+  const worker = world.units.find(unit => unit.side === 0);
+  const trees = findNearestResource(world, worker.x, worker.y, 'wood', 0);
+
+  worker.x = trees.x - trees.radius - 120;
+  worker.y = trees.y - 45;
+  assert.equal(assignGatherers(world, [worker], trees), true);
+  stepEconomy(world, 1 / 30);
+  const first = { x: worker.orderX, y: worker.orderY };
+
+  worker.x += 18;
+  worker.y += 34;
+  stepEconomy(world, 1 / 30);
+
+  assert.deepEqual(
+    { x: worker.orderX, y: worker.orderY },
+    first,
+    'the target edge slot should not be recomputed from the current worker vector',
+  );
+});
+
 test('the Town Center accepts carried food, wood, gold, and stone as the universal fallback', () => {
   const world = makeWorld();
   advance(world, 4.1);
