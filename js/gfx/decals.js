@@ -119,9 +119,9 @@ const DEC_PAL = {
   CHAR: '#241C14',
   SOOT: '#16120D',
   ASH: '#9A9186',
-  BLOOD: '#5E1512',
-  BLOOD_DARK: '#3A0F0D',
-  BLOOD_WET: '#8E3A2C',
+  BLOOD: '#4A1612',
+  BLOOD_DARK: '#2B0B09',
+  BLOOD_WET: '#6B241D',
   STEEL: '#8D939B',
   WOOD: '#5A452C',
   WOOD_PALE: '#8C7048',
@@ -204,6 +204,33 @@ function decRng(seed) {
 }
 function decR(rng, a, b) { return a + rng() * (b - a); }
 function decPick(rng, arr) { return arr[(rng() * arr.length) | 0]; }
+
+const CORPSE_DECAL_LIFETIME_SECONDS = 240;
+const CORPSE_DECAL_FADE_SECONDS = 45;
+
+function corpseDecalTiming(now) {
+  const bornAt = Number.isFinite(now) ? now : 0;
+  return {
+    bornAt,
+    fadeAt: bornAt + CORPSE_DECAL_LIFETIME_SECONDS - CORPSE_DECAL_FADE_SECONDS,
+    expiresAt: bornAt + CORPSE_DECAL_LIFETIME_SECONDS,
+  };
+}
+
+function decalOpacity(d, now) {
+  if (!d || d.kind !== 'corpse') return 1;
+  if (!Number.isFinite(d.expiresAt) || !Number.isFinite(d.fadeAt)) return 1;
+  const t = Number.isFinite(now) ? now : 0;
+  if (t >= d.expiresAt) return 0;
+  if (t <= d.fadeAt) return 1;
+  const fadeDuration = Math.max(0.001, d.expiresAt - d.fadeAt);
+  return Math.max(0, Math.min(1, (d.expiresAt - t) / fadeDuration));
+}
+
+function isDecalExpired(d, now) {
+  return !!d && d.kind === 'corpse' && Number.isFinite(d.expiresAt)
+    && (Number.isFinite(now) ? now : 0) >= d.expiresAt;
+}
 
 // ============================================================================
 //  Canvas plumbing
@@ -671,8 +698,8 @@ function decBloodPool(g, rng, cx, cy, rx, ry, amount) {
     const py = cy + Math.sin(a) * ry * d * 0.9;
     const r = decR(rng, rx * 0.30, rx * 0.66);
     const grd = g.createRadialGradient(px, py, 0, px, py, r);
-    grd.addColorStop(0, decRgba(DEC_PAL.BLOOD, 0.72 * amt));
-    grd.addColorStop(0.5, decRgba(DEC_PAL.BLOOD_DARK, 0.56 * amt));
+    grd.addColorStop(0, decRgba(DEC_PAL.BLOOD, 0.56 * amt));
+    grd.addColorStop(0.5, decRgba(DEC_PAL.BLOOD_DARK, 0.48 * amt));
     grd.addColorStop(1, decRgba(DEC_PAL.BLOOD_DARK, 0));
     g.fillStyle = grd;
     g.beginPath();
@@ -681,7 +708,7 @@ function decBloodPool(g, rng, cx, cy, rx, ry, amount) {
   }
 
   const coreGrd = g.createRadialGradient(cx - 0.4, cy - 0.3, 0, cx - 0.4, cy - 0.3, rx * 0.55);
-  coreGrd.addColorStop(0, decRgba('#2E0B09', 0.60 * amt));
+  coreGrd.addColorStop(0, decRgba('#1F0706', 0.54 * amt));
   coreGrd.addColorStop(1, decRgba('#2E0B09', 0));
   g.fillStyle = coreGrd;
   g.beginPath();
@@ -695,7 +722,7 @@ function decBloodPool(g, rng, cx, cy, rx, ry, amount) {
     let x = cx + Math.cos(ang) * rx * 0.6;
     let y = cy + Math.sin(ang) * ry * 0.6;
     const steps = 3 + ((rng() * 4) | 0);
-    g.strokeStyle = decRgba(DEC_PAL.BLOOD_DARK, 0.5 * amt);
+    g.strokeStyle = decRgba(DEC_PAL.BLOOD_DARK, 0.42 * amt);
     g.lineWidth = decR(rng, 0.4, 0.9);
     g.beginPath();
     g.moveTo(x, y);
@@ -706,7 +733,7 @@ function decBloodPool(g, rng, cx, cy, rx, ry, amount) {
       g.lineTo(x, y);
     }
     g.stroke();
-    g.fillStyle = decRgba(DEC_PAL.BLOOD_DARK, 0.44 * amt);
+    g.fillStyle = decRgba(DEC_PAL.BLOOD_DARK, 0.36 * amt);
     g.beginPath();
     g.ellipse(x, y, decR(rng, 0.5, 1.1), decR(rng, 0.4, 0.8), 0, 0, DEC_TAU);
     g.fill();
@@ -723,14 +750,14 @@ function decBloodPool(g, rng, cx, cy, rx, ry, amount) {
     const y = cy + Math.sin(a) * d * 0.78;
     const r = decR(rng, 0.16, 0.62) * (1 - d / (maxD * 1.35));
     if (r <= 0.05) continue;
-    g.fillStyle = decRgba(DEC_PAL.BLOOD_DARK, decR(rng, 0.3, 0.62) * amt);
+    g.fillStyle = decRgba(DEC_PAL.BLOOD_DARK, decR(rng, 0.22, 0.46) * amt);
     g.beginPath();
     g.ellipse(x, y, r * decR(rng, 1.0, 2.2), r, a, 0, DEC_TAU);
     g.fill();
   }
 
   // Coagulated rim: blood dries darker and thicker at the perimeter.
-  g.strokeStyle = decRgba('#280907', 0.26 * amt);
+  g.strokeStyle = decRgba('#1B0605', 0.24 * amt);
   g.lineWidth = 0.5;
   g.beginPath();
   for (let i = 0; i <= 26; i++) {
@@ -744,7 +771,7 @@ function decBloodPool(g, rng, cx, cy, rx, ry, amount) {
 
   // Wet sheen. Fresh blood is the one glossy thing on a matte-varnished board,
   // and this small arc is what sells "wet" rather than "brown paint".
-  g.globalAlpha = 0.30 * amt;
+  g.globalAlpha = 0.18 * amt;
   g.strokeStyle = DEC_PAL.BLOOD_WET;
   g.lineWidth = Math.max(0.3, rx * 0.11);
   g.beginPath();
@@ -1327,10 +1354,11 @@ function decBakeCorpse(kit, type, pose, heading, seed) {
   // decRamp's force-clamp guarantees relative luminance <= 58 for any coat a
   // user may add to config.js later, which is what makes this safe to tint.
   decFinish(figC, {
-    light: 1, wash: 0.20, washBlur: 1.6, varnish: 0.045,
+    light: 0.86, wash: 0.27, washBlur: 1.9, varnish: 0.018,
     lineColour: decMix(decRamp(kit.coat).line, '#141118', 0.45),
-    linePx: DEC_OS, lineAlpha: 1,   // a true 1 world px painted lining
-    aoPx: type === 'cav' ? 6 : 4, aoAlpha: 0.5,
+    linePx: DEC_OS, lineAlpha: 0.82,   // a true 1 world px painted lining
+    haloAlpha: 0.24,
+    aoPx: type === 'cav' ? 7 : 5, aoAlpha: 0.58,
   });
 
   decSetRot(0);
@@ -2020,34 +2048,43 @@ function decBlitStamp(g, stamp, x, y, ang, scale) {
   g.restore();
 }
 
-function paintDecal(d) {
+function paintDecal(d, opts = {}) {
   const g = decalCtx;
   if (!g) return;
+  const opacity = typeof opts === 'number' ? opts : opts.opacity;
+  const alpha = Number.isFinite(opacity) ? Math.max(0, Math.min(1, opacity)) : 1;
+  if (alpha <= 0) return;
+  const stampWear = !(opts && typeof opts === 'object' && opts.stampWear === false);
   const S = decEnsureStamps();
   const seed = decSeedOf(d);
   const rng = decRng(seed);
+  g.save();
+  g.globalAlpha = alpha;
 
   if (d.kind === 'crater') {
     // No free rotation: the lit inner wall would swing away from the sun.
     // Variety comes from 5 distinct ejecta patterns plus scale.
     decBlitStamp(g, S.crater[seed % S.crater.length], d.x, d.y,
       decR(rng, -0.12, 0.12), decR(rng, 0.85, 1.25));
-    stampTrample(d.x, d.y, 2, 0.22);
+    if (stampWear) stampTrample(d.x, d.y, 2, 0.22);
+    g.restore();
     return;
   }
 
-  if (d.kind === 'ruin') { decPaintRuin(g, d, rng); return; }
+  if (d.kind === 'ruin') { decPaintRuin(g, d, rng); g.restore(); return; }
 
   if (d.kind === 'wreck') {
     const list = S.wreck[decSideOf(d)];
     // Heading is baked into each of the 4 variants; only jitter here.
     decBlitStamp(g, list[seed % list.length], d.x, d.y, decR(rng, -0.14, 0.14), 1);
-    stampTrample(d.x, d.y, 1, 0.20);
+    if (stampWear) stampTrample(d.x, d.y, 1, 0.20);
+    g.restore();
     return;
   }
 
   if (d.kind === 'blood' || d.kind === 'splat') {
     decBlitStamp(g, S.splat[seed % S.splat.length], d.x, d.y, rng() * DEC_TAU, decR(rng, 0.7, 1.3));
+    g.restore();
     return;
   }
 
@@ -2058,7 +2095,8 @@ function paintDecal(d) {
   // 12 baked headings for infantry, 9 for cavalry, each already lit correctly.
   // Only a few degrees of jitter on top, which the near-flat art tolerates.
   decBlitStamp(g, list[seed % list.length], d.x, d.y, decR(rng, -0.14, 0.14), 1);
-  stampTrample(d.x, d.y, 1, type === 'cav' ? 0.22 : 0.13);
+  if (stampWear) stampTrample(d.x, d.y, 1, type === 'cav' ? 0.22 : 0.13);
+  g.restore();
 }
 
 // ---- RUINS -----------------------------------------------------------------
@@ -2190,4 +2228,6 @@ function decPaintRuin(g, d, rng) {
 export {
   setDecalCtx, buildDecalStamps, paintDecal,
   stampTrample, drainTrample, getTrampleCanvas,
+  corpseDecalTiming, decalOpacity, isDecalExpired,
+  CORPSE_DECAL_LIFETIME_SECONDS, CORPSE_DECAL_FADE_SECONDS,
 };

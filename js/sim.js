@@ -13,6 +13,7 @@ import {
 import { normalizeWorldCountry } from './countries.js';
 import { sfx } from './audio.js';
 import { initializeEconomy, stepEconomy, onUnitKilled, onBuildingDestroyed } from './economy.js';
+import { corpseDecalTiming } from './gfx/decals.js';
 import {
   dismountWallUnit, lineIntersectsFortification, resolveUnitFortificationCollision,
   updateWallAssignment,
@@ -360,8 +361,10 @@ function kill(world, entity, attacker = null) {
   world.pendingDecals.push({
     kind: u.type === 'gun' ? 'wreck' : 'corpse',
     x: u.x, y: u.y, type: u.type,
-    coat: NATIONS[u.nation].coat,
+    side: u.side, coat: NATIONS[u.nation].coat,
     ang: (Math.random() - 0.5) * 1.4,
+    seed: ((Math.imul(u.id || 1, 2654435761) ^ Math.imul(Math.round(world.time * 30), 2246822519)) >>> 0),
+    ...(u.type === 'gun' ? {} : corpseDecalTiming(world.time)),
   });
   // Watching a comrade fall is bad for everyone nearby.
   const active = world.active;

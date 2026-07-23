@@ -4,7 +4,9 @@
 import { WORLD, NATIONS, UNIT_TYPES, BUILDING_TYPES } from './config.js';
 import { buildTerrain, drawTerrain, drawTree, buildMinimapTerrain } from './gfx/terrain.js';
 import { drawSoldier, INF_W, INF_H, INF_AX, INF_AY } from './gfx/infantry.js';
-import { setDecalCtx, buildDecalStamps, paintDecal } from './gfx/decals.js';
+import {
+  setDecalCtx, buildDecalStamps, paintDecal, decalOpacity, isDecalExpired,
+} from './gfx/decals.js';
 import { setEffectsCamera, setEffectsView, buildParticleTextures,
          resetEffectFields, fxNoteDecal, drawSmokeUnder, drawBuildingFires,
          drawEffects } from './gfx/effects.js';
@@ -61,6 +63,7 @@ export const camera = { x: 660, y: WORLD.h / 2, zoom: 0.9, rotation: 0 };
 let canvas, ctx, mmCanvas, mmCtx;
 let cw = 0, ch = 0, dpr = 1;
 let decalCanvas = null, decalCtx = null;
+let nextDecalFadeRepaintAt = 0;
 let mmTerrain = null;
 let sprites = null; // sprites[side][type] = {frames: [dir][frame], w,h,ax,ay}
 const buildingSortBuf = [];
@@ -284,7 +287,8 @@ export function startBattle(world) {
   decalCtx = decalCanvas.getContext('2d');
   setDecalCtx(decalCtx);
   buildDecalStamps(world);
-  for (const decal of world.decals || []) paintDecal(decal);
+  nextDecalFadeRepaintAt = 0;
+  redrawDecalCanvas(world);
   buildParticleTextures();
   resetEffectFields();   // so a rematch does not inherit last game's powder
   sprites = world.sides.map((side, sideIndex) => buildNationSprites(side.nation, sideIndex));
@@ -298,6 +302,37 @@ export function startBattle(world) {
   camera.zoom = Math.max(0.62, Math.min(1.15, ch / 1050));
   camera.rotation = 0;
   clampCamera();
+}
+
+function redrawDecalCanvas(world) {
+  if (!decalCtx) return;
+  decalCtx.clearRect(0, 0, WORLD.w, WORLD.h);
+  for (const decal of world.decals || []) {
+    paintDecal(decal, { opacity: decalOpacity(decal, world.time), stampWear: false });
+  }
+}
+
+function updateTimedDecals(world) {
+  if (!world?.decals?.length) return;
+  const now = Number.isFinite(world.time) ? world.time : 0;
+  let removed = false;
+  let fading = false;
+  const kept = [];
+  for (const decal of world.decals) {
+    if (isDecalExpired(decal, now)) {
+      removed = true;
+      continue;
+    }
+    if (decalOpacity(decal, now) < 1) fading = true;
+    kept.push(decal);
+  }
+  if (removed) world.decals = kept;
+  if (removed || (fading && now >= nextDecalFadeRepaintAt)) {
+    redrawDecalCanvas(world);
+    nextDecalFadeRepaintAt = now + 1;
+  } else if (!fading) {
+    nextDecalFadeRepaintAt = now + 1;
+  }
 }
 
 
@@ -944,10 +979,11 @@ export function draw(
   const visibleWorld = getVisibleWorldBounds(camera, cw, ch, 0, WORLD.w, WORLD.h);
 
   // flush new decals, then blit
+  updateTimedDecals(world);
   if (world.pendingDecals.length) {
     if (!world.decals) world.decals = [];
     for (const d of world.pendingDecals) {
-      paintDecal(d);
+      paintDecal(d, { opacity: decalOpacity(d, world.time) });
       fxNoteDecal(world, d);
       world.decals.push(d);
     }
