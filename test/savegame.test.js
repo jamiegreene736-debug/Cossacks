@@ -30,7 +30,7 @@ test('a campaign round trip preserves economy, AI, camera and entity references'
   world.decals.push({ kind: 'crater', x: 222, y: 333 });
   const attacker = spawnUnit(world, 0, 'musk', 900, 1500);
   const defender = spawnUnit(world, 1, 'pike', 1100, 1500);
-  const mill = createBuilding(0, 'mill', 760, 1380, true);
+  const mill = createBuilding(0, 'mill', 760, 1380, true, { rotation: Math.PI / 3 });
   const fieldSlot = getMillFieldSlots(mill)[2];
   const field = createBuilding(0, 'farm', fieldSlot.x, fieldSlot.y, true, fieldSlot);
   world.buildings.push(mill, field);
@@ -94,9 +94,11 @@ test('a campaign round trip preserves economy, AI, camera and entity references'
     dropoffId: mill.id, carriedAmount: 10,
   });
   const restoredField = restored.world.buildings.find(building => building.id === field.id);
+  const restoredMill = restored.world.buildings.find(building => building.id === mill.id);
   const restoredTownCenter = restored.world.buildings.find(building => building.id === townCenter.id);
   assert.equal(restoredTownCenter.rallyTargetId, field.id);
   assert.equal(getRallyTarget(restored.world, restoredTownCenter), restoredField);
+  assert.equal(Math.round(restoredMill.rotation * 180 / Math.PI), 60);
   assert.equal(restoredField.millId, mill.id);
   assert.equal(restoredField.fieldSlot, 2);
   assert.deepEqual(restored.camera, { x: 777, y: 888, zoom: 1.4, rotation: Math.PI });

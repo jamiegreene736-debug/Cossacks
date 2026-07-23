@@ -79,6 +79,13 @@
     </div>
     <div id="placement-tip" class="hud hidden" role="status" aria-live="polite">
       <span id="placement-message">Move to place · Click terrain to build</span>
+      <div id="placement-rotation-controls" class="hidden" aria-label="Building rotation controls">
+        <button id="btn-rotate-placement-left" type="button" title="Rotate building left (Q)">-15</button>
+        <input id="placement-rotation" type="range" min="0" max="359" step="1" value="0" aria-label="Building rotation angle">
+        <output id="placement-rotation-value" for="placement-rotation">0 deg</output>
+        <button id="btn-rotate-placement-right" type="button" title="Rotate building right (E)">+15</button>
+        <button id="btn-reset-placement-rotation" type="button" title="Reset building rotation">0</button>
+      </div>
       <button id="btn-cancel-placement" type="button" title="Cancel building placement (Esc)">Cancel placement</button>
     </div>
     <div id="resource-tooltip" class="hidden" role="status" aria-live="polite"></div>

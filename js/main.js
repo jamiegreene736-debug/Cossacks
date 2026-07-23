@@ -8,7 +8,7 @@ import { initRender, startBattle as startBattleRender, draw,
 import { viewDirectionLabel } from './camera.js';
 import { initInput, updateInput, getSelection, getDragRect,
          getPlacementPreview, getResourceHoverTarget, getResourceHoverKind, getMovePreview,
-         beginPlacement, setFormation,
+         beginPlacement, rotatePlacementDegrees, setPlacementRotationDegrees, setFormation,
          cancelPlacement, haltSelection, resetForBattle, selectEntitiesById,
          setControlledSide } from './input.js';
 import {
@@ -84,6 +84,7 @@ initInput(canvas, minimap, () => world, {
     placement ? BUILDING_TYPES[placement.type].label : '',
     placement?.type || '',
     placement?.orientation || '',
+    placement?.rotation ?? null,
   ),
   onResourceHover: hover => ui.setResourceHover(world, hover),
   onToast: ui.toast,
@@ -110,6 +111,8 @@ ui.bindControls({
   onFormation: setFormation,
   onCommand: handleCommand,
   onCancelPlacement: cancelPlacement,
+  onRotatePlacement: rotatePlacementDegrees,
+  onSetPlacementRotation: setPlacementRotationDegrees,
   onSave: saveCurrentCampaign,
   onAudio: settings => {
     sfx.setSettings(settings);

@@ -225,6 +225,28 @@ button, select { font: inherit; }
   color: #fff4c9; background: rgba(39,45,28,.94); border: 1px solid #b3a35d; border-radius: 4px;
   box-shadow: 0 4px 14px rgba(0,0,0,.35); font: 12px Arial, sans-serif; pointer-events: auto;
 }
+#placement-rotation-controls {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 6px; border-left: 1px solid rgba(179,163,93,.45);
+  white-space: nowrap;
+}
+#placement-rotation-controls.hidden { display: none; }
+#placement-rotation-controls button {
+  min-width: 31px; min-height: 28px; padding: 3px 7px;
+  color: #f2e9c4; background: linear-gradient(#4e4b32, #2d2f21);
+  border: 1px solid #948852; border-radius: 3px;
+  font: 700 10px Arial, sans-serif; cursor: pointer;
+}
+#placement-rotation-controls button:hover,
+#placement-rotation-controls button:focus-visible {
+  border-color: #d2bd65; color: #fff6d2; outline: none;
+}
+#placement-rotation {
+  width: 138px; accent-color: #d2bd65;
+}
+#placement-rotation-value {
+  width: 45px; color: #ddd1a7; font: 700 10px Arial, sans-serif; text-align: right;
+}
 #btn-cancel-placement {
   min-height: 34px; padding: 6px 11px; color: #ffe4dc;
   background: linear-gradient(#93483d, #652f29); border: 1px solid #c06e5f; border-radius: 3px;

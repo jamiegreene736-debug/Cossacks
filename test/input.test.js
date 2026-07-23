@@ -48,6 +48,7 @@ function keyEvent(key) {
     key: { value: key },
     ctrlKey: { value: false },
     metaKey: { value: false },
+    shiftKey: { value: false },
   });
   return event;
 }
@@ -95,6 +96,9 @@ test('building placement supports one-action click-away, secondary-click, and Es
 
     input.beginPlacement('house');
     assert.equal(input.getPlacementPreview()?.type, 'house');
+    fakeWindow.dispatchEvent(keyEvent('e'));
+    assert.equal(Math.round(input.getPlacementPreview()?.rotation * 180 / Math.PI), 15);
+    assert.equal(Math.round(validationOptions?.rotation * 180 / Math.PI), 15);
     canvas.dispatchEvent(mouseEvent('mousedown', 0, { clientX: 100, clientY: 100 }));
     assert.equal(input.getPlacementPreview()?.type, 'house', 'an invalid terrain click remains retryable');
 
@@ -124,6 +128,40 @@ test('building placement supports one-action click-away, secondary-click, and Es
     assert.equal(input.getPlacementPreview(), null);
     input.cancelPlacement();
     assert.equal(placements.filter(placement => placement === null).length, 4);
+  } finally {
+    globalThis.window = previousWindow;
+    globalThis.document = previousDocument;
+  }
+});
+
+test('building placement rotation is forwarded to the placement command', async () => {
+  const previousWindow = globalThis.window;
+  const previousDocument = globalThis.document;
+  const fakeWindow = new FakeElement('WINDOW');
+  const fakeDocument = new FakeElement('DOCUMENT');
+  const canvas = new FakeElement('CANVAS');
+  const minimap = new FakeElement('CANVAS');
+  fakeDocument.getElementById = id => id === 'minimap' ? minimap : null;
+  globalThis.window = fakeWindow;
+  globalThis.document = fakeDocument;
+
+  try {
+    const input = await import('../js/input.js');
+    let placedOptions = null;
+    input.initInput(canvas, minimap, () => ({ state: 'running' }), {
+      onValidatePlacement: (_type, x, y, options) => ({ ok: true, x, y, rotation: options.rotation }),
+      onPlaceBuilding: (_type, _x, _y, _workers, options) => {
+        placedOptions = options;
+        return { ok: true, message: 'placed' };
+      },
+    });
+
+    input.beginPlacement('barracks');
+    input.setPlacementRotationDegrees(225);
+    assert.equal(Math.round(input.getPlacementPreview()?.rotation * 180 / Math.PI), 225);
+    canvas.dispatchEvent(mouseEvent('mousedown', 0, { clientX: 210, clientY: 180 }));
+    assert.equal(Math.round(placedOptions?.rotation * 180 / Math.PI), 225);
+    assert.equal(input.getPlacementPreview(), null);
   } finally {
     globalThis.window = previousWindow;
     globalThis.document = previousDocument;
