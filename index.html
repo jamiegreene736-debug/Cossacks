@@ -34,6 +34,20 @@
       </div>
     </header>
 
+    <button id="btn-idle-villager" class="hud hidden" type="button"
+      title="Select and center the next idle villager">
+      <span class="villager-status-mark" aria-hidden="true">&#9874;</span>
+      <span class="villager-status-count">
+        <small>Villagers</small>
+        <b id="hud-villager-total">0</b>
+      </span>
+      <span class="villager-status-count idle">
+        <small>Idle</small>
+        <b id="hud-villager-idle">0</b>
+      </span>
+      <span class="villager-status-next" aria-hidden="true">&#8250;</span>
+    </button>
+
       <div id="time-controls" class="hud hidden">
       <button id="btn-view-left" title="Turn view left (Q)" aria-label="Turn view left">&#8634;</button>
       <span id="view-direction" title="Current viewing direction">South</span>
