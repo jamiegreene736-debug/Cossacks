@@ -123,6 +123,20 @@ export function initInput(canvas, minimap, worldGetter, cbs) {
     }
   });
 
+  canvas.addEventListener('dblclick', event => {
+    const world = getWorld();
+    if (!world || world.state === 'ended' || placement || event.button !== 0 || keys.has(' ')) return;
+    const point = screenToWorld(event.clientX, event.clientY);
+    const entity = findPlayerSelectableEntityAt(world, point.x, point.y);
+    const matchingUnits = findSelectableUnitsOfType(world, entity);
+    if (!matchingUnits.length) return;
+    event.preventDefault();
+    const picked = event.shiftKey
+      ? getSelection().concat(matchingUnits.filter(unit => !unit.selected))
+      : matchingUnits;
+    setSelection(picked);
+  });
+
   document.addEventListener('mousedown', event => {
     if (!placement || event.button !== 0 || event.target === canvas) return;
     if (event.target.closest?.('button[data-action="build"]')) return;
@@ -285,6 +299,14 @@ export function canPlayerSelectEntity(world, entity) {
 export function findPlayerSelectableEntityAt(world, x, y) {
   const entity = findEntityAt(world, x, y);
   return canPlayerSelectEntity(world, entity) ? entity : null;
+}
+
+export function findSelectableUnitsOfType(world, entity) {
+  if (!world?.units?.includes(entity) || entity.side !== controlledSide
+    || !canPlayerSelectEntity(world, entity)) return [];
+  // Worker variants intentionally share the villager gameplay type; military types remain distinct.
+  return world.units.filter(unit => unit.alive && unit.side === controlledSide
+    && unit.type === entity.type);
 }
 
 function setSelection(entities) {
