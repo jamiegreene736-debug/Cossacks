@@ -49,6 +49,7 @@ def prepare_marketplace(source: Path) -> Image.Image:
   bottom_padding = 18
   top = CANVAS_SIZE[1] - fitted.height - bottom_padding
   canvas.alpha_composite(fitted, (left, top))
+  mute_canvas_highlights(canvas)
   return canvas
 
 
@@ -75,6 +76,26 @@ def remove_light_matte(image: Image.Image) -> Image.Image:
           alpha,
         )
   return output
+
+
+def mute_canvas_highlights(image: Image.Image) -> None:
+  pixels = image.load()
+  for y in range(int(image.height * 0.46), image.height):
+    for x in range(image.width):
+      red, green, blue, alpha = pixels[x, y]
+      if alpha < 160:
+        continue
+      neutral = max(red, green, blue) - min(red, green, blue)
+      if red <= 205 or green <= 198 or blue <= 180 or neutral >= 65:
+        continue
+      luminance = (red * 0.30 + green * 0.59 + blue * 0.11) / 255
+      shade = 0.70 + min(0.22, max(0, luminance - 0.70))
+      pixels[x, y] = (
+        round(142 * shade),
+        round(116 * shade),
+        round(76 * shade),
+        alpha,
+      )
 
 
 def parse_args() -> argparse.Namespace:
