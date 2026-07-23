@@ -5074,7 +5074,7 @@ const BD_TOP_EXTRA = {
   town_center: 112, house: 118, english_cottage: 108, english_townhouse: 116,
   english_mansion: 148, spooky_house: 146, farm: 30, mill: 104, lumber_camp: 54,
   mine: 74, barracks: 78, stable: 72, foundry: 108, tower: 106,
-  castle: 162,
+  marketplace: 118, castle: 162,
   wall: 72, gate: 94, wall_stairs: 92,
 };
 
@@ -5138,7 +5138,7 @@ const BD_VARIANTS = {
   town_center: 1, tower: 2, castle: 2, farm: 1, house: 1,
   english_cottage: 1, english_townhouse: 1, english_mansion: 1, spooky_house: 1,
   mill: 2, lumber_camp: 2, mine: 2, barracks: 2, stable: 2, foundry: 2,
-  school: 1, pool: 1, beach: 1, park: 5, playground: 1,
+  marketplace: 1, school: 1, pool: 1, beach: 1, park: 5, playground: 1,
   wall: 3, gate: 3, wall_stairs: 3,
 };
 
@@ -5147,7 +5147,7 @@ const BD_PAINTERS = {
   english_townhouse: bdPaintHouse, english_mansion: bdPaintHouse,
   spooky_house: bdPaintHouse, mill: bdPaintMill,
   lumber_camp: bdPaintLumberCamp, mine: bdPaintMine, barracks: bdPaintBarracks,
-  stable: bdPaintStable, foundry: bdPaintFoundry, tower: bdPaintTower,
+  marketplace: bdPaintTownCenter, stable: bdPaintStable, foundry: bdPaintFoundry, tower: bdPaintTower,
   castle: bdPaintCastle, school: bdPaintBarracks, pool: bdPaintMill,
   beach: bdPaintLumberCamp, park: bdPaintHouse, playground: bdPaintHouse,
 };
@@ -5162,6 +5162,7 @@ const BD_ENGLISH_BUILDING_ART = Object.freeze({
   mill: { key: 'englishMill' },
   lumber_camp: { key: 'englishLumberCamp' },
   mine: { key: 'englishMine' },
+  marketplace: { key: 'englishMarketplace' },
   barracks: { key: 'englishBarracks' },
   stable: { key: 'englishStable' },
   foundry: { key: 'englishFoundry' },
@@ -5277,6 +5278,7 @@ const BD_BUILDING_PRESENTATION = Object.freeze({
   mill: { artWidthScale: 1.42, apronWidthScale: 0.86, apronDepthScale: 0.58 },
   lumber_camp: { artWidthScale: 1.44, apronWidthScale: 0.86, apronDepthScale: 0.58 },
   mine: { artWidthScale: 1.42, apronWidthScale: 0.86, apronDepthScale: 0.58 },
+  marketplace: { artWidthScale: 1.52, apronWidthScale: 0.96, apronDepthScale: 0.64 },
   barracks: { artWidthScale: 1.44, apronWidthScale: 0.90, apronDepthScale: 0.60 },
   stable: { artWidthScale: 1.48, apronWidthScale: 0.94, apronDepthScale: 0.62 },
   foundry: { artWidthScale: 1.40, apronWidthScale: 0.92, apronDepthScale: 0.60 },

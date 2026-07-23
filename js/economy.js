@@ -44,6 +44,8 @@ const INCOME_SAMPLE_SECONDS = 0.75;
 // the live rate legible between ordinary mine-to-drop-off round trips.
 const INCOME_SMOOTHING_SECONDS = 18;
 const FULL_TURN = Math.PI * 2;
+export const MARKET_TRADE_INPUT = 100;
+export const MARKET_TRADE_OUTPUT = 70;
 
 export function normalizeBuildingRotation(rotation = 0) {
   if (!Number.isFinite(rotation)) return 0;
@@ -795,6 +797,39 @@ export function placeBuilding(world, sideIndex, type, x, y, builders, options = 
     ? `Field attached to Mill · plot ${building.fieldSlot + 1} of ${MILL_FIELD_OFFSETS.length}.`
     : `${def.label} foundation placed.`;
   return { ok: true, building, message };
+}
+
+export function executeMarketTrade(
+  world, sideIndex, building, fromResource, toResource, amount = MARKET_TRADE_INPUT,
+) {
+  const side = world?.sides?.[sideIndex];
+  const def = BUILDING_TYPES[building?.type];
+  const input = Number.isFinite(amount) && amount > 0 ? Math.floor(amount) : MARKET_TRADE_INPUT;
+  const output = Math.floor(input * MARKET_TRADE_OUTPUT / MARKET_TRADE_INPUT);
+  if (!world || !side || !building?.alive || building.side !== sideIndex) {
+    return { ok: false, message: 'Select your Marketplace.' };
+  }
+  if (!building.complete || !def?.market) {
+    return { ok: false, message: 'Complete a Marketplace before trading.' };
+  }
+  if (!RESOURCE_KEYS.includes(fromResource) || !RESOURCE_KEYS.includes(toResource)
+      || fromResource === toResource) {
+    return { ok: false, message: 'Choose two different resources.' };
+  }
+  normalizeEconomyLedgers(side);
+  if ((side.resources[fromResource] || 0) + 1e-6 < input) {
+    return { ok: false, message: `Need ${input} ${fromResource} to trade.` };
+  }
+  side.resources[fromResource] -= input;
+  side.resources[toResource] += output;
+  return {
+    ok: true,
+    fromResource,
+    toResource,
+    input,
+    output,
+    message: `Traded ${input} ${fromResource} for ${output} ${toResource}.`,
+  };
 }
 
 export function assignBuilders(world, workers, building) {

@@ -412,6 +412,12 @@ export const BUILDING_TYPES = {
     w: 74, h: 58, radius: 40, visualScale: 1.26, hp: 950, buildTime: 12,
     cost: { wood: 110, stone: 20 }, boost: 'mineral', workResources: ['gold', 'stone'], hotkey: 'N',
   },
+  marketplace: {
+    label: 'Marketplace',
+    description: 'English market house where merchants trade one stockpiled resource for another.',
+    w: 118, h: 86, radius: 64, visualScale: 1.26, hp: 1450, buildTime: 14,
+    cost: { wood: 180, stone: 60 }, buildNations: ['england'], market: true, hotkey: 'K',
+  },
   barracks: {
     label: 'Barracks', description: 'Trains musketeers and pikemen in large batches.',
     w: 104, h: 76, radius: 56, visualScale: 1.26, hp: 1700, buildTime: 15,

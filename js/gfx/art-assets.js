@@ -158,6 +158,7 @@ const ART_URLS = Object.freeze({
   englishMill: new URL('../../assets/buildings/english-mill.webp', import.meta.url).href,
   englishLumberCamp: new URL('../../assets/buildings/english-lumber-camp.webp', import.meta.url).href,
   englishMine: new URL('../../assets/buildings/english-mine.webp', import.meta.url).href,
+  englishMarketplace: new URL('../../assets/buildings/english-marketplace.webp', import.meta.url).href,
   englishBarracks: new URL('../../assets/buildings/english-barracks.webp', import.meta.url).href,
   englishStable: new URL('../../assets/buildings/english-stable.webp', import.meta.url).href,
   englishFoundry: new URL('../../assets/buildings/english-foundry.webp', import.meta.url).href,

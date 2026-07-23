@@ -12,7 +12,7 @@ import { initInput, updateInput, getSelection, getDragRect,
          cancelPlacement, haltSelection, resetForBattle, selectEntitiesById,
          setControlledSide } from './input.js';
 import {
-  assignBuilders, assignGatherers, assignRepairers, createBuilding, findEntityAt,
+  assignBuilders, assignGatherers, assignRepairers, createBuilding, executeMarketTrade, findEntityAt,
   findResourceAt, placeBuilding, placeWallRun, planWallRun, queueUnit, setRallyPoint,
   validatePlacement,
 } from './economy.js';
@@ -395,6 +395,12 @@ function applyRemoteCommand(command) {
     if (command.kind === 'gate') {
       const gate = buildingsById([command.buildingId], command.side)[0];
       return toggleGate(world, gate).ok;
+    }
+    if (command.kind === 'trade') {
+      const market = buildingsById([command.buildingId], command.side)[0];
+      return executeMarketTrade(
+        world, command.side, market, command.fromResource, command.toResource, command.amount,
+      ).ok;
     }
   } finally {
     suppressNetworkCommand = false;
@@ -1136,6 +1142,30 @@ function handleCommand(command) {
       buildingId: building.id,
       type: command.type,
       count: command.count,
+    });
+    return;
+  }
+  if (command.action === 'trade') {
+    const market = getSelection().find(entity => entity.entityKind === 'building'
+      && entity.side === localSide && BUILDING_TYPES[entity.type]?.market);
+    const result = executeMarketTrade(
+      world,
+      localSide,
+      market,
+      command.fromResource,
+      command.toResource,
+      command.amount,
+    );
+    ui.toast(result.message, result.ok ? 'good' : 'danger');
+    if (result.ok) sfx.command('build');
+    ui.updateHud(world, getSelection());
+    if (result.ok) sendPlayerCommand({
+      kind: 'trade',
+      side: localSide,
+      buildingId: market.id,
+      fromResource: command.fromResource,
+      toResource: command.toResource,
+      amount: command.amount,
     });
     return;
   }
