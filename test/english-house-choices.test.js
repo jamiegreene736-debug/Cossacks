@@ -4,7 +4,9 @@ import { stat } from 'node:fs/promises';
 
 import { BUILDING_TYPES, canNationBuildBuilding } from '../js/config.js';
 import { placeBuilding, validatePlacement } from '../js/economy.js';
-import { getBuildingProductionArtSpec } from '../js/gfx/buildings.js';
+import {
+  getBuildingPresentation, getBuildingProductionArtSpec,
+} from '../js/gfx/buildings.js';
 import { createWorld, spawnUnit } from '../js/sim.js';
 
 const ENGLISH_HOUSE_CHOICES = Object.freeze({
@@ -34,6 +36,26 @@ test('England has explicit selectable house choices with deterministic art', asy
     const metadata = await stat(new URL(`../assets/buildings/${filename}`, import.meta.url));
     assert.ok(metadata.size > 75_000, `${filename} should retain rendered architectural detail`);
   }
+});
+
+test('English residences preserve a readable human-to-manor scale hierarchy', () => {
+  const width = type => getBuildingPresentation(type).displayArtWidth;
+  const hierarchy = [
+    'house',
+    'english_cottage',
+    'english_townhouse',
+    'spooky_house',
+    'english_mansion',
+    'town_center',
+  ];
+
+  for (let index = 1; index < hierarchy.length; index++) {
+    assert.ok(
+      width(hierarchy[index]) > width(hierarchy[index - 1]),
+      `${hierarchy[index]} should read larger than ${hierarchy[index - 1]}`,
+    );
+  }
+  assert.ok(width('english_mansion') < width('town_center') * 0.85);
 });
 
 test('English house choices are gated from non-English builders', () => {
