@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 
 import { Commander } from '../js/ai.js';
@@ -281,6 +282,16 @@ test('fantasy architecture is backed by substantial high-detail production asset
       assert.deepEqual(webpDimensions(await readFile(assetUrl)), { width: 768, height: 1024 });
     }
   }
+});
+
+test('the Great Hall keeps its opacity-corrected production artwork', async () => {
+  const assetUrl = new URL('../assets/buildings/hogwarts-great-hall.webp', import.meta.url);
+  const digest = createHash('sha256').update(await readFile(assetUrl)).digest('hex');
+  assert.equal(
+    digest,
+    '6bfd78d85ca5b43e0da834c534123a15cb164ef888d98b626c3a5afac810d97c',
+    'the alpha-corrected masonry must not regress to the translucent source sprite',
+  );
 });
 
 test('world-country identity and fantasy units survive save and resume', () => {
