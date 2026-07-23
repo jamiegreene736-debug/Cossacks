@@ -657,7 +657,7 @@ function unitIcon(type) {
     villager: '⚒', woman_villager: '⚒◉', musk: '♟', pike: '†', cav: '♞', gun: '◉',
     wizard_worker: '⚒✦', witch_worker: '⚒✧', circus_worker: '⚒☠',
     starwars_mechanic: '⚒◇', starwars_robed_villager: '⚒◈',
-    wizard_duelist: '✦', witch_duelist: '✧', moaning_myrtle: '◌',
+    wizard_duelist: '✦', witch_duelist: '✧', broom_rider: '✧♞', moaning_myrtle: '◌',
     pennywise: '●', art_clown: '◐', twisty_clown: '♣',
     captain_spaulding: '※', killer_klown: '◎',
     starwars_sentinel: '◇', starwars_blade_guard: '◈',

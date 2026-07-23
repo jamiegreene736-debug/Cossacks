@@ -247,6 +247,13 @@ export function initializeEconomy(world) {
     if (side.nation === 'hogwarts') {
       const landmarks = [
         ['house', -280, 280],
+        ['mill', -410, 40],
+        ['lumber_camp', 245, 65],
+        ['mine', -360, -230],
+        ['barracks', 255, -190],
+        ['stable', 445, 75],
+        ['foundry', 470, -240],
+        ['tower', -510, 260],
         ['school', 15, 300],
         ['castle', 340, 330],
         ['pool', -160, 585],

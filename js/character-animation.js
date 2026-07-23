@@ -15,7 +15,8 @@ const STRIDE_LENGTH = Object.freeze({
 });
 
 function unitStrideLength(unit) {
-  if (unit.type === 'cav' || unit.unitType === 'starwars_skiff_rider') return STRIDE_LENGTH.cav;
+  if (unit.type === 'cav' || unit.unitType === 'starwars_skiff_rider'
+      || unit.unitType === 'broom_rider') return STRIDE_LENGTH.cav;
   if (unit.type === 'gun' || unit.unitType === 'starwars_pulse_cannon') return STRIDE_LENGTH.gun;
   if (unit.type === 'villager') return STRIDE_LENGTH.villager;
   return STRIDE_LENGTH[unit.type] || 31;
@@ -65,7 +66,8 @@ export function getCharacterMotion(unit, visualFacing = 1) {
   const phase = getCharacterGaitPhase(unit);
   const strideWave = Math.sin(phase * TAU);
   const contactLift = Math.abs(Math.sin(phase * TAU));
-  const mounted = unit.type === 'cav' || unit.unitType === 'starwars_skiff_rider';
+  const mounted = unit.type === 'cav' || unit.unitType === 'starwars_skiff_rider'
+    || unit.unitType === 'broom_rider';
   const heavy = unit.type === 'gun' || unit.unitType === 'starwars_pulse_cannon';
   const movingWeight = unit.moving ? 1 : 0;
   const bobScale = mounted ? 0.72 : heavy ? 0.18 : unit.type === 'villager' ? 0.52 : 0.62;

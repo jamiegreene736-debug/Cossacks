@@ -295,7 +295,7 @@ function setupLocalFantasyFactionPreview(activeWorld) {
   ));
   activeWorld.time = OPENING_PEACE_SECONDS;
 
-  const hogwartsTypes = ['wizard_duelist', 'witch_duelist', 'moaning_myrtle'];
+  const hogwartsTypes = ['wizard_duelist', 'witch_duelist', 'broom_rider', 'moaning_myrtle'];
   const starwarsTypes = [
     'starwars_mechanic', 'starwars_robed_villager', 'starwars_sentinel',
     'starwars_blade_guard', 'starwars_skiff_rider', 'starwars_pulse_cannon',
@@ -392,7 +392,7 @@ function setupLocalCharacterAnimationPreview(activeWorld) {
   const roster = [
     [0, 'villager'], [0, 'woman_villager'], [0, 'musk'], [0, 'pike'], [0, 'cav'], [0, 'gun'],
     [1, 'villager'], [1, 'woman_villager'], [1, 'musk'], [1, 'pike'], [1, 'cav'], [1, 'gun'],
-    [2, 'wizard_worker'], [2, 'witch_worker'], [2, 'moaning_myrtle'],
+    [2, 'wizard_worker'], [2, 'witch_worker'], [2, 'broom_rider'], [2, 'moaning_myrtle'],
     [4, 'starwars_mechanic'], [4, 'starwars_robed_villager'], [4, 'starwars_sentinel'],
     [4, 'starwars_blade_guard'], [4, 'starwars_skiff_rider'], [4, 'starwars_pulse_cannon'],
     [3, 'circus_worker'], [3, 'pennywise'], [3, 'art_clown'], [3, 'twisty_clown'],

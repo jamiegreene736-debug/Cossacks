@@ -15,7 +15,7 @@ const UNIT_FORMATION_FOOTPRINT = Object.freeze({
 const ANIMATED_MILITARY_TYPES = new Set(['musk', 'pike', 'cav']);
 const HOME_GUARD_TYPE_ORDER = Object.freeze([
   'musk', 'pike', 'cav', 'gun',
-  'wizard_duelist', 'witch_duelist', 'moaning_myrtle',
+  'wizard_duelist', 'witch_duelist', 'broom_rider', 'moaning_myrtle',
   'starwars_sentinel', 'starwars_blade_guard', 'starwars_skiff_rider',
   'starwars_pulse_cannon',
   'pennywise', 'art_clown', 'twisty_clown', 'captain_spaulding', 'killer_klown',
