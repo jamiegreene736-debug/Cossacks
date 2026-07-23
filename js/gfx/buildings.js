@@ -5194,12 +5194,37 @@ const BD_HOGWARTS_BUILDING_ART = Object.freeze({
 });
 
 const BD_STARWARS_BUILDING_ART = Object.freeze({
+  // These assets share a 720x560 authoring canvas, but their painted
+  // silhouettes occupy very different fractions of it. The tower, for
+  // example, is only 262 pixels wide while the mine is 659 pixels wide.
+  // Rendering the full transparent canvas made the tower less than half a
+  // house high. Source rectangles keep each silhouette on the role-based
+  // world scale while retaining a soft fringe around shadows and antennas.
   town_center: { key: 'starwarsTownCenter' },
-  house: { key: 'starwarsHouse' }, mill: { key: 'starwarsMill' },
-  lumber_camp: { key: 'starwarsLumberCamp' }, mine: { key: 'starwarsMine' },
-  barracks: { key: 'starwarsBarracks' }, stable: { key: 'starwarsStable' },
-  foundry: { key: 'starwarsFoundry' }, tower: { key: 'starwarsTower' },
+  house: { key: 'starwarsHouse' },
+  mill: { key: 'starwarsMill' },
+  lumber_camp: { key: 'starwarsLumberCamp' },
+  mine: { key: 'starwarsMine' },
+  barracks: { key: 'starwarsBarracks' },
+  stable: { key: 'starwarsStable' },
+  foundry: { key: 'starwarsFoundry' },
+  tower: { key: 'starwarsTower' },
   castle: { key: 'starwarsCastle' },
+});
+
+const BD_BUILDING_SOURCE_RECT_BY_NATION = Object.freeze({
+  starwars: Object.freeze({
+    town_center: [48, 52, 624, 500],
+    house: [112, 96, 496, 432],
+    mill: [80, 52, 560, 488],
+    lumber_camp: [26, 52, 668, 490],
+    mine: [22, 26, 674, 512],
+    barracks: [48, 58, 622, 483],
+    stable: [22, 68, 674, 437],
+    foundry: [42, 28, 632, 514],
+    tower: [220, 48, 280, 512],
+    castle: [28, 28, 664, 528],
+  }),
 });
 
 const BD_CIRCUS_BUILDING_ART = Object.freeze({
@@ -5282,7 +5307,11 @@ const BD_BUILDING_PRESENTATION = Object.freeze({
   barracks: { artWidthScale: 1.44, apronWidthScale: 0.90, apronDepthScale: 0.60 },
   stable: { artWidthScale: 1.48, apronWidthScale: 0.94, apronDepthScale: 0.62 },
   foundry: { artWidthScale: 1.40, apronWidthScale: 0.92, apronDepthScale: 0.60 },
-  tower: { artWidthScale: 1.36, apronWidthScale: 0.80, apronDepthScale: 0.56 },
+  // A watch tower has a compact collision footprint but a tall architectural
+  // silhouette. Its art width is deliberately broader than its pathing width
+  // so naturally proportioned source art rises above housing without being
+  // stretched vertically.
+  tower: { artWidthScale: 1.84, apronWidthScale: 0.80, apronDepthScale: 0.56 },
   castle: { artWidthScale: 1.58, apronWidthScale: 0.80, apronDepthScale: 0.58 },
   school: { artWidthScale: 1.48, apronWidthScale: 0.88, apronDepthScale: 0.58 },
   pool: { artWidthScale: 1.48, apronWidthScale: 0.92, apronDepthScale: 0.62 },
@@ -5293,8 +5322,41 @@ const BD_BUILDING_PRESENTATION = Object.freeze({
 });
 
 const BD_NATION_PRESENTATION_SCALE = Object.freeze({
-  hogwarts: 0.82,
-  starwars: 0.84,
+  // Themed architecture used to receive one blanket reduction. That flattened
+  // its hierarchy: a cottage, utility shed and tower all lost the same share
+  // of their stature even though only the monumental pieces needed restraint.
+  // Role-specific factors keep allied settlements readable beside normal-size
+  // workers while preventing the castle and Town Center from swallowing the
+  // battlefield.
+  hogwarts: Object.freeze({
+    default: 0.90,
+    town_center: 0.86,
+    house: 0.92,
+    mill: 0.92,
+    lumber_camp: 0.92,
+    mine: 0.92,
+    barracks: 0.90,
+    stable: 0.90,
+    foundry: 0.90,
+    tower: 1,
+    castle: 0.86,
+    school: 0.86,
+    pool: 0.90,
+    beach: 0.90,
+  }),
+  starwars: Object.freeze({
+    default: 0.92,
+    town_center: 0.88,
+    house: 0.94,
+    mill: 0.94,
+    lumber_camp: 0.94,
+    mine: 0.94,
+    barracks: 0.92,
+    stable: 0.92,
+    foundry: 0.92,
+    tower: 1,
+    castle: 0.88,
+  }),
 });
 
 function getBuildingPresentation(type, def = BUILDING_TYPES[type], nation = null) {
@@ -5302,7 +5364,8 @@ function getBuildingPresentation(type, def = BUILDING_TYPES[type], nation = null
   const profile = BD_BUILDING_PRESENTATION[type] || {
     artWidthScale: 1.4, apronWidthScale: 0.76, apronDepthScale: 0.48,
   };
-  const nationScale = BD_NATION_PRESENTATION_SCALE[nation] || 1;
+  const nationProfile = BD_NATION_PRESENTATION_SCALE[nation];
+  const nationScale = nationProfile?.[type] ?? nationProfile?.default ?? 1;
   const visualScale = Math.max(1, (def.visualScale || 1) * nationScale);
   const artWidth = def.w * profile.artWidthScale;
   return {
@@ -5316,6 +5379,34 @@ function getBuildingPresentation(type, def = BUILDING_TYPES[type], nation = null
     // production sprites and procedural painters from independently anchoring
     // paving to their front wall, which leaves most bricks below the building.
     pavingCenterY: def.h * 0.22,
+  };
+}
+
+function bdProductionSourceRect(nation, type, naturalWidth, naturalHeight) {
+  const requested = BD_BUILDING_SOURCE_RECT_BY_NATION[nation]?.[type]
+    || [0, 0, naturalWidth, naturalHeight];
+  const x = bdClamp(requested[0], 0, naturalWidth);
+  const y = bdClamp(requested[1], 0, naturalHeight);
+  const width = bdClamp(requested[2], 1, naturalWidth - x);
+  const height = bdClamp(requested[3], 1, naturalHeight - y);
+  return { x, y, width, height };
+}
+
+/**
+ * Visible painted size after transparent-canvas trimming and role scaling.
+ * Keeping this calculation public gives tests and future asset passes the
+ * exact same contract as the renderer instead of comparing gameplay radii to
+ * image files by eye.
+ */
+function getProductionBuildingVisibleSize(type, nation, naturalWidth, naturalHeight) {
+  const def = BUILDING_TYPES[type];
+  if (!def || !(naturalWidth > 0) || !(naturalHeight > 0)) return null;
+  const source = bdProductionSourceRect(nation, type, naturalWidth, naturalHeight);
+  const presentation = getBuildingPresentation(type, def, nation);
+  return {
+    width: presentation.displayArtWidth,
+    height: presentation.displayArtWidth * source.height / source.width,
+    sourceRect: source,
   };
 }
 
@@ -5661,10 +5752,11 @@ function bdProductionHouseSprite(def, image, side, variant, damageStage, seed) {
   });
 }
 
-function bdProductionBuildingSprite(type, def, image, side, damageStage, seed) {
-  const presentation = getBuildingPresentation(type, def);
+function bdProductionBuildingSprite(type, def, image, nation, side, damageStage, seed) {
+  const presentation = getBuildingPresentation(type, def, nation);
+  const source = bdProductionSourceRect(nation, type, image.naturalWidth, image.naturalHeight);
   const imageW = presentation.artWidth;
-  const imageH = imageW * image.naturalHeight / image.naturalWidth;
+  const imageH = imageW * source.height / source.width;
   const bottom = def.h * 0.48 + 8;
   const left = -imageW / 2;
   const top = bottom - imageH;
@@ -5677,7 +5769,11 @@ function bdProductionBuildingSprite(type, def, image, side, damageStage, seed) {
   const box = [boxLeft, top - 18, boxRight - boxLeft, boxBottom - (top - 18)];
 
   return bdBake(box, BD_SCALE, function (g) {
-    g.drawImage(image, left, top, imageW, imageH);
+    g.drawImage(
+      image,
+      source.x, source.y, source.width, source.height,
+      left, top, imageW, imageH,
+    );
 
     // Damage remains cached with the sprite. Low-opacity soot and hairline
     // fractures preserve the pre-rendered material response instead of
@@ -6036,7 +6132,7 @@ function bdBuildingSprite(type, def, side, nation, natRoof, variant, damageStage
 
   if (image) {
     const seed = variant * 7919 + side * 104729 + 1;
-    s = bdProductionBuildingSprite(type, def, image, side, damage, seed);
+    s = bdProductionBuildingSprite(type, def, image, nation, side, damage, seed);
     bdBuildingCache.set(key, s);
     return s;
   }
@@ -7493,6 +7589,7 @@ function drawBuildingCollapse(destruction, worldTime) {
 
 export {
   setBuildingRefs, bdResetCaches, getBuildingPresentation, getBuildingPavingLayout,
+  getProductionBuildingVisibleSize,
   bdConstructionArtFrame,
   drawResourceNode, drawFarm, drawFarmForeground, drawFoundation,
   drawCompleteBuilding, drawBuilding, drawBuildingCollapse,

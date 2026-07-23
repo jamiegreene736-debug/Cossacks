@@ -62,7 +62,12 @@ clipping the horse's head.
 contact without changing placement, collision, pathfinding, or saved geometry.
 Ordinary buildings sit near 1.25x, stone fortifications near 1.32x, and the
 Town Center at 1.35x so a 50-world-pixel infantryman reads as an occupant of the
-settlement rather than as tall as its houses. Construction, wall-walk elevation,
+settlement rather than as tall as its houses. Themed settlements tune that scale
+by building role rather than with one faction-wide multiplier: housing and
+utility buildings stay human-readable, towers rise above housing, and civic
+centres remain subordinate to castles. Production assets with loose transparent
+authoring canvases must declare a padded source rectangle so the painted
+silhouette—not empty pixels—sets world scale. Construction, wall-walk elevation,
 fires, collapse art, health bars, and click targeting must follow the same tier.
 
 **Buildings and paved courtyards share one footprint centre.**
