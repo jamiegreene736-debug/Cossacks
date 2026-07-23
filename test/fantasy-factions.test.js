@@ -15,9 +15,12 @@ import { applyAttackOrder } from '../js/formations.js';
 import {
   getBuildingProductionArtSpec, getWizardPlaygroundChildLayout,
 } from '../js/gfx/buildings.js';
+import { FACTION_CHARACTER_ART_SPECS } from '../js/gfx/art-assets.js';
 import { getSpecialProjectileVisualProfile } from '../js/gfx/effects.js';
 import { getMilitaryFrame } from '../js/military-animation.js';
-import { getFactionCharacterFrameSources } from '../js/render.js';
+import {
+  CHARACTER_SCALE_TIERS, getFactionCharacterFrameSources, getFactionCharacterPresentation,
+} from '../js/render.js';
 import { createGameSnapshot, restoreGameSnapshot } from '../js/savegame.js';
 import { createWorld, damage, spawnUnit, step } from '../js/sim.js';
 import { OPENING_PEACE_SECONDS } from '../js/truce.js';
@@ -225,6 +228,32 @@ test('all CPU factions develop comparable opening armies', () => {
     assert.ok(weakest >= 90, `weakest CPU army should be battle-ready, got ${strengths.join(', ')}`);
     assert.ok(strongest / weakest <= 1.6, `CPU army spread should stay fair, got ${strengths.join(', ')}`);
   });
+});
+
+test('every faction character shares the same human-scale presentation tiers', () => {
+  for (const [nation, spec] of Object.entries(FACTION_CHARACTER_ART_SPECS)) {
+    for (const unitType of Object.keys(spec.unitRows)) {
+      const presentation = getFactionCharacterPresentation(unitType);
+      const expectedTier = presentation.worker ? CHARACTER_SCALE_TIERS.worker
+        : presentation.equipment ? CHARACTER_SCALE_TIERS.equipment
+          : presentation.mounted ? CHARACTER_SCALE_TIERS.mounted
+            : CHARACTER_SCALE_TIERS.infantry;
+      assert.equal(
+        presentation.standingHeight,
+        expectedTier.height,
+        `${nation} ${unitType} should use the shared ${presentation.worker ? 'worker' : 'combat'} height`,
+      );
+      assert.equal(presentation.standingWidth, expectedTier.width);
+      assert.ok(
+        presentation.standingHeight <= CHARACTER_SCALE_TIERS.equipment.height,
+        `${nation} ${unitType} should never approach building-scale height`,
+      );
+    }
+  }
+
+  assert.equal(getFactionCharacterPresentation('circus_worker').standingHeight, 44);
+  assert.equal(getFactionCharacterPresentation('pennywise').standingHeight, 50);
+  assert.equal(getFactionCharacterPresentation('killer_klown').standingHeight, 56);
 });
 
 test('Hogwarts trains wizards, witches, and Moaning Myrtle from faction buildings', () => {
