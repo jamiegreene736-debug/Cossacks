@@ -12,6 +12,10 @@ import {
 } from './config.js';
 import { normalizeWorldCountry } from './countries.js';
 import { advanceCharacterGait } from './character-animation.js';
+import {
+  initializeWitchFlight, isBroomWitch, moveBroomWitch, snapshotWitchFlight,
+  stepWitchFlight,
+} from './witch-flight.js';
 import { sfx } from './audio.js';
 import { initializeEconomy, stepEconomy, onUnitKilled, onBuildingDestroyed } from './economy.js';
 import { corpseDecalTiming } from './gfx/decals.js';
@@ -114,7 +118,7 @@ export function getUnitRuntimeStats(type) {
 function makeUnit(side, nationKey, type, x, y, team = null) {
   const stats = getUnitRuntimeStats(type);
   const definition = UNIT_TYPES[type];
-  return {
+  const unit = {
     id: nextId++, side, team,
     // Worker kinds share the mature villager job/navigation surface while the
     // durable unitType preserves their own balance, renderer and save identity.
@@ -142,6 +146,8 @@ function makeUnit(side, nationKey, type, x, y, team = null) {
     job: null,
     workAction: null,
   };
+  initializeWitchFlight(unit);
+  return unit;
 }
 
 function setMovementFacing(unit, directionX, dt) {
@@ -442,15 +448,19 @@ function fireSpecialBolt(world, u, target, distance, accMul = 1) {
   u.fireT = 0.32;
   const nx = (target.x - u.x) / Math.max(1, distance);
   const ny = (target.y - u.y) / Math.max(1, distance);
+  const sourceElevation = (u.wallElevation || 0)
+    + (isBroomWitch(u) ? (u.flightHeight || 0) : 0);
+  const targetElevation = (target.wallElevation || 0)
+    + (isBroomWitch(target) ? (target.flightHeight || 0) : 0);
   const muzzleX = u.x + nx * 10;
-  const muzzleY = u.y + ny * 10 - 13;
+  const muzzleY = u.y - sourceElevation + ny * 10 - 13;
   const hitChance = Math.min(0.98, Math.max(0.18,
     accMul * u.acc * (1.08 - 0.42 * distance / Math.max(1, u.range))));
   const hit = Math.random() < hitChance;
   const scatter = hit ? 0 : 20 + distance * 0.08;
   const angle = Math.random() * Math.PI * 2;
   const tx = target.x + Math.cos(angle) * scatter;
-  const ty = target.y + Math.sin(angle) * scatter;
+  const ty = target.y - targetElevation + Math.sin(angle) * scatter;
   world.projectiles.push({
     kind: u.projectileKind,
     sx: muzzleX, sy: muzzleY, x: muzzleX, y: muzzleY, px: muzzleX, py: muzzleY,
@@ -647,10 +657,16 @@ function updateUnit(world, u, dt) {
   if (u.state === 'flee') {
     const dirX = -sideFrontDirection(world, u.side);
     const oldX = u.x, oldY = u.y;
-    u.x += dirX * u.speed * 1.2 * dt;
-    u.y += u.fleeYDrift * u.speed * 0.5 * dt;
+    if (isBroomWitch(u)) {
+      const driftY = u.fleeYDrift * 0.42;
+      const length = Math.hypot(dirX, driftY) || 1;
+      moveBroomWitch(u, dirX / length, driftY / length, u.speed * 1.2, Infinity, 0, dt);
+    } else {
+      u.x += dirX * u.speed * 1.2 * dt;
+      u.y += u.fleeYDrift * u.speed * 0.5 * dt;
+    }
     clampPos(u);
-    advanceCharacterGait(u, Math.hypot(u.x - oldX, u.y - oldY));
+    if (!isBroomWitch(u)) advanceCharacterGait(u, Math.hypot(u.x - oldX, u.y - oldY));
     u.moving = true;
     u.animT += dt * 1.4;
     setMovementFacing(u, dirX, dt);
@@ -808,10 +824,14 @@ function updateUnit(world, u, dt) {
       else if (u.formation === 'square') sp *= 0.8;
       const nx = mx / md, ny = my / md;
       const oldX = u.x, oldY = u.y;
-      u.x += nx * sp * dt;
-      u.y += ny * sp * dt;
+      if (isBroomWitch(u)) {
+        moveBroomWitch(u, nx, ny, sp, md, stopAt, dt);
+      } else {
+        u.x += nx * sp * dt;
+        u.y += ny * sp * dt;
+      }
       clampPos(u);
-      advanceCharacterGait(u, Math.hypot(u.x - oldX, u.y - oldY));
+      if (!isBroomWitch(u)) advanceCharacterGait(u, Math.hypot(u.x - oldX, u.y - oldY));
       u.moving = true;
       u.animT += dt;
       setMovementFacing(u, nx, dt);
@@ -896,6 +916,7 @@ export function step(world, dt) {
   for (const u of world.units) {
     if (u.alive) {
       u.px = u.x; u.py = u.y;
+      snapshotWitchFlight(u);
       active.push(u);
     }
   }
@@ -921,6 +942,7 @@ export function step(world, dt) {
     const u = active[i];
     if (u.alive) {
       updateUnit(world, u, dt);
+      stepWitchFlight(u, dt);
       if (u.moving) resolveUnitFortificationCollision(u, blockingFortifications);
     }
   }
@@ -933,7 +955,10 @@ export function step(world, dt) {
       const v = active[j];
       if (v === u || !v.alive) return;
       const dx = u.x - v.x, dy = u.y - v.y;
-      const minD = u.radius + v.radius;
+      // Low broom flight still respects formations, walls and other fliers,
+      // but it glides over part of a grounded unit's personal-space circle.
+      const mixedFlightLayer = isBroomWitch(u) !== isBroomWitch(v);
+      const minD = (u.radius + v.radius) * (mixedFlightLayer ? 0.68 : 1);
       const d2 = dx * dx + dy * dy;
       if (d2 < minD * minD) {
         if (d2 > 0.0001) {

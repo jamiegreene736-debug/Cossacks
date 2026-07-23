@@ -12,6 +12,7 @@ import {
 } from './economy.js';
 import { createWorld, getUnitRuntimeStats, reserveUnitIds } from './sim.js';
 import { PLAYER_TEAM, RIVAL_TEAM } from './teams.js';
+import { initializeWitchFlight } from './witch-flight.js';
 
 export const SAVE_KEY = 'empires1700.campaign.v1';
 export const SAVE_VERSION = 1;
@@ -216,6 +217,7 @@ export function restoreGameSnapshot(snapshot) {
   for (const entity of [...world.units, ...world.buildings, ...world.resources]) entities.set(entity.id, entity);
   for (const unit of world.units) {
     applyCurrentUnitBalance(unit);
+    initializeWitchFlight(unit);
     unit.selected = false;
     unit.target = entities.get(unit.targetId) || null;
     unit.orderTarget = entities.get(unit.orderTargetId) || null;

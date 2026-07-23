@@ -21,6 +21,7 @@ import { sfx } from './audio.js';
 import { assignVillagerPath, clearVillagerPath, pointBlocksVillager } from './navigation.js';
 import { isPeaceTime } from './truce.js';
 import { areHostileSides, sideFrontDirection } from './teams.js';
+import { isBroomWitch, isWitchGrounded } from './witch-flight.js';
 
 let nextEntityId = 100000;
 
@@ -1417,6 +1418,13 @@ function updateWorkers(world, dt) {
       worker.orderX = point.x;
       worker.orderY = point.y;
       worker.state = 'move';
+      worker.workAction = null;
+      continue;
+    }
+    if (isBroomWitch(worker) && !isWitchGrounded(worker)) {
+      worker.orderX = NaN;
+      worker.orderY = NaN;
+      worker.state = 'land';
       worker.workAction = null;
       continue;
     }

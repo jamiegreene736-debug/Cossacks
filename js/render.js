@@ -22,6 +22,7 @@ import {
   WOMAN_VILLAGER_ART_SPECS,
   WOMAN_VILLAGER_CANNON_ART_SPEC,
   FACTION_CHARACTER_ART_SPECS,
+  WITCH_BROOM_ART_SPEC,
   getProductionArt,
   getProductionFrameSlice,
 } from './gfx/art-assets.js';
@@ -29,6 +30,9 @@ import { fortificationCorners, isFortificationType } from './fortifications.js';
 import { getWomanVillagerFrame, getWorkerFrame } from './worker-animation.js';
 import { getMilitaryFrame } from './military-animation.js';
 import { getCharacterMotion } from './character-animation.js';
+import {
+  getWitchFlightFrame, getWitchFlightVisual, isBroomWitch,
+} from './witch-flight.js';
 import {
   chooseRenderDpr, circleIntersectsBounds, getVisibleWorldBounds,
 } from './render-performance.js';
@@ -612,11 +616,13 @@ function paintFallbackWomanCannon(g, nat, pose, side) {
 function buildFactionCharacterDefs(nationKey, side, nat) {
   const spec = FACTION_CHARACTER_ART_SPECS[nationKey];
   const image = spec ? getProductionArt(spec.key) : null;
+  const broomImage = getProductionArt(WITCH_BROOM_ART_SPEC.key);
   if (!spec || !image) return {};
   const defs = {};
   const normalizeScale = nationKey === 'hogwarts' || nationKey === 'starwars';
   for (const [unitType, sourceRow] of Object.entries(spec.unitRows)) {
     const worker = Boolean(UNIT_TYPES[unitType]?.worker);
+    const broomWitch = unitType === 'witch_worker' || unitType === 'witch_duelist';
     const isGhost = unitType === 'moaning_myrtle';
     const isHeavy = unitType === 'killer_klown' || unitType === 'starwars_pulse_cannon';
     const isMounted = unitType === 'starwars_skiff_rider';
@@ -626,20 +632,38 @@ function buildFactionCharacterDefs(nationKey, side, nat) {
           : isMounted ? MILITARY_ART_SPECS.cav
             : MILITARY_ART_SPECS.musk
       : null;
-    const w = frame?.w ?? (isHeavy ? 78 : isMounted ? 72 : isGhost ? 68 : 58);
-    const h = frame?.h ?? (isHeavy ? 66 : isMounted ? 62 : isGhost ? 64 : 62);
-    const ax = frame?.ax ?? w / 2;
-    const ay = frame?.ay ?? h - 5;
+    const w = broomWitch ? 72 : frame?.w ?? (isHeavy ? 78 : isMounted ? 72 : isGhost ? 68 : 58);
+    const h = broomWitch ? 54 : frame?.h ?? (isHeavy ? 66 : isMounted ? 62 : isGhost ? 64 : 62);
+    const ax = broomWitch ? 36 : frame?.ax ?? w / 2;
+    const ay = broomWitch ? 49 : frame?.ay ?? h - 5;
     const sourceFrames = getFactionCharacterFrameSources(unitType, worker);
+    const flightFrameStart = broomWitch && broomImage ? sourceFrames.length : null;
+    const frames = sourceFrames.map(sourceFrame => ['idle', 0, null, sourceFrame]);
+    if (flightFrameStart !== null) {
+      for (let sourceFrame = 0; sourceFrame < WITCH_BROOM_ART_SPEC.columns; sourceFrame++) {
+        frames.push(['idle', 0, null, sourceFrame, 'witch-flight']);
+      }
+    }
     defs[unitType] = {
       w, h, ax, ay,
+      flightFrameStart,
       military: !worker,
       baseRadiusX: frame?.baseRadiusX ?? (isHeavy ? 23 : 15),
       baseRadiusY: frame?.baseRadiusY ?? (isHeavy ? 4.2 : 3.1),
       production: {
         image, sourceW: spec.sourceW, sourceH: spec.sourceH, sourceRow,
+        destW: broomWitch ? (worker ? 38 : 44) : undefined,
+        destH: broomWitch ? (worker ? 44 : 50) : undefined,
       },
-      frames: sourceFrames.map(sourceFrame => ['idle', 0, null, sourceFrame]),
+      flightProduction: flightFrameStart !== null ? {
+        image: broomImage,
+        sourceW: WITCH_BROOM_ART_SPEC.sourceW,
+        sourceH: WITCH_BROOM_ART_SPEC.sourceH,
+        sourceRow: 0,
+        destW: 72,
+        destH: 54,
+      } : null,
+      frames,
       painter: worker
         ? (g, pose, leg, action) => drawWorker(g, nat, pose, leg, action)
         : (g, pose, leg) => drawSoldier(g, nat, pose, leg, 'musk'),
@@ -820,6 +844,7 @@ function buildNationSprites(nationKey, side = 0) {
       let resolvedSourceRowOffset = sourceRowOffset;
       let production = sourceKind === 'procedural' ? null : sourceKind === 'combat'
         ? def.combatProduction
+        : sourceKind === 'witch-flight' ? def.flightProduction
         : sourceKind === 'walk' ? def.walkProduction
           : sourceKind === 'carry' ? def.carryProduction : def.production;
       // Carry art is an enhancement over the base detailed villager. If its
@@ -838,14 +863,18 @@ function buildNationSprites(nationKey, side = 0) {
           production.sourceW,
           resolvedSourceFrame,
           production.frameXBounds,
-          def.w,
+          production.destW ?? def.w,
         );
+        const destW = production.destW ?? def.w;
+        const destH = production.destH ?? def.h;
+        const destX = (def.w - destW) / 2;
+        const destY = def.h - destH;
         g.drawImage(
           production.image,
           slice.sourceX,
           (production.sourceRow + resolvedSourceRowOffset) * production.sourceH,
           slice.sourceW, production.sourceH,
-          slice.destX, 0, slice.destW, def.h,
+          destX + slice.destX, destY, slice.destW, destH,
         );
         if (!def.military && action && sourceKind !== 'combat') {
           paintProductionWorkerTool(g, nationKey, action, leg);
@@ -867,7 +896,14 @@ function buildNationSprites(nationKey, side = 0) {
       right.push(c);
       left.push(mirror(c));
     }
-    out[type] = { w: def.w, h: def.h, ax: def.ax, ay: def.ay, frames: [right, left] };
+    out[type] = {
+      w: def.w,
+      h: def.h,
+      ax: def.ax,
+      ay: def.ay,
+      flightFrameStart: def.flightFrameStart,
+      frames: [right, left],
+    };
   }
   return out;
 }
@@ -918,6 +954,28 @@ function drawAnimatedCharacterFrame(context, image, sprite, motion) {
   context.translate(0, -neckY);
   context.drawImage(image, left, top, sprite.w, sprite.h);
   context.restore();
+  context.restore();
+}
+
+function drawWitchFlightShadow(context, unit, alpha, viewRotation) {
+  if (!isBroomWitch(unit)) return;
+  const visual = getWitchFlightVisual(unit, alpha);
+  if (visual.height <= 0.12) return;
+  const x = unit.px + (unit.x - unit.px) * alpha;
+  const y = unit.py + (unit.y - unit.py) * alpha;
+  const heightRatio = Math.max(0, Math.min(1, visual.height / 22));
+  context.save();
+  context.translate(x + 3.5 + heightRatio * 2.5, y + 2.2 + heightRatio * 1.8);
+  context.rotate(-viewRotation);
+  context.scale(1 - heightRatio * 0.16, 1 - heightRatio * 0.08);
+  const shadow = context.createRadialGradient(0, 0, 1, 0, 0, 24);
+  shadow.addColorStop(0, `rgba(24,28,40,${0.34 - heightRatio * 0.11})`);
+  shadow.addColorStop(0.52, `rgba(24,28,40,${0.18 - heightRatio * 0.07})`);
+  shadow.addColorStop(1, 'rgba(24,28,40,0)');
+  context.fillStyle = shadow;
+  context.beginPath();
+  context.ellipse(0, 0, 25, 5.2, 0.08, 0, Math.PI * 2);
+  context.fill();
   context.restore();
 }
 
@@ -1285,14 +1343,19 @@ export function draw(
 
   // Selection rings go under the sprites so they read as marks on the ground.
   drawSelection(ctx, sortBuf, alpha);
+  for (const u of sortBuf) drawWitchFlightShadow(ctx, u, alpha, rotation);
 
   for (const u of sortBuf) {
     const unitType = u.unitType || u.type;
     const sp = sprites[u.side][unitType];
     const ix = u.px + (u.x - u.px) * alpha;
-    const iy = u.py + (u.y - u.py) * alpha - (u.wallElevation || 0);
+    const witchVisual = isBroomWitch(u) ? getWitchFlightVisual(u, alpha) : null;
+    const iy = u.py + (u.y - u.py) * alpha
+      - (u.wallElevation || 0) - (witchVisual?.height || 0);
     let frame;
-    if (unitType === 'woman_villager') {
+    if (witchVisual && sp.flightFrameStart !== null) {
+      frame = sp.flightFrameStart + getWitchFlightFrame(u);
+    } else if (unitType === 'woman_villager') {
       frame = getWomanVillagerFrame(u, hoverKind === 'attack' && u.selected);
     } else if (u.type === 'villager') {
       frame = getWorkerFrame(u, hoverKind === 'attack' && u.selected);
@@ -1306,7 +1369,12 @@ export function draw(
     ctx.save();
     ctx.translate(ix, iy);
     ctx.rotate(-rotation);
-    drawAnimatedCharacterFrame(ctx, sp.frames[dir][frame], sp, getCharacterMotion(u, visualFacing));
+    drawAnimatedCharacterFrame(
+      ctx,
+      sp.frames[dir][frame],
+      sp,
+      witchVisual?.motion || getCharacterMotion(u, visualFacing),
+    );
     drawThrowingTorch(u, 0, 0, visualFacing);
     drawStarWarsEnergyBlade(u, visualFacing);
     ctx.restore();

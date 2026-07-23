@@ -2,6 +2,7 @@
 import { WORLD, BUILDING_TYPES } from '../config.js';
 import { shouldRenderUnitHealthBar } from '../render-performance.js';
 import { isPlayerTeam, sideFrontDirection } from '../teams.js';
+import { getWitchFlightVisual, isBroomWitch } from '../witch-flight.js';
 let camera = { x: 0, y: 0, zoom: 1 };
 let cw = 0, ch = 0, dpr = 1;
 let mmCanvas = null, mmCtx = null, mmTerrain = null;
@@ -1476,8 +1477,9 @@ function drawHealthBars(ctx, units, alpha, spritesRef) {
     if (!routing && !showBar) continue;
 
     const ix = u.px + (u.x - u.px) * alpha;
-    const iy = u.py + (u.y - u.py) * alpha - (u.wallElevation || 0);
-    const sp = spritesRef[u.side][u.type];
+    const flightHeight = isBroomWitch(u) ? getWitchFlightVisual(u, alpha).height : 0;
+    const iy = u.py + (u.y - u.py) * alpha - (u.wallElevation || 0) - flightHeight;
+    const sp = spritesRef[u.side][u.unitType || u.type];
     let top = -sp.ay - 2;
     ctx.save();
     ctx.translate(ix, iy);
