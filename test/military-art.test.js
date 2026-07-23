@@ -186,7 +186,7 @@ test('each nation has detailed woman worker poses and a complete cannon sequence
 });
 
 test('fantasy factions use dedicated complete character sheets instead of historical rows', async () => {
-  const expectedRows = { hogwarts: 3, starwars: 6, nightmare_circus: 5 };
+  const expectedRows = { hogwarts: 3, starwars: 6, nightmare_circus: 6 };
   for (const [nation, spec] of Object.entries(FACTION_CHARACTER_ART_SPECS)) {
     assert.equal(spec.columns, 4);
     assert.equal(spec.rows, expectedRows[nation]);
@@ -201,4 +201,19 @@ test('fantasy factions use dedicated complete character sheets instead of histor
       height: spec.sourceH * spec.rows,
     });
   }
+});
+
+test('each Nightmare Circus character owns a high-resolution animation row', () => {
+  const spec = FACTION_CHARACTER_ART_SPECS.nightmare_circus;
+  assert.equal(spec.sourceW, 384);
+  assert.equal(spec.sourceH, 448);
+  assert.deepEqual(spec.unitRows, {
+    circus_worker: 0,
+    pennywise: 1,
+    art_clown: 2,
+    twisty_clown: 3,
+    captain_spaulding: 4,
+    killer_klown: 5,
+  });
+  assert.equal(new Set(Object.values(spec.unitRows)).size, spec.rows);
 });

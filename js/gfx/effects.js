@@ -92,8 +92,8 @@ const FX_SIM_DT = 1 / 30;           // sim.js fixed step; used to back-extrapola
 const SPECIAL_PROJECTILE_VISUALS = Object.freeze({
   arcane: Object.freeze({ shape: 'bolt', core: '#eefcff', shell: '#5ab6ff', trail: 26 }),
   spectral: Object.freeze({ shape: 'bolt', core: '#e3ffff', shell: '#62e3e8', trail: 26 }),
-  nightmare: Object.freeze({ shape: 'bolt', core: '#ffb2a7', shell: '#a31224', trail: 26 }),
-  cotton_candy: Object.freeze({ shape: 'bolt', core: '#fff0fb', shell: '#ff69c9', trail: 26 }),
+  nightmare: Object.freeze({ shape: 'nightmare', core: '#ffd8c8', shell: '#7b1824', trail: 34 }),
+  cotton_candy: Object.freeze({ shape: 'spun_sugar', core: '#fff8f1', shell: '#d88dae', trail: 34 }),
   plasma: Object.freeze({ shape: 'orb', core: '#f7ffff', shell: '#37caff', trail: 30 }),
   ion: Object.freeze({ shape: 'discharge', core: '#ffffff', shell: '#6e7dff', trail: 38 }),
 });
@@ -1787,16 +1787,18 @@ function drawEffects(ctx, world, alpha) {
         const nx = vx / distance, ny = vy / distance;
         const visual = SPECIAL_PROJECTILE_VISUALS[p.kind];
         ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalCompositeOperation = visual.shape === 'nightmare' ? 'source-over' : 'lighter';
         ctx.strokeStyle = visual.shell;
-        ctx.lineWidth = p.kind === 'cotton_candy' ? 6 : visual.shape === 'discharge' ? 7 : 3.6;
+        ctx.lineWidth = visual.shape === 'spun_sugar' ? 5.2
+          : visual.shape === 'nightmare' ? 4.8 : visual.shape === 'discharge' ? 7 : 3.6;
         ctx.globalAlpha = 0.72;
         ctx.beginPath();
         ctx.moveTo(ix - nx * visual.trail, iy - ny * visual.trail);
         ctx.lineTo(ix, iy);
         ctx.stroke();
         ctx.strokeStyle = visual.core;
-        ctx.lineWidth = p.kind === 'cotton_candy' ? 2.4 : visual.shape === 'discharge' ? 2.1 : 1.45;
+        ctx.lineWidth = visual.shape === 'spun_sugar' ? 1.8
+          : visual.shape === 'nightmare' ? 1.35 : visual.shape === 'discharge' ? 2.1 : 1.45;
         ctx.globalAlpha = 0.94;
         ctx.beginPath();
         ctx.moveTo(ix - nx * (visual.trail * 0.72), iy - ny * (visual.trail * 0.72));
@@ -1804,7 +1806,8 @@ function drawEffects(ctx, world, alpha) {
         ctx.stroke();
         ctx.fillStyle = visual.shell;
         ctx.globalAlpha = 0.58;
-        const radius = p.kind === 'cotton_candy' ? 8 : visual.shape === 'discharge' ? 7.5
+        const radius = visual.shape === 'spun_sugar' ? 8 : visual.shape === 'nightmare' ? 6.5
+          : visual.shape === 'discharge' ? 7.5
           : p.kind === 'spectral' ? 5.5 : 4.5;
         ctx.beginPath(); ctx.arc(ix, iy, radius, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = visual.core;
@@ -1854,6 +1857,61 @@ function drawEffects(ctx, world, alpha) {
             ctx.ellipse(ix - nx * 3, iy - ny * 3, ring * 0.45, ring,
               Math.atan2(ny, nx), 0, Math.PI * 2);
             ctx.stroke();
+          }
+        } else if (visual.shape === 'nightmare') {
+          const px = -ny, py = nx;
+          ctx.fillStyle = '#24171c';
+          for (let lobe = 1; lobe <= 5; lobe++) {
+            const back = lobe * 6.2;
+            const sway = Math.sin((p.x + p.y) * 0.025 + lobe * 2.1) * (2 + lobe * 0.45);
+            ctx.globalAlpha = 0.26 - lobe * 0.025;
+            ctx.beginPath();
+            ctx.ellipse(ix - nx * back + px * sway, iy - ny * back + py * sway,
+              5.8 + lobe * 0.7, 3.2 + lobe * 0.5, Math.atan2(ny, nx), 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.strokeStyle = '#c33a3f';
+          ctx.lineWidth = 0.9;
+          for (const side of [-1, 1]) {
+            ctx.globalAlpha = 0.55;
+            ctx.beginPath();
+            ctx.moveTo(ix - nx * 29, iy - ny * 29);
+            ctx.lineTo(ix - nx * 19 + px * 3 * side, iy - ny * 19 + py * 3 * side);
+            ctx.lineTo(ix - nx * 9 - px * 2 * side, iy - ny * 9 - py * 2 * side);
+            ctx.lineTo(ix, iy);
+            ctx.stroke();
+          }
+          ctx.globalAlpha = 0.48;
+          ctx.strokeStyle = '#64101d';
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          ctx.ellipse(ix - nx * 2, iy - ny * 2, 8.2, 5.1,
+            Math.atan2(ny, nx), 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (visual.shape === 'spun_sugar') {
+          const px = -ny, py = nx;
+          ctx.strokeStyle = '#f7c8d9';
+          ctx.lineWidth = 0.85;
+          for (let strand = 0; strand < 4; strand++) {
+            const back = 5 + strand * 7;
+            const side = strand % 2 === 0 ? 1 : -1;
+            ctx.globalAlpha = 0.72 - strand * 0.1;
+            ctx.beginPath();
+            ctx.ellipse(ix - nx * back + px * side * 1.8, iy - ny * back + py * side * 1.8,
+              5.5 + strand, 2.4 + strand * 0.55, Math.atan2(ny, nx) + strand * 0.18,
+              0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.fillStyle = '#efd2dc';
+          for (let wisp = 1; wisp <= 4; wisp++) {
+            const back = wisp * 6.5;
+            const sway = Math.cos((p.x - p.y) * 0.02 + wisp * 1.7) * 3;
+            ctx.globalAlpha = 0.18;
+            ctx.beginPath();
+            ctx.arc(ix - nx * back + px * sway, iy - ny * back + py * sway,
+              3.5 + wisp * 0.65, 0, Math.PI * 2);
+            ctx.fill();
           }
         }
         if (p.kind === 'spectral') {

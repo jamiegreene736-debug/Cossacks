@@ -161,6 +161,16 @@ test('Nightmare Circus AI production rotates through its five hostile clown iden
   }
 });
 
+test('Nightmare Circus projectiles use dimensional smoke and spun-sugar treatments', () => {
+  const nightmare = getSpecialProjectileVisualProfile('nightmare');
+  const cottonCandy = getSpecialProjectileVisualProfile('cotton_candy');
+  assert.equal(nightmare.shape, 'nightmare');
+  assert.equal(cottonCandy.shape, 'spun_sugar');
+  assert.ok(nightmare.trail >= 34);
+  assert.ok(cottonCandy.trail >= 34);
+  assert.notEqual(nightmare.shell, cottonCandy.shell);
+});
+
 test('magic attacks travel visibly while protected parks and children cannot be damaged', () => {
   const world = factionWorld();
   world.time = OPENING_PEACE_SECONDS;

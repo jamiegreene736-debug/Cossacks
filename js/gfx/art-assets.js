@@ -54,11 +54,11 @@ const FACTION_CHARACTER_ART_SPECS = Object.freeze({
     }),
   }),
   nightmare_circus: Object.freeze({
-    key: 'nightmareClowns', file: 'nightmare-clowns.webp', columns: 4, rows: 5,
-    sourceW: 313.5, sourceH: 250.8,
+    key: 'nightmareClowns', file: 'nightmare-clowns.webp', columns: 4, rows: 6,
+    sourceW: 384, sourceH: 448,
     unitRows: Object.freeze({
-      circus_worker: 1, pennywise: 0, art_clown: 1, twisty_clown: 2,
-      captain_spaulding: 3, killer_klown: 4,
+      circus_worker: 0, pennywise: 1, art_clown: 2, twisty_clown: 3,
+      captain_spaulding: 4, killer_klown: 5,
     }),
   }),
 });

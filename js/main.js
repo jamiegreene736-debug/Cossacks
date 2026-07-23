@@ -280,7 +280,8 @@ function setupLocalFantasyFactionPreview(activeWorld) {
     'starwars_blade_guard', 'starwars_skiff_rider', 'starwars_pulse_cannon',
   ];
   const circusTypes = [
-    'pennywise', 'art_clown', 'twisty_clown', 'captain_spaulding', 'killer_klown',
+    'circus_worker', 'pennywise', 'art_clown', 'twisty_clown',
+    'captain_spaulding', 'killer_klown',
   ];
   const hogwartsUnits = hogwartsTypes.map((type, index) => (
     spawnUnit(activeWorld, 2, type, 2250, 1260 + index * 145)
@@ -289,7 +290,7 @@ function setupLocalFantasyFactionPreview(activeWorld) {
     spawnUnit(activeWorld, 4, type, 2385, 1045 + index * 125)
   ));
   const circusUnits = circusTypes.map((type, index) => (
-    spawnUnit(activeWorld, 3, type, 2710, 1130 + index * 140)
+    spawnUnit(activeWorld, 3, type, 2710, 1045 + index * 125)
   ));
 
   for (const unit of [...hogwartsUnits, ...starwarsUnits, ...circusUnits]) {
