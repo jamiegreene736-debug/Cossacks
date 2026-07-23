@@ -9,13 +9,16 @@ import {
 import { countryParkVariant } from './countries.js';
 import { applyMoveOrder } from './formations.js';
 import {
-  fortificationAxis, fortificationCorners, fortificationFrame,
+  fortificationAxis, fortificationFrame,
   fortificationsOverlap, fortificationsShareEndpoint,
   isFortificationType, normalizeFortificationOrientation,
   nearestFriendlyFortificationEndpoint,
-  pointDistanceToFortification, pointInsideFortification,
+  pointInsideFortification,
   resolveWallStairAttachment, snapFortificationPlacement,
 } from './fortifications.js';
+import {
+  distanceToStructure, structureCorners, structuresOverlap,
+} from './obstacles.js';
 import { resolveWorkerAction } from './worker-animation.js';
 import { sfx } from './audio.js';
 import { assignVillagerPath, clearVillagerPath, pointBlocksVillager } from './navigation.js';
@@ -458,11 +461,8 @@ export function validatePlacement(world, side, type, x, y, options = {}) {
   if (wallAttachment && !stairAttachment) {
     return reject('Place the staircase beside a completed friendly Stone Wall.');
   }
-  const outsideMap = fortification || wallAttachment
-    ? fortificationCorners(type, candidate.x, candidate.y, candidate.orientation, 35)
-      .some(point => point.x < 0 || point.y < 0 || point.x > WORLD.w || point.y > WORLD.h)
-    : candidate.x < def.radius + 35 || candidate.y < def.radius + 35
-      || candidate.x > WORLD.w - def.radius - 35 || candidate.y > WORLD.h - def.radius - 35;
+  const outsideMap = structureCorners(candidate, 35)
+    .some(point => point.x < 0 || point.y < 0 || point.x > WORLD.w || point.y > WORLD.h);
   if (outsideMap) {
     return reject('Build inside the map boundary.');
   }
@@ -483,21 +483,13 @@ export function validatePlacement(world, side, type, x, y, options = {}) {
       }
       continue;
     }
-    const blocked = fortification || wallAttachment
-      ? pointDistanceToFortification(candidate, b.x, b.y) < b.radius + 18
-      : existingFortification
-        ? pointDistanceToFortification(b, candidate.x, candidate.y) < def.radius + 18
-        : Math.hypot(candidate.x - b.x, candidate.y - b.y) < def.radius + b.radius + 18;
-    if (blocked) {
+    if (structuresOverlap(candidate, b, 14)) {
       return reject('Too close to another building.');
     }
   }
   for (const r of world.resources) {
     if (!r.alive || r.amount <= 0) continue;
-    const distance = fortification || wallAttachment
-      ? pointDistanceToFortification(candidate, r.x, r.y)
-      : Math.hypot(candidate.x - r.x, candidate.y - r.y);
-    if (distance < ((fortification || wallAttachment) ? r.radius + 10 : def.radius + r.radius + 10)) {
+    if (distanceToStructure(candidate, r.x, r.y) < r.radius + 10) {
       return reject('Resource deposits must remain accessible.');
     }
   }

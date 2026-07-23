@@ -44,7 +44,7 @@ test('the flight spring approaches altitude without overshooting', () => {
 
 test('witch travel accelerates into flight without advancing a foot gait', () => {
   const world = factionWorld();
-  const witch = spawnUnit(world, 2, 'witch_duelist', 1900, 1200);
+  const witch = spawnUnit(world, 2, 'witch_duelist', 2000, 1200);
   witch.gaitDistance = 17;
   witch.orderX = witch.x + 700;
   witch.orderY = witch.y;

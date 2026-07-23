@@ -1,11 +1,11 @@
-// Command-time villager navigation. A compact world grid keeps route searches
+// Command-time ground-unit navigation. A compact world grid keeps route searches
 // deterministic and bounded, while exact line-of-sight checks smooth the grid
 // result back into natural-looking waypoints around walls and settlement props.
 
-import { BUILDING_TYPES, WORLD } from './config.js';
+import { WORLD } from './config.js';
 import {
-  isFortificationType, lineIntersectsFortification, pointInsideFortification,
-} from './fortifications.js';
+  pointInsideStructure, segmentIntersectsStructure, structureBlocksGround,
+} from './obstacles.js';
 
 export const NAV_CELL = 32;
 const COLS = Math.ceil(WORLD.w / NAV_CELL);
@@ -26,21 +26,11 @@ function distanceToSegment(px, py, x0, y0, x1, y1) {
   return Math.hypot(px - (x0 + dx * t), py - (y0 + dy * t));
 }
 
-function blocksNavigation(building) {
-  if (!building.alive) return false;
-  const def = BUILDING_TYPES[building.type];
-  return !def?.gate || (building.complete && building.gateOpen === false);
-}
-
-export function pointBlocksVillager(world, x, y, clearance = 7) {
+export function pointBlocksGround(world, x, y, clearance = 7) {
   if (x < clearance || y < clearance || x > WORLD.w - clearance || y > WORLD.h - clearance) return true;
   for (const building of world.buildings) {
-    if (!blocksNavigation(building)) continue;
-    if (isFortificationType(building.type)) {
-      if (pointInsideFortification(building, x, y, clearance)) return true;
-    } else if (Math.hypot(x - building.x, y - building.y) <= building.radius + clearance) {
-      return true;
-    }
+    if (structureBlocksGround(building)
+      && pointInsideStructure(building, x, y, clearance)) return true;
   }
   for (const resource of world.resources) {
     if (resource.alive && resource.amount > 0
@@ -49,13 +39,10 @@ export function pointBlocksVillager(world, x, y, clearance = 7) {
   return false;
 }
 
-export function segmentBlocksVillager(world, x0, y0, x1, y1, clearance = 7) {
+export function segmentBlocksGround(world, x0, y0, x1, y1, clearance = 7) {
   for (const building of world.buildings) {
-    if (!blocksNavigation(building)) continue;
-    if (isFortificationType(building.type)) {
-      if (lineIntersectsFortification(x0, y0, x1, y1, building, clearance)) return true;
-    } else if (distanceToSegment(building.x, building.y, x0, y0, x1, y1)
-      <= building.radius + clearance) return true;
+    if (structureBlocksGround(building)
+      && segmentIntersectsStructure(building, x0, y0, x1, y1, clearance)) return true;
   }
   for (const resource of world.resources) {
     if (resource.alive && resource.amount > 0
@@ -125,6 +112,7 @@ function nearestNavigableNode(world, x, y, clearance) {
   const origin = containingNode(x, y);
   const ox = nodeX(origin);
   const oy = nodeY(origin);
+  const originBlocked = pointBlocksGround(world, x, y, clearance);
   let best = -1;
   let bestDistance = Infinity;
   for (let radius = 0; radius <= 6; radius++) {
@@ -135,8 +123,9 @@ function nearestNavigableNode(world, x, y, clearance) {
         const index = nodeIndex(col, row);
         const point = worldPoint(index);
         const distance = Math.hypot(point.x - x, point.y - y);
-        if (distance >= bestDistance || pointBlocksVillager(world, point.x, point.y, clearance)
-          || segmentBlocksVillager(world, x, y, point.x, point.y, clearance)) continue;
+        if (distance >= bestDistance || pointBlocksGround(world, point.x, point.y, clearance)
+          || (!originBlocked
+            && segmentBlocksGround(world, x, y, point.x, point.y, clearance))) continue;
         best = index;
         bestDistance = distance;
       }
@@ -170,12 +159,12 @@ function smoothPath(world, start, gridPath, goal, clearance) {
   let anchor = start;
   let index = 0;
   while (index < candidates.length) {
-    if (segmentBlocksVillager(
+    if (segmentBlocksGround(
       world, anchor.x, anchor.y, candidates[index].x, candidates[index].y, clearance,
     )) return [];
     let furthest = index;
     while (furthest + 1 < candidates.length
-      && !segmentBlocksVillager(
+      && !segmentBlocksGround(
         world, anchor.x, anchor.y, candidates[furthest + 1].x, candidates[furthest + 1].y, clearance,
       )) furthest++;
     const waypoint = candidates[furthest];
@@ -186,14 +175,16 @@ function smoothPath(world, start, gridPath, goal, clearance) {
   return result;
 }
 
-export function findVillagerPath(world, startX, startY, goalX, goalY, clearance = 7) {
+export function findUnitPath(world, startX, startY, goalX, goalY, clearance = 7) {
   const start = { x: startX, y: startY };
-  const goal = { x: goalX, y: goalY };
-  if (!segmentBlocksVillager(world, startX, startY, goalX, goalY, clearance)) return [goal];
+  let goal = { x: goalX, y: goalY };
+  if (!pointBlocksGround(world, goalX, goalY, clearance)
+    && !segmentBlocksGround(world, startX, startY, goalX, goalY, clearance)) return [goal];
 
   const startNode = nearestNavigableNode(world, startX, startY, clearance);
   const goalNode = nearestNavigableNode(world, goalX, goalY, clearance);
   if (startNode < 0 || goalNode < 0) return [];
+  if (pointBlocksGround(world, goalX, goalY, clearance)) goal = worldPoint(goalNode);
   const open = new MinHeap();
   const cameFrom = new Int32Array(NODE_COUNT);
   const scores = new Float64Array(NODE_COUNT);
@@ -208,7 +199,7 @@ export function findVillagerPath(world, startX, startY, goalX, goalY, clearance 
   const nodeBlocked = index => {
     if (blocked[index] < 0) {
       const point = worldPoint(index);
-      blocked[index] = pointBlocksVillager(world, point.x, point.y, clearance) ? 1 : 0;
+      blocked[index] = pointBlocksGround(world, point.x, point.y, clearance) ? 1 : 0;
     }
     return blocked[index] === 1;
   };
@@ -242,21 +233,35 @@ export function findVillagerPath(world, startX, startY, goalX, goalY, clearance 
   return [];
 }
 
-export function assignVillagerPath(world, unit, goalX, goalY) {
-  if (!unit?.alive || unit.type !== 'villager') return false;
-  const path = findVillagerPath(world, unit.x, unit.y, goalX, goalY, unit.radius + 2);
+export function assignUnitPath(world, unit, goalX, goalY) {
+  if (!unit?.alive || unit.wallMount) return false;
+  const path = findUnitPath(world, unit.x, unit.y, goalX, goalY, unit.radius + 2);
   unit.navigationPath = path;
   unit.navigationIndex = 0;
   unit.navigationGoalX = goalX;
   unit.navigationGoalY = goalY;
   unit.navigationVersion = world.navigationVersion || 0;
+  unit.navigationFailedX = path.length ? NaN : goalX;
+  unit.navigationFailedY = path.length ? NaN : goalY;
+  unit.navigationFailedVersion = path.length ? -1 : unit.navigationVersion;
   return path.length > 0;
 }
 
-export function clearVillagerPath(unit) {
+export function clearUnitPath(unit) {
   unit.navigationPath = null;
   unit.navigationIndex = 0;
   unit.navigationGoalX = NaN;
   unit.navigationGoalY = NaN;
   unit.navigationVersion = 0;
+  unit.navigationFailedX = NaN;
+  unit.navigationFailedY = NaN;
+  unit.navigationFailedVersion = -1;
 }
+
+// Compatibility exports keep the economy API stable while every grounded unit
+// now shares the same route planner.
+export const pointBlocksVillager = pointBlocksGround;
+export const segmentBlocksVillager = segmentBlocksGround;
+export const findVillagerPath = findUnitPath;
+export const assignVillagerPath = assignUnitPath;
+export const clearVillagerPath = clearUnitPath;

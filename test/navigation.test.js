@@ -1,9 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createBuilding } from '../js/economy.js';
+import { BUILDING_TYPES } from '../js/config.js';
+import { createBuilding, validatePlacement } from '../js/economy.js';
 import { pointInsideFortification, toggleGate } from '../js/fortifications.js';
-import { assignVillagerPath, findVillagerPath } from '../js/navigation.js';
+import {
+  assignVillagerPath, findUnitPath, findVillagerPath,
+} from '../js/navigation.js';
+import { pointInsideStructure, structuresOverlap } from '../js/obstacles.js';
 import { createWorld, spawnUnit, step } from '../js/sim.js';
 
 function navigationWorld() {
@@ -74,4 +78,87 @@ test('settlement buildings and resource deposits are navigation obstacles', () =
   const path = findVillagerPath(world, 1250, 1600, 1850, 1600, 7);
   assert.ok(path.length > 1);
   assert.ok(path.some(waypoint => Math.abs(waypoint.y - 1600) > 70));
+});
+
+test('scaled and rotated architectural footprints reject visible building overlap', () => {
+  const world = navigationWorld();
+  world.buildings = [];
+  world.resources = [];
+  const barracks = createBuilding(0, 'barracks', 1500, 1600, true, {
+    rotation: Math.PI / 4,
+  });
+  world.buildings.push(barracks);
+
+  const candidate = {
+    type: 'marketplace', x: 1645, y: 1600, rotation: 0,
+  };
+  assert.ok(
+    Math.hypot(candidate.x - barracks.x, candidate.y - barracks.y)
+      > barracks.radius + BUILDING_TYPES.marketplace.radius + 18,
+    'this edge case sits beyond the previous center-radius placement check',
+  );
+  assert.equal(structuresOverlap(candidate, barracks, 14), true);
+
+  const blocked = validatePlacement(world, 0, candidate.type, candidate.x, candidate.y);
+  assert.equal(blocked.ok, false);
+  assert.match(blocked.message, /another building/i);
+
+  const clear = validatePlacement(world, 0, candidate.type, 1690, 1600);
+  assert.equal(clear.ok, true);
+});
+
+test('ordinary buildings and stone walls share one placement obstacle model', () => {
+  const world = navigationWorld();
+  world.buildings = [
+    createBuilding(0, 'wall', 1500, 1600, true, { orientation: 'horizontal' }),
+  ];
+  world.resources = [];
+
+  const blockedBuilding = validatePlacement(world, 0, 'house', 1500, 1600);
+  assert.equal(blockedBuilding.ok, false);
+  assert.match(blockedBuilding.message, /another building/i);
+
+  const blockedWall = validatePlacement(
+    world, 0, 'wall', 1500, 1600, { orientation: 'horizontal', snap: false },
+  );
+  assert.equal(blockedWall.ok, false);
+  assert.match(blockedWall.message, /overlaps/i);
+});
+
+test('soldiers receive obstacle routes and never cross a completed building', () => {
+  const world = navigationWorld();
+  const barracks = createBuilding(0, 'barracks', 1500, 1600, true);
+  world.buildings.push(barracks);
+  const musketeer = spawnUnit(world, 0, 'musk', 1280, 1600);
+  musketeer.orderX = 1720;
+  musketeer.orderY = 1600;
+  musketeer.state = 'move';
+
+  assert.ok(findUnitPath(
+    world, musketeer.x, musketeer.y, musketeer.orderX, musketeer.orderY, musketeer.radius + 2,
+  ).length > 1);
+  for (let tick = 0; tick < 500 && musketeer.state === 'move'; tick++) {
+    step(world, 1 / 30);
+    assert.equal(
+      pointInsideStructure(barracks, musketeer.x, musketeer.y, musketeer.radius),
+      false,
+    );
+  }
+
+  assert.equal(musketeer.state, 'idle');
+  assert.ok(Math.hypot(musketeer.x - 1720, musketeer.y - 1600) < 7);
+});
+
+test('legacy or separated units embedded in a building recover to legal ground', () => {
+  const world = navigationWorld();
+  const mansion = createBuilding(0, 'english_mansion', 1500, 1600, true, {
+    rotation: Math.PI / 5,
+  });
+  world.buildings.push(mansion);
+  const villager = spawnUnit(world, 0, 'villager', mansion.x, mansion.y);
+  assert.equal(pointInsideStructure(mansion, villager.x, villager.y, villager.radius), true);
+
+  step(world, 1 / 30);
+
+  assert.equal(pointInsideStructure(mansion, villager.x, villager.y, villager.radius), false);
 });

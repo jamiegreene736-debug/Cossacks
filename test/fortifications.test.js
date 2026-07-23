@@ -7,7 +7,7 @@ import {
 } from '../js/economy.js';
 import {
   assignMusketeersToWall, dismountWallUnit, fortificationAxis,
-  fortificationEndpoints, lineIntersectsFortification,
+  fortificationEndpoints, lineIntersectsFortification, pointInsideFortification,
   resolveUnitFortificationCollision, toggleGate, updateWallAssignment,
 } from '../js/fortifications.js';
 import { OPENING_PEACE_SECONDS } from '../js/truce.js';
@@ -193,8 +193,19 @@ test('wall masonry blocks units while a player-controlled gate opens and closes'
   moving.orderX = 660;
   moving.orderY = 1840;
   moving.state = 'move';
-  for (let tick = 0; tick < 90; tick++) step(world, 1 / 30);
-  assert.ok(moving.y < wall.y, 'the simulation keeps the villager on the near side of the wall');
+  let clearedWallEnd = false;
+  for (let tick = 0; tick < 180 && moving.state === 'move'; tick++) {
+    step(world, 1 / 30);
+    assert.equal(
+      pointInsideFortification(wall, moving.x, moving.y, moving.radius),
+      false,
+      'the route never crosses wall masonry',
+    );
+    if (Math.abs(moving.x - wall.x) > wall.w * 0.5 + moving.radius) clearedWallEnd = true;
+    if (moving.y > wall.y) {
+      assert.equal(clearedWallEnd, true, 'the villager crosses only after routing around a wall end');
+    }
+  }
 });
 
 test('stone staircases snap to a completed wall and preserve their attachment', () => {
