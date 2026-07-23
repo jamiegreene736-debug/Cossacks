@@ -9,7 +9,8 @@ import {
   findPlayerSelectableEntityAt, getVillagerAttackTargetAt, getVillagerRepairTargetAt,
   isOpenGroundMoveTarget,
   isSecondaryPointerEvent, issuePrimaryUnitCommand, issueVillagerAttack,
-  issueVillagerGroundMove, setBuildingRallyAt, setControlledSide, setTownCenterPrimaryRallyAt,
+  issueVillagerGroundMove, setBuildingRallyAt, setControlledSide,
+  setProductionBuildingPrimaryRallyAt, setTownCenterPrimaryRallyAt,
 } from '../js/input.js';
 import { createBuilding } from '../js/economy.js';
 
@@ -300,6 +301,31 @@ test('a primary click gives a selected Town Center a resource or worksite rally'
   const open = findOpenPoint(world);
   assert.equal(setTownCenterPrimaryRallyAt(world, [townCenter], open.x, open.y), null);
   assert.equal(setTownCenterPrimaryRallyAt(world, [unfinishedWall], berries.x, berries.y), null);
+});
+
+test('a primary click gives military production buildings a ground waypoint', () => {
+  const world = makeWorld();
+  const open = findOpenPoint(world);
+  const buildings = [
+    createBuilding(0, 'barracks', 880, 1660, true),
+    createBuilding(0, 'stable', 1040, 1660, true),
+    createBuilding(0, 'castle', 1280, 1660, true),
+  ];
+  world.buildings.push(...buildings);
+
+  for (const building of buildings) {
+    const rally = setProductionBuildingPrimaryRallyAt(world, [building], open.x, open.y);
+    assert.equal(rally.target, null);
+    assert.equal(rally.buildings[0], building);
+    assert.equal(building.rallyTargetId, null);
+    assert.equal(building.rallyX, open.x);
+    assert.equal(building.rallyY, open.y);
+  }
+
+  const townCenter = world.buildings.find(building => building.side === 0
+    && building.type === 'town_center');
+  assert.equal(setProductionBuildingPrimaryRallyAt(world, [townCenter], open.x, open.y), null);
+  assert.equal(setProductionBuildingPrimaryRallyAt(world, buildings, open.x, open.y), null);
 });
 
 test('a villager ground click clears work and creates a routed destination flag', () => {

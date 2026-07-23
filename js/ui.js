@@ -579,7 +579,7 @@ function rallyDescription(world, building) {
   if (Number.isNaN(building.rallyX) || Number.isNaN(building.rallyY)) {
     return building.type === 'town_center'
       ? 'Click a resource, workplace, or construction to rally new villagers · two-finger or Control-click ground for a waypoint.'
-      : 'Right-click a building or ground to set the rally point.';
+      : 'Click ground to set the waypoint for new units · two-finger or Control-click also works.';
   }
   const target = getRallyTarget(world, building);
   if (!target) return 'Rally: ground waypoint';
