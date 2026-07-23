@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 
 import { createWorld, damage, spawnUnit, step } from '../js/sim.js';
 import { Commander } from '../js/ai.js';
-import { BUILDING_TYPES, WORLD } from '../js/config.js';
+import { BUILDING_TYPES, WORLD, canNationBuildBuilding } from '../js/config.js';
 import { OPENING_PEACE_SECONDS } from '../js/truce.js';
 import {
   assignBuilders, assignGatherers, AUTO_BUILD_SEARCH_RADIUS,
-  createBuilding, findNearestResource, findResourceAt, placeBuilding,
+  createBuilding, executeMarketTrade, findNearestResource, findResourceAt, placeBuilding,
   getBuildingEconomyStats, getEconomyBreakdown, getFieldAttachmentStatus,
   getFieldWorkPoint, getGatherAssignmentStats, getMillFieldSlots,
   getRallyTarget, queueUnit, setRallyPoint, stepEconomy, validatePlacement,
@@ -86,6 +86,32 @@ test('ordinary building placement stores a normalized 360-degree rotation', () =
   const result = placeBuilding(world, 0, 'house', placement.x, placement.y, [builder], { rotation });
   assert.equal(result.ok, true);
   assert.equal(Math.round(result.building.rotation * 180 / Math.PI), 315);
+});
+
+test('England can build a marketplace and trade stockpiled resources', () => {
+  const world = makeWorld();
+  clearOpeningQueue(world);
+  assert.equal(canNationBuildBuilding('england', 'marketplace'), true);
+  assert.equal(canNationBuildBuilding('ottoman', 'marketplace'), false);
+
+  world.sides[0].resources = { food: 240, wood: 1000, gold: 120, stone: 500 };
+  const builder = spawnUnit(world, 0, 'villager', 800, 1500);
+  const placement = findBuildablePoint(world, 'marketplace');
+  const placed = placeBuilding(world, 0, 'marketplace', placement.x, placement.y, [builder]);
+  assert.equal(placed.ok, true);
+  assert.equal(placed.building.type, 'marketplace');
+  assert.equal(placed.building.complete, false);
+  assert.equal(executeMarketTrade(world, 0, placed.building, 'wood', 'gold').ok, false);
+
+  placed.building.complete = true;
+  placed.building.progress = 1;
+  const beforeWood = world.sides[0].resources.wood;
+  const beforeGold = world.sides[0].resources.gold;
+  const traded = executeMarketTrade(world, 0, placed.building, 'wood', 'gold');
+  assert.equal(traded.ok, true);
+  assert.equal(world.sides[0].resources.wood, beforeWood - 100);
+  assert.equal(world.sides[0].resources.gold, beforeGold + 70);
+  assert.equal(executeMarketTrade(world, 0, placed.building, 'gold', 'gold').ok, false);
 });
 
 function clearOpeningQueue(world) {

@@ -55,6 +55,17 @@ test('English house choices are gated from non-English builders', () => {
   assert.match(rejected.message, /not available to Ottoman Empire/);
 });
 
+test('England marketplace has production art and resource trading metadata', async () => {
+  assert.equal(canNationBuildBuilding('england', 'marketplace'), true);
+  assert.equal(canNationBuildBuilding('ottoman', 'marketplace'), false);
+  assert.equal(BUILDING_TYPES.marketplace.market, true);
+  assert.match(BUILDING_TYPES.marketplace.description, /trade/i);
+  assert.deepEqual(getBuildingProductionArtSpec('england', 'marketplace'), { key: 'englishMarketplace' });
+
+  const metadata = await stat(new URL('../assets/buildings/english-marketplace.webp', import.meta.url));
+  assert.ok(metadata.size > 100_000, 'english-marketplace.webp should retain rendered market-house detail');
+});
+
 test('villagers place the selected English house type instead of a random variant', () => {
   const world = createWorld({
     playerNation: 'england',

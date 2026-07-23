@@ -9,6 +9,7 @@ import { WORLD_COUNTRIES, WORLD_COUNTRY_BY_CODE, countryFlag } from './countries
 import {
   formatCost, getBuildingEconomyStats, getEconomyBreakdown,
   getFieldAttachmentStatus, getGatherAssignmentStats, getRallyTarget,
+  MARKET_TRADE_INPUT, MARKET_TRADE_OUTPUT,
 } from './economy.js';
 import { formatPeaceTime, isPeaceTime } from './truce.js';
 import { isPlayerTeam, playerTeam } from './teams.js';
@@ -167,6 +168,9 @@ export function bindControls(cbs) {
     cbs.onCommand?.({
       action: button.dataset.action,
       type: button.dataset.type,
+      fromResource: button.dataset.fromResource,
+      toResource: button.dataset.toResource,
+      amount: Number(button.dataset.amount || 0),
       count: Number(button.dataset.count || 1),
     });
   });
@@ -348,7 +352,8 @@ export function updateHud(world, selection) {
   }
 
   const hasLiveEconomy = selection.length === 0 || selection.some(entity => entity.type === 'villager'
-    || (entity.entityKind === 'building' && (entity.resourceType || BUILDING_TYPES[entity.type].boost)));
+    || (entity.entityKind === 'building'
+      && (entity.resourceType || BUILDING_TYPES[entity.type].boost || BUILDING_TYPES[entity.type].market)));
   const key = selection.map(entity => {
     const first = entity.queue?.[0];
     const queueProgress = first ? Math.floor((1 - first.remaining / first.total) * 100) : '';
@@ -459,6 +464,27 @@ function renderSelection(world, selection) {
         meta: open ? 'Bar the passage' : 'Clear the passage',
       });
     }
+    if (def.market) {
+      const labels = { food: 'Food', wood: 'Wood', gold: 'Gold', stone: 'Stone' };
+      context.textContent = 'Marketplace trade';
+      for (const fromResource of RESOURCE_KEYS) {
+        for (const toResource of RESOURCE_KEYS) {
+          if (fromResource === toResource) continue;
+          const available = world.sides[localSide].resources[fromResource] || 0;
+          addCommand(grid, {
+            action: 'trade',
+            type: `${fromResource}:${toResource}`,
+            fromResource,
+            toResource,
+            amount: MARKET_TRADE_INPUT,
+            icon: `${resourceIcon(fromResource)}→${resourceIcon(toResource)}`,
+            label: `${labels[fromResource]} to ${labels[toResource]}`,
+            meta: `${MARKET_TRADE_INPUT} for ${MARKET_TRADE_OUTPUT}`,
+            disabled: available + 1e-6 < MARKET_TRADE_INPUT,
+          });
+        }
+      }
+    }
     for (const unitType of trainable) {
       const counts = UNIT_TYPES[unitType].worker ? [1, 5] : [1, 5, 20];
       for (const count of counts) addCommand(grid, {
@@ -504,7 +530,7 @@ function renderSelection(world, selection) {
     }
     for (const [type, def] of Object.entries(BUILDING_TYPES)) {
       if (type === 'town_center') continue;
-      if (!canNationBuildBuilding(world.sides[0]?.nation, type)) continue;
+      if (!canNationBuildBuilding(world.sides[localSide]?.nation, type)) continue;
       const fieldStatus = type === 'farm' ? getFieldAttachmentStatus(world, localSide) : null;
       addCommand(grid, {
         action: 'build', type, icon: buildingIcon(type), label: def.label,
@@ -576,6 +602,9 @@ function addCommand(grid, command) {
   button.className = 'command-card';
   button.dataset.action = command.action;
   button.dataset.type = command.type;
+  if (command.fromResource) button.dataset.fromResource = command.fromResource;
+  if (command.toResource) button.dataset.toResource = command.toResource;
+  if (command.amount) button.dataset.amount = String(command.amount);
   if (command.action === 'build') {
     const active = command.type === activePlacementType;
     button.classList.toggle('placement-active', active);
@@ -614,11 +643,15 @@ function unitIcon(type) {
   }[type] || '•';
 }
 
+function resourceIcon(type) {
+  return { food: '●', wood: '▥', gold: '◆', stone: '⬟' }[type] || '•';
+}
+
 function buildingIcon(type) {
   return {
     house: '⌂', english_cottage: '⌂', english_townhouse: '▤',
     english_mansion: '▣', spooky_house: '☾',
-    farm: '≋', mill: '✣', lumber_camp: '♣', mine: '◆',
+    farm: '≋', mill: '✣', lumber_camp: '♣', mine: '◆', marketplace: '⚖',
     barracks: '⚔', stable: '♞', foundry: '◉', tower: '♜', castle: '♛',
     school: '⌘', pool: '≈', beach: '≋', park: '♧', playground: '☆',
     wall: '▥', gate: '∩', wall_stairs: '▰',
