@@ -15,7 +15,7 @@ import {
   isFortificationType, rotateFortificationOrientation,
 } from './fortifications.js';
 import { formatPeaceTime, isPeaceTime } from './truce.js';
-import { assignVillagerPath, clearVillagerPath } from './navigation.js';
+import { assignUnitPath, clearUnitPath } from './navigation.js';
 import {
   beginThreeFingerViewGesture, createViewGestureState, endThreeFingerViewGesture,
   readThreeFingerViewGesture, readTrackpadViewGesture,
@@ -497,8 +497,7 @@ function moveUnitsTo(world, units, x, y, formation) {
   clearWorkerJobs(units);
   applyMoveOrder(units, x, y, formation);
   for (const unit of units) {
-    if (unit.type === 'villager') assignVillagerPath(world, unit, unit.orderX, unit.orderY);
-    else clearVillagerPath(unit);
+    assignUnitPath(world, unit, unit.orderX, unit.orderY);
   }
   world.flags.push({
     kind: 'move', route: true,
@@ -528,7 +527,7 @@ function attackUnits(world, units, target) {
   }
   clearWorkerJobs(units);
   const villagers = units.filter(unit => unit.type === 'villager');
-  for (const villager of villagers) clearVillagerPath(villager);
+  for (const unit of units) clearUnitPath(unit);
   applyAttackOrder(units, target);
   world.flags.push({
     kind: 'attack', attack: true,
@@ -629,7 +628,7 @@ export function issueVillagerAttack(world, selected, target) {
     && target?.alive && areHostileSides(world, entity.side, target.side));
   if (!world || isPeaceTime(world) || !target?.alive || workers.length === 0) return 0;
   clearWorkerJobs(workers);
-  for (const worker of workers) clearVillagerPath(worker);
+  for (const worker of workers) clearUnitPath(worker);
   applyAttackOrder(workers, target);
   world.flags.push({
     kind: 'attack', attack: true,

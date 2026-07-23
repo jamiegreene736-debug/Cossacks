@@ -261,6 +261,7 @@ async function startBattle(opts) {
   setupLocalFantasyFactionPreview(world);
   setupLocalWizardChildrenPreview(world);
   setupLocalCharacterAnimationPreview(world);
+  setupLocalObstacleNavigationPreview(world);
   setupLocalEnglandHousePreview(world);
   setupLocalThemedArchitecturePreview(world);
   setupLocalSettlementVarietyPreview(world);
@@ -415,6 +416,58 @@ function setupLocalCharacterAnimationPreview(activeWorld) {
     side: 0,
     tone: 'info',
     text: `${previewUnits.length} character animation profiles are marching at inspection speed.`,
+  });
+}
+
+function setupLocalObstacleNavigationPreview(activeWorld) {
+  const debugName = new URLSearchParams(window.location.search).get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'obstacle-navigation') return;
+
+  const previewBounds = { left: 1750, right: 3450, top: 750, bottom: 2350 };
+  activeWorld.resources = activeWorld.resources.filter(resource => (
+    resource.x < previewBounds.left || resource.x > previewBounds.right
+    || resource.y < previewBounds.top || resource.y > previewBounds.bottom
+  ));
+  activeWorld.buildings = activeWorld.buildings.filter(building => (
+    building.x < previewBounds.left || building.x > previewBounds.right
+    || building.y < previewBounds.top || building.y > previewBounds.bottom
+  ));
+
+  const barracks = createBuilding(0, 'barracks', 2520, 1240, true, {
+    rotation: Math.PI / 7,
+  });
+  const mansion = createBuilding(0, 'english_mansion', 2720, 1500, true, {
+    rotation: Math.PI / 5,
+  });
+  const walls = [-176, -88, 0, 88, 176].map(offset => createBuilding(
+    0, 'wall', 2600 + offset, 1760, true, { orientation: 'horizontal' },
+  ));
+  activeWorld.buildings.push(barracks, mansion, ...walls);
+
+  const lanes = [
+    { side: 0, type: 'musk', x: 2120, y: 1240, tx: 3070, ty: 1240 },
+    { side: 0, type: 'pike', x: 2180, y: 1460, tx: 3190, ty: 1510 },
+    { side: 0, type: 'cav', x: 2100, y: 1610, tx: 3180, ty: 1470 },
+    { side: 0, type: 'villager', x: 2360, y: 1670, tx: 2820, ty: 1850 },
+    { side: 0, type: 'woman_villager', x: 2440, y: 1665, tx: 2900, ty: 1850 },
+  ];
+  for (const lane of lanes) {
+    const unit = spawnUnit(activeWorld, lane.side, lane.type, lane.x, lane.y);
+    unit.speed *= 0.7;
+    applyMoveOrder([unit], lane.tx, lane.ty, 'line');
+  }
+
+  activeWorld.time = 0;
+  camera.x = 2650;
+  camera.y = 1500;
+  camera.zoom = 0.72;
+  clampCamera();
+  activeWorld.events.push({
+    side: 0,
+    tone: 'info',
+    text: 'Obstacle inspection: troops route around solid buildings and wall masonry.',
   });
 }
 

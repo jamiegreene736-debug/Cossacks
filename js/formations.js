@@ -4,6 +4,7 @@
 
 import { WORLD } from './config.js';
 import { MILITARY_WALK_FRAME_COUNT } from './military-animation.js';
+import { clearUnitPath } from './navigation.js';
 
 const UNIT_FORMATION_FOOTPRINT = Object.freeze({
   villager: Object.freeze({ across: 16, depth: 15 }),
@@ -123,6 +124,7 @@ export function applyMoveOrder(units, dx, dy, formation, options = {}) {
   for (let i = 0; i < sortedUnits.length; i++) {
     const u = sortedUnits[i];
     const s = sortedSlots[i];
+    clearUnitPath(u);
     u.orderX = dx + rx * s.a - fx * s.b;
     u.orderY = dy + ry * s.a - fy * s.b;
     u.orderTarget = null;
@@ -225,6 +227,7 @@ export function applyAttackOrder(units, target) {
   for (let index = 0; index < orderedUnits.length; index++) {
     const u = orderedUnits[index];
     if (u.state === 'flee') continue;
+    clearUnitPath(u);
     if (ANIMATED_MILITARY_TYPES.has(u.type) && !u.moving) {
       u.animT = sharedAnimT;
       u.gaitDistance = sharedGaitDistance;
@@ -239,6 +242,7 @@ export function applyAttackOrder(units, target) {
 
 export function haltOrder(units) {
   for (const u of units) {
+    clearUnitPath(u);
     u.orderX = NaN;
     u.orderTarget = null;
     if (u.state === 'move') u.state = 'idle';

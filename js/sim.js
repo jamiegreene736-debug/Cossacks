@@ -24,8 +24,11 @@ import {
   updateWallAssignment,
 } from './fortifications.js';
 import {
-  assignVillagerPath, clearVillagerPath, segmentBlocksVillager,
+  assignUnitPath, clearUnitPath, segmentBlocksGround,
 } from './navigation.js';
+import {
+  resolveUnitStructureCollision, structureBlocksGround,
+} from './obstacles.js';
 import { isHostilePair, isPeaceTime } from './truce.js';
 import {
   RIVAL_TEAM, areAlliedSides, areHostileEntities, areHostileSides,
@@ -34,6 +37,7 @@ import {
 
 const PARTICLE_CAP = 900;
 const blockingFortifications = [];
+const blockingStructures = [];
 
 class FlatGrid {
   constructor(cell, w, h) {
@@ -135,6 +139,7 @@ function makeUnit(side, nationKey, type, x, y, team = null) {
     orderX: NaN, orderY: NaN, orderTarget: null,
     navigationPath: null, navigationIndex: 0,
     navigationGoalX: NaN, navigationGoalY: NaN, navigationVersion: 0,
+    navigationFailedX: NaN, navigationFailedY: NaN, navigationFailedVersion: -1,
     target: null, acquireT: Math.random() * 0.5,
     formation: 'line',
     facing: team === RIVAL_TEAM ? -1 : 1,
@@ -282,7 +287,7 @@ function flee(world, u) {
   u.target = null;
   u.charge = 0;
   u.fleeYDrift = (Math.random() - 0.5) * 0.9;
-  clearVillagerPath(u);
+  clearUnitPath(u);
 }
 
 function maybeBreak(world, u) {
@@ -692,7 +697,7 @@ function updateUnit(world, u, dt) {
   if (u.target && !u.target.alive) u.target = null;
   if (u.orderTarget && !u.orderTarget.alive) {
     u.orderTarget = null;
-    if (u.type === 'villager') clearVillagerPath(u);
+    clearUnitPath(u);
     if (u.state === 'move' && Number.isNaN(u.orderX)) u.state = 'idle';
   }
   u.acquireT -= dt;
@@ -793,15 +798,22 @@ function updateUnit(world, u, dt) {
   } else if (t && isRanged && shouldEngageTarget) {
     destX = t.x; destY = t.y; stopAt = Math.max(u.range * 0.85, u.minRange + 20);
   } else if (!Number.isNaN(u.orderX)) {
-    if (u.type === 'villager' && u.navigationPath?.length) {
+    const routeAlreadyFailed = u.navigationFailedVersion === (world.navigationVersion || 0)
+      && Math.abs(u.navigationFailedX - u.orderX) < 0.01
+      && Math.abs(u.navigationFailedY - u.orderY) < 0.01;
+    if (!u.navigationPath?.length && !routeAlreadyFailed
+      && segmentBlocksGround(world, u.x, u.y, u.orderX, u.orderY, u.radius + 2)) {
+      assignUnitPath(world, u, u.orderX, u.orderY);
+    }
+    if (u.navigationPath?.length) {
       let waypoint = u.navigationPath[u.navigationIndex];
       if (u.navigationVersion !== world.navigationVersion) {
         u.navigationVersion = world.navigationVersion;
-        if (segmentBlocksVillager(world, u.x, u.y, waypoint.x, waypoint.y, u.radius + 2)) {
-          if (!assignVillagerPath(world, u, u.navigationGoalX, u.navigationGoalY)) {
+        if (segmentBlocksGround(world, u.x, u.y, waypoint.x, waypoint.y, u.radius + 2)) {
+          if (!assignUnitPath(world, u, u.navigationGoalX, u.navigationGoalY)) {
             u.orderX = NaN;
             u.orderY = NaN;
-            clearVillagerPath(u);
+            clearUnitPath(u);
             if (u.state === 'move') u.state = 'idle';
             return;
           }
@@ -837,13 +849,13 @@ function updateUnit(world, u, dt) {
       setMovementFacing(u, nx, dt);
       if (u.type === 'cav') u.charge = Math.min(1, u.charge + dt / 1.4);
     } else if (!Number.isNaN(u.orderX)) {
-      const hasNextWaypoint = u.type === 'villager' && u.navigationPath?.length
+      const hasNextWaypoint = u.navigationPath?.length
         && u.navigationIndex < u.navigationPath.length - 1;
       if (hasNextWaypoint) {
         u.navigationIndex++;
       } else {
         u.orderX = NaN; u.orderY = NaN;
-        clearVillagerPath(u);
+        clearUnitPath(u);
         if (u.state === 'move') u.state = 'idle';
       }
     }
@@ -928,6 +940,7 @@ export function step(world, dt) {
   stepBuildingFires(world, dt);
 
   blockingFortifications.length = 0;
+  blockingStructures.length = 0;
   for (const building of world.buildings) {
     const blockingWall = building.type === 'wall'
       && (building.complete || building.progress >= 0.24);
@@ -936,6 +949,9 @@ export function step(world, dt) {
     if (building.alive && (blockingWall || blockingGate)) {
       blockingFortifications.push(building);
     }
+    if (structureBlocksGround(building) && !BUILDING_TYPES[building.type]?.fortification) {
+      blockingStructures.push(building);
+    }
   }
 
   for (let i = 0; i < active.length; i++) {
@@ -943,7 +959,10 @@ export function step(world, dt) {
     if (u.alive) {
       updateUnit(world, u, dt);
       stepWitchFlight(u, dt);
-      if (u.moving) resolveUnitFortificationCollision(u, blockingFortifications);
+      if (!u.wallMount) {
+        resolveUnitFortificationCollision(u, blockingFortifications);
+        resolveUnitStructureCollision(u, blockingStructures);
+      }
     }
   }
 
@@ -981,6 +1000,7 @@ export function step(world, dt) {
       }
     });
     resolveUnitFortificationCollision(u, blockingFortifications);
+    resolveUnitStructureCollision(u, blockingStructures);
     clampPos(u);
   }
 
