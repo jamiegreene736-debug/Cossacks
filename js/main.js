@@ -240,6 +240,7 @@ async function startBattle(opts) {
   setupLocalWomanVillagerPreview(world);
   setupLocalOpeningTrucePreview(world);
   setupLocalFantasyFactionPreview(world);
+  setupLocalCharacterAnimationPreview(world);
   setupLocalEnglandHousePreview(world);
   setupLocalThemedArchitecturePreview(world);
   setupLocalSettlementVarietyPreview(world);
@@ -315,6 +316,51 @@ function setupLocalFantasyFactionPreview(activeWorld) {
   camera.y = 1450;
   camera.zoom = 0.72;
   clampCamera();
+}
+
+function setupLocalCharacterAnimationPreview(activeWorld) {
+  const debugName = new URLSearchParams(window.location.search).get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'character-animation') return;
+
+  const previewBounds = { left: 1800, right: 3450, top: 700, bottom: 2350 };
+  activeWorld.resources = activeWorld.resources.filter(resource => (
+    resource.x < previewBounds.left || resource.x > previewBounds.right
+    || resource.y < previewBounds.top || resource.y > previewBounds.bottom
+  ));
+  activeWorld.buildings = activeWorld.buildings.filter(building => (
+    building.x < previewBounds.left || building.x > previewBounds.right
+    || building.y < previewBounds.top || building.y > previewBounds.bottom
+  ));
+
+  const roster = [
+    [0, 'villager'], [0, 'woman_villager'], [0, 'musk'], [0, 'pike'], [0, 'cav'], [0, 'gun'],
+    [1, 'villager'], [1, 'woman_villager'], [1, 'musk'], [1, 'pike'], [1, 'cav'], [1, 'gun'],
+    [2, 'wizard_worker'], [2, 'witch_worker'], [2, 'moaning_myrtle'],
+    [4, 'starwars_mechanic'], [4, 'starwars_robed_villager'], [4, 'starwars_sentinel'],
+    [4, 'starwars_blade_guard'], [4, 'starwars_skiff_rider'], [4, 'starwars_pulse_cannon'],
+    [3, 'circus_worker'], [3, 'pennywise'], [3, 'art_clown'], [3, 'twisty_clown'],
+    [3, 'captain_spaulding'], [3, 'killer_klown'],
+  ];
+  const previewUnits = roster.map(([side, type], index) => {
+    const column = index % 5;
+    const row = Math.floor(index / 5);
+    const unit = spawnUnit(activeWorld, side, type, 1950 + column * 120, 900 + row * 165);
+    unit.speed *= 0.58;
+    applyMoveOrder([unit], unit.x + 760, unit.y, 'line');
+    return unit;
+  });
+  activeWorld.time = 0;
+  camera.x = 2520;
+  camera.y = 1370;
+  camera.zoom = 0.86;
+  clampCamera();
+  activeWorld.events.push({
+    side: 0,
+    tone: 'info',
+    text: `${previewUnits.length} character animation profiles are marching at inspection speed.`,
+  });
 }
 
 function livingUnitsById(unitIds, side) {

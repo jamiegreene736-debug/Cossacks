@@ -11,6 +11,7 @@ import {
   normalizeCpuDifficulty, PIKE_VS_CAV, CAV_CHARGE_BONUS, SQUARE_VS_CAV,
 } from './config.js';
 import { normalizeWorldCountry } from './countries.js';
+import { advanceCharacterGait } from './character-animation.js';
 import { sfx } from './audio.js';
 import { initializeEconomy, stepEconomy, onUnitKilled, onBuildingDestroyed } from './economy.js';
 import { corpseDecalTiming } from './gfx/decals.js';
@@ -133,7 +134,8 @@ function makeUnit(side, nationKey, type, x, y, team = null) {
     target: null, acquireT: Math.random() * 0.5,
     formation: 'line',
     facing: team === RIVAL_TEAM ? -1 : 1,
-    moving: false, animT: Math.random() * 10, walkPhaseOffset: 0,
+    moving: false, animT: Math.random() * 10, gaitDistance: Math.random() * 31,
+    walkPhaseOffset: 0,
     fireT: 0, torchT: 0,
     fleeYDrift: 0,
     job: null,
@@ -635,9 +637,11 @@ function updateUnit(world, u, dt) {
 
   if (u.state === 'flee') {
     const dirX = -sideFrontDirection(world, u.side);
+    const oldX = u.x, oldY = u.y;
     u.x += dirX * u.speed * 1.2 * dt;
     u.y += u.fleeYDrift * u.speed * 0.5 * dt;
     clampPos(u);
+    advanceCharacterGait(u, Math.hypot(u.x - oldX, u.y - oldY));
     u.moving = true;
     u.animT += dt * 1.4;
     u.facing = dirX > 0 ? 1 : -1;
@@ -794,9 +798,11 @@ function updateUnit(world, u, dt) {
       if (u.formation === 'column') sp *= 1.15;
       else if (u.formation === 'square') sp *= 0.8;
       const nx = mx / md, ny = my / md;
+      const oldX = u.x, oldY = u.y;
       u.x += nx * sp * dt;
       u.y += ny * sp * dt;
       clampPos(u);
+      advanceCharacterGait(u, Math.hypot(u.x - oldX, u.y - oldY));
       u.moving = true;
       u.animT += dt;
       if (Math.abs(nx) > 0.25) u.facing = nx > 0 ? 1 : -1;

@@ -5,7 +5,7 @@ import { applyMoveOrder, getFormationSlots } from '../js/formations.js';
 
 function unit(id, type, x, y, animT = id) {
   return {
-    id, type, x, y, animT, side: 0, state: 'idle',
+    id, type, x, y, animT, gaitDistance: animT * 10, side: 0, state: 'idle',
     orderX: NaN, orderY: NaN, orderTarget: null,
   };
 }
@@ -48,6 +48,7 @@ test('a regiment shares one clock with stable three-cohort gait offsets', () => 
   applyMoveOrder(units, 500, 100, 'line');
 
   assert.equal(new Set(units.map(entry => entry.animT)).size, 1);
+  assert.equal(new Set(units.map(entry => entry.gaitDistance)).size, 1);
   assert.deepEqual([...new Set(units.map(entry => entry.walkPhaseOffset))].sort(), [0, 2, 4]);
   assert.ok(units.every(entry => entry.state === 'move'));
 });

@@ -1,34 +1,37 @@
+import { CHARACTER_WALK_FRAME_COUNT, getCharacterWalkFrame } from './character-animation.js';
+
 const WORK_FRAMES = Object.freeze({
-  build: 3,
-  chop: 5,
-  mine: 7,
-  farm: 9,
-  forage: 11,
+  build: 7,
+  chop: 9,
+  mine: 11,
+  farm: 13,
+  forage: 15,
 });
 
 const COMBAT_FRAMES = Object.freeze({
-  ready: 13,
-  advance: 14,
-  fire: 15,
-  reload: 16,
+  ready: 17,
+  advance: 18,
+  fire: 19,
+  reload: 20,
 });
 
 const CARRY_FRAMES = Object.freeze({
-  woodFirst: 17,
-  woodLast: 20,
-  resourceFirst: 21,
-  resourceLast: 24,
+  woodFirst: 21,
+  woodLast: 24,
+  resourceFirst: 25,
+  resourceLast: 28,
   count: 4,
 });
 
 const WOMAN_WORKER_FRAMES = Object.freeze({
   idle: 0,
   walkFirst: 1,
-  work: 3,
-  deploy: 4,
-  aim: 5,
-  fire: 6,
-  reload: 7,
+  walkLast: CHARACTER_WALK_FRAME_COUNT,
+  work: 7,
+  deploy: 8,
+  aim: 9,
+  fire: 10,
+  reload: 11,
 });
 
 const RESOURCE_ACTIONS = Object.freeze({
@@ -64,9 +67,9 @@ export function getWorkerFrame(worker, combatReady = false) {
   if (worker.moving && (Number(worker.job?.carriedAmount) || 0) > 0) {
     const first = worker.job?.resourceType === 'wood'
       ? CARRY_FRAMES.woodFirst : CARRY_FRAMES.resourceFirst;
-    return first + (((worker.animT * 6) | 0) % CARRY_FRAMES.count);
+    return first + getCharacterWalkFrame(worker, CARRY_FRAMES.count);
   }
-  if (worker.moving) return 1 + (((worker.animT * 6) | 0) % 2);
+  if (worker.moving) return 1 + getCharacterWalkFrame(worker);
   return 0;
 }
 
@@ -83,7 +86,7 @@ export function getWomanVillagerFrame(worker, combatReady = false) {
       ? WOMAN_WORKER_FRAMES.work : WOMAN_WORKER_FRAMES.idle;
   }
   if (worker.moving) {
-    return WOMAN_WORKER_FRAMES.walkFirst + (((worker.animT * 6) | 0) & 1);
+    return WOMAN_WORKER_FRAMES.walkFirst + getCharacterWalkFrame(worker);
   }
   return WOMAN_WORKER_FRAMES.idle;
 }

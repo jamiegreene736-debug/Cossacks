@@ -1,14 +1,12 @@
+import {
+  CHARACTER_WALK_FRAME_COUNT, getCharacterGaitPhase, getCharacterWalkFrame,
+} from './character-animation.js';
+
 // Cached military atlases keep locomotion separate from combat presentation.
 // Foot and mounted units use authored six-pose cycles, then return to ready as
 // soon as movement ends. Artillery retains its compact 2-frame idle/fire sheet.
 
-export const MILITARY_WALK_FRAME_COUNT = 6;
-
-const WALK_FRAMES_PER_SECOND = Object.freeze({
-  musk: 8,
-  pike: 8,
-  cav: 10,
-});
+export const MILITARY_WALK_FRAME_COUNT = CHARACTER_WALK_FRAME_COUNT;
 
 const WALK_BOB = Object.freeze({
   musk: 0.38,
@@ -24,11 +22,7 @@ export const MILITARY_FRAME = Object.freeze({
 });
 
 function getWalkPhase(unit) {
-  const framesPerSecond = WALK_FRAMES_PER_SECOND[unit.type] || 8;
-  const formationOffset = Number.isFinite(unit.walkPhaseOffset) ? unit.walkPhaseOffset : 0;
-  const phase = unit.animT * framesPerSecond + formationOffset;
-  return ((phase % MILITARY_WALK_FRAME_COUNT) + MILITARY_WALK_FRAME_COUNT)
-    % MILITARY_WALK_FRAME_COUNT;
+  return getCharacterGaitPhase(unit) * MILITARY_WALK_FRAME_COUNT;
 }
 
 export function getMilitaryFrame(unit) {
@@ -37,7 +31,7 @@ export function getMilitaryFrame(unit) {
   }
 
   if (unit.moving) {
-    return MILITARY_FRAME.WALK_START + Math.floor(getWalkPhase(unit));
+    return MILITARY_FRAME.WALK_START + getCharacterWalkFrame(unit);
   }
 
   return unit.fireT > 0 ? MILITARY_FRAME.ATTACK : MILITARY_FRAME.READY;

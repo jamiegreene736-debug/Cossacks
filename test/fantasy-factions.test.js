@@ -117,6 +117,8 @@ test('StarWars attacks retain distinct authored weapon and effect contracts', ()
     type: 'starwars_pulse_cannon', unitType: 'starwars_pulse_cannon', fireT: 0.1, moving: false,
   }), 1);
   assert.equal(getFactionCharacterFrameSources('starwars_sentinel').at(-1), 2);
+  assert.deepEqual(getFactionCharacterFrameSources('starwars_sentinel').slice(1, 7), [1, 0, 3, 1, 0, 3]);
+  assert.equal(getFactionCharacterFrameSources('starwars_mechanic').length, 29);
 
   const plasma = getSpecialProjectileVisualProfile('plasma');
   const ion = getSpecialProjectileVisualProfile('ion');
