@@ -1300,7 +1300,8 @@ export function draw(
       frame = getMilitaryFrame(u);
     }
     const rearView = viewMirrorsHorizontalFacing(rotation);
-    const dir = (u.facing >= 0) !== rearView ? 0 : 1;
+    const facingValue = u.moving && Number.isFinite(u.visualFacing) ? u.visualFacing : u.facing;
+    const dir = (facingValue >= 0) !== rearView ? 0 : 1;
     const visualFacing = dir === 0 ? 1 : -1;
     ctx.save();
     ctx.translate(ix, iy);

@@ -80,6 +80,21 @@ test('soldiers resume their interrupted march after the nearby threat falls', ()
   assert.equal(soldier.state, 'move');
 });
 
+test('villager facing eases during movement instead of snapping instantly', () => {
+  const world = makeEmptyWorld();
+  const villager = spawnUnit(world, 0, 'villager', 2200, 1500);
+  villager.facing = 1;
+  villager.visualFacing = 1;
+  applyMoveOrder([villager], 1800, 1500, 'line');
+
+  step(world, 1 / 30);
+
+  assert.equal(villager.facing, -1);
+  assert.ok(villager.visualFacing < 1);
+  assert.ok(villager.visualFacing > -1);
+  assert.ok(villager.gaitDistance > 0);
+});
+
 test('an explicit attack order stays focused instead of switching to a nearer enemy', () => {
   const world = makeEmptyWorld();
   const soldier = spawnUnit(world, 0, 'musk', 2200, 1500);

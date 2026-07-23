@@ -1,5 +1,7 @@
 import { CHARACTER_WALK_FRAME_COUNT, getCharacterWalkFrame } from './character-animation.js';
 
+export const WORKER_WALK_FRAME_COUNT = CHARACTER_WALK_FRAME_COUNT;
+
 const WORK_FRAMES = Object.freeze({
   build: 7,
   chop: 9,
@@ -69,7 +71,7 @@ export function getWorkerFrame(worker, combatReady = false) {
       ? CARRY_FRAMES.woodFirst : CARRY_FRAMES.resourceFirst;
     return first + getCharacterWalkFrame(worker, CARRY_FRAMES.count);
   }
-  if (worker.moving) return 1 + getCharacterWalkFrame(worker);
+  if (worker.moving) return 1 + getCharacterWalkFrame(worker, WORKER_WALK_FRAME_COUNT);
   return 0;
 }
 

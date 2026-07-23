@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   CARRY_FRAMES, COMBAT_FRAMES, WOMAN_WORKER_FRAMES,
-  resolveWorkerAction, getWomanVillagerFrame, getWorkerFrame,
+  resolveWorkerAction, getWomanVillagerFrame, getWorkerFrame, WORKER_WALK_FRAME_COUNT,
 } from '../js/worker-animation.js';
 
 test('worker jobs resolve to historically legible tool actions', () => {
@@ -38,8 +38,8 @@ test('walking workers use all six distance-synchronized civilian poses', () => {
   assert.equal(getWorkerFrame({ state: 'idle', moving: false, animT: 0 }), 0);
   const worker = { state: 'move', type: 'villager', moving: true, gaitDistance: 0 };
   const frames = [];
-  for (let index = 0; index < 6; index++) {
-    worker.gaitDistance = index * (29 / 6);
+  for (let index = 0; index < WORKER_WALK_FRAME_COUNT; index++) {
+    worker.gaitDistance = index * (29 / WORKER_WALK_FRAME_COUNT);
     frames.push(getWorkerFrame(worker));
   }
   assert.deepEqual(frames, [1, 2, 3, 4, 5, 6]);
