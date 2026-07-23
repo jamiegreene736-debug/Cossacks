@@ -223,7 +223,6 @@ const ART_URLS = Object.freeze({
   ottomanFortifications: new URL('../../assets/buildings/ottoman-fortifications.webp', import.meta.url).href,
   ottomanGateClosed: new URL('../../assets/buildings/ottoman-gate-closed.webp', import.meta.url).href,
   ottomanFortificationConstruction: new URL('../../assets/buildings/ottoman-fortification-construction.webp', import.meta.url).href,
-  woodland: new URL('../../assets/resources/woodland.webp', import.meta.url).href,
   berryBushes: new URL('../../assets/resources/berry-bushes.webp', import.meta.url).href,
   stoneOutcrop: new URL('../../assets/resources/stone-outcrop.webp', import.meta.url).href,
   goldOutcrop: new URL('../../assets/resources/gold-outcrop.webp', import.meta.url).href,
