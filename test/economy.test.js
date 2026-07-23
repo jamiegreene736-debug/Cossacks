@@ -23,6 +23,16 @@ function advance(world, seconds) {
   for (let i = 0; i < ticks; i++) step(world, 1 / 30);
 }
 
+function findBuildablePoint(world, type, options = {}) {
+  for (let y = 260; y <= WORLD.h - 260; y += 140) {
+    for (let x = 260; x <= WORLD.w - 260; x += 140) {
+      const placement = validatePlacement(world, 0, type, x, y, options);
+      if (placement.ok) return placement;
+    }
+  }
+  throw new Error(`No buildable point found for ${type}`);
+}
+
 test('an allied England start has Hogwarts and StarWars beside the player', () => {
   const world = makeWorld();
   const townCenters = world.buildings.filter(building => building.type === 'town_center');
@@ -62,6 +72,20 @@ test('the free first villager emerges and regular training spends resources', ()
   assert.equal(result.queued, 4);
   assert.equal(world.sides[0].resources.food, 40);
   assert.equal(world.sides[0].queuedPopulation, 4);
+});
+
+test('ordinary building placement stores a normalized 360-degree rotation', () => {
+  const world = makeWorld();
+  clearOpeningQueue(world);
+  world.sides[0].resources.wood = 5000;
+  const builder = spawnUnit(world, 0, 'villager', 800, 1500);
+  const rotation = -Math.PI / 4;
+  const placement = findBuildablePoint(world, 'house', { rotation });
+  assert.equal(Math.round(placement.rotation * 180 / Math.PI), 315);
+
+  const result = placeBuilding(world, 0, 'house', placement.x, placement.y, [builder], { rotation });
+  assert.equal(result.ok, true);
+  assert.equal(Math.round(result.building.rotation * 180 / Math.PI), 315);
 });
 
 function clearOpeningQueue(world) {

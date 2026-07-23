@@ -1124,6 +1124,7 @@ export function draw(
         }
       } else {
         ctx.translate(placementPreview.x, placementPreview.y);
+        if (Number.isFinite(placementPreview.rotation)) ctx.rotate(placementPreview.rotation);
         ctx.fillRect(-def.w / 2, -def.h / 2, def.w, def.h);
         ctx.strokeRect(-def.w / 2, -def.h / 2, def.w, def.h);
       }

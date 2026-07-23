@@ -46,6 +46,30 @@ let movePreview = null;
 const EDGE = 26;
 const PAN_SPEED = 720;
 const MOVE_FEEDBACK_LIFE = 2.8;
+const BUILD_ROTATE_STEP = Math.PI / 12;
+const BUILD_ROTATE_FINE_STEP = Math.PI / 36;
+const BUILD_ROTATE_QUARTER_STEP = Math.PI / 2;
+const FULL_TURN = Math.PI * 2;
+
+function normalizePlacementRotation(rotation = 0) {
+  if (!Number.isFinite(rotation)) return 0;
+  const normalized = rotation % FULL_TURN;
+  return normalized < 0 ? normalized + FULL_TURN : normalized;
+}
+
+function placementSupportsFreeRotation(activePlacement = placement) {
+  return Boolean(activePlacement && !isFortificationType(activePlacement.type)
+    && !BUILDING_TYPES[activePlacement.type]?.wallAttachment);
+}
+
+function applyPlacementRotation(rotation) {
+  if (!placementSupportsFreeRotation()) return null;
+  placement.rotation = normalizePlacementRotation(rotation);
+  if (wallDrag) updateWallDrag(mouseX || window.innerWidth / 2, mouseY || window.innerHeight / 2);
+  else updatePlacement(mouseX || window.innerWidth / 2, mouseY || window.innerHeight / 2);
+  callbacks.onPlacement?.(placement);
+  return placement.rotation;
+}
 
 export function isSecondaryPointerEvent(event) {
   return event?.button === 2 || (event?.button === 0 && Boolean(event.ctrlKey));
@@ -102,6 +126,7 @@ export function initInput(canvas, minimap, worldGetter, cbs) {
   document.addEventListener('mousedown', event => {
     if (!placement || event.button !== 0 || event.target === canvas) return;
     if (event.target.closest?.('button[data-action="build"]')) return;
+    if (event.target.closest?.('#placement-tip')) return;
     cancelPlacement();
   }, true);
 
@@ -185,11 +210,22 @@ export function initInput(canvas, minimap, worldGetter, cbs) {
     if (!getWorld()) return;
     const key = event.key.toLowerCase();
     if (key === 'escape') cancelPlacement();
-    else if (key === 'r' && placement && isFortificationType(placement.type)) {
-      placement.orientation = rotateFortificationOrientation(placement.orientation);
-      if (wallDrag) updateWallDrag(mouseX || window.innerWidth / 2, mouseY || window.innerHeight / 2);
-      else updatePlacement(mouseX || window.innerWidth / 2, mouseY || window.innerHeight / 2);
-      callbacks.onPlacement?.(placement);
+    else if (placement && (key === 'q' || key === 'e') && placementSupportsFreeRotation()) {
+      event.preventDefault();
+      const direction = key === 'q' ? -1 : 1;
+      applyPlacementRotation(placement.rotation + direction
+        * (event.shiftKey ? BUILD_ROTATE_FINE_STEP : BUILD_ROTATE_STEP));
+    }
+    else if (key === 'r' && placement) {
+      if (isFortificationType(placement.type)) {
+        placement.orientation = rotateFortificationOrientation(placement.orientation);
+        if (wallDrag) updateWallDrag(mouseX || window.innerWidth / 2, mouseY || window.innerHeight / 2);
+        else updatePlacement(mouseX || window.innerWidth / 2, mouseY || window.innerHeight / 2);
+        callbacks.onPlacement?.(placement);
+      } else if (placementSupportsFreeRotation()) {
+        event.preventDefault();
+        applyPlacementRotation(placement.rotation + BUILD_ROTATE_QUARTER_STEP);
+      }
     }
     else if (key === 'l') setFormation('line');
     else if (key === 'c') setFormation('column');
@@ -734,6 +770,7 @@ export function beginPlacement(type) {
   placement = {
     type, x: camera.x, y: camera.y, valid: false, message: '',
     orientation: isFortificationType(type) ? 'horizontal' : null,
+    rotation: isFortificationType(type) || BUILDING_TYPES[type]?.wallAttachment ? null : 0,
     millId: null,
     fieldSlot: null,
     wallId: null,
@@ -759,7 +796,7 @@ function updatePlacement(screenX, screenY) {
     placement.type,
     point.x,
     point.y,
-    { orientation: placement.orientation },
+    { orientation: placement.orientation, rotation: placement.rotation },
   )
     || { ok: true, message: '' };
   placement.x = Number.isFinite(validation.x) ? validation.x : point.x;
@@ -773,6 +810,7 @@ function updatePlacement(screenX, screenY) {
   placement.stairAlong = validation.stairAlong ?? null;
   placement.valid = validation.ok;
   placement.message = validation.message;
+  if (Number.isFinite(validation.rotation)) placement.rotation = normalizePlacementRotation(validation.rotation);
   placement.segments = null;
 }
 
@@ -866,6 +904,7 @@ function placeAt(screenX, screenY, keepPlacing) {
     workers,
     {
       orientation: placement.orientation,
+      rotation: placement.rotation,
       millId: placement.millId,
       fieldSlot: placement.fieldSlot,
       wallId: placement.wallId,
@@ -887,6 +926,7 @@ function placeAt(screenX, screenY, keepPlacing) {
     y: placement.y,
     options: {
       orientation: placement.orientation,
+      rotation: placement.rotation,
       millId: placement.millId,
       fieldSlot: placement.fieldSlot,
       wallId: placement.wallId,
@@ -895,6 +935,24 @@ function placeAt(screenX, screenY, keepPlacing) {
     },
   });
   if (!keepPlacing) cancelPlacement();
+}
+
+export function rotatePlacement(deltaRadians) {
+  if (!placementSupportsFreeRotation()) return null;
+  return applyPlacementRotation((placement.rotation || 0) + deltaRadians);
+}
+
+export function rotatePlacementDegrees(deltaDegrees) {
+  return rotatePlacement((Number(deltaDegrees) || 0) * Math.PI / 180);
+}
+
+export function setPlacementRotationDegrees(degrees) {
+  if (!placementSupportsFreeRotation()) return null;
+  return applyPlacementRotation((Number(degrees) || 0) * Math.PI / 180);
+}
+
+export function resetPlacementRotation() {
+  return setPlacementRotationDegrees(0);
 }
 
 export function getPlacementPreview() { return placement; }

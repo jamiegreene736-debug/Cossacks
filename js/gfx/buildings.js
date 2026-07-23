@@ -7044,7 +7044,9 @@ function drawBuilding(building, world) {
     }
   }
 
-  if (building.type !== 'farm') ctx.rotate(-(camera.rotation || 0));
+  const baseRotation = building.type !== 'farm' ? -(camera.rotation || 0) : 0;
+  if (baseRotation) ctx.rotate(baseRotation);
+  const buildingRotation = Number.isFinite(building.rotation) ? building.rotation : 0;
 
   // Gameplay footprints stay compact enough for mass-army pathfinding, while
   // the painted architecture is enlarged around its contact line. Scaling
@@ -7055,6 +7057,7 @@ function drawBuilding(building, world) {
   const visualScale = presentation?.visualScale || 1;
   const visualGroundY = bdVisualGroundY(building);
   ctx.save();
+  if (buildingRotation) ctx.rotate(buildingRotation);
   if (visualScale !== 1) {
     ctx.translate(0, visualGroundY);
     ctx.scale(visualScale, visualScale);

@@ -157,6 +157,10 @@ export function bindControls(cbs) {
   $('pause-music').addEventListener('change', event => cbs.onAudio?.({ pauseMusic: event.target.value }));
   $('btn-mute').addEventListener('click', () => cbs.onMute?.());
   $('btn-cancel-placement').addEventListener('click', () => cbs.onCancelPlacement?.());
+  $('btn-rotate-placement-left').addEventListener('click', () => cbs.onRotatePlacement?.(-15));
+  $('btn-rotate-placement-right').addEventListener('click', () => cbs.onRotatePlacement?.(15));
+  $('btn-reset-placement-rotation').addEventListener('click', () => cbs.onSetPlacementRotation?.(0));
+  $('placement-rotation').addEventListener('input', event => cbs.onSetPlacementRotation?.(Number(event.target.value)));
   $('command-grid').addEventListener('click', event => {
     const button = event.target.closest('button[data-action]');
     if (!button || button.disabled) return;
@@ -656,19 +660,25 @@ function updateObjective(world) {
   if (text.textContent !== body) text.textContent = body;
 }
 
-export function setPlacement(active, label = '', type = '', orientation = '') {
+export function setPlacement(active, label = '', type = '', orientation = '', rotation = null) {
   activePlacementType = active ? type : null;
   $('placement-tip').classList.toggle('hidden', !active);
+  const canRotate = active && type && !BUILDING_TYPES[type]?.fortification && !BUILDING_TYPES[type]?.wallAttachment;
+  const angle = Number.isFinite(rotation) ? Math.round(rotation * 180 / Math.PI) % 360 : 0;
+  const displayAngle = angle < 0 ? angle + 360 : angle;
+  $('placement-rotation-controls').classList.toggle('hidden', !canRotate);
+  $('placement-rotation').value = String(displayAngle);
+  $('placement-rotation-value').textContent = `${displayAngle} deg`;
   if (active && label) {
     $('placement-message').textContent = type === 'farm'
-      ? 'Field: move beside a completed Mill · snaps to an open attached plot · HUD or Esc cancels'
+      ? 'Field: move beside a completed Mill · slider or Q/E turns · HUD or Esc cancels'
       : BUILDING_TYPES[type]?.wallAttachment
       ? `${label}: move beside a completed Stone Wall · snaps only to the settlement-facing inner side · HUD or Esc cancels`
       : BUILDING_TYPES[type]?.fortification
       ? type === 'wall'
         ? `${label}: drag from open ground or an existing wall end · bend while dragging to curve · HUD or Esc cancels`
         : `${label}: click terrain · R turns ${orientation === 'diagonal' ? 'diagonal' : 'straight'} · HUD or Esc cancels`
-      : `${label}: click terrain to build · Click any HUD panel to cancel`;
+      : `${label}: click terrain to build · slider or Q/E turns · HUD or Esc cancels`;
   }
   for (const button of $('command-grid').querySelectorAll('button[data-action="build"]')) {
     const selected = active && button.dataset.type === type;

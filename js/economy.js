@@ -43,6 +43,13 @@ const INCOME_SAMPLE_SECONDS = 0.75;
 // Ten-unit hand-ins are much farther apart than HUD samples. Smoothing keeps
 // the live rate legible between ordinary mine-to-drop-off round trips.
 const INCOME_SMOOTHING_SECONDS = 18;
+const FULL_TURN = Math.PI * 2;
+
+export function normalizeBuildingRotation(rotation = 0) {
+  if (!Number.isFinite(rotation)) return 0;
+  const normalized = rotation % FULL_TURN;
+  return normalized < 0 ? normalized + FULL_TURN : normalized;
+}
 
 const RESOURCE_DROPOFF_TYPES = Object.freeze({
   food: Object.freeze(['mill']),
@@ -133,6 +140,9 @@ export function createBuilding(side, type, x, y, complete = false, options = {})
     amount: def.amount || 0,
     visualVariant: Number.isInteger(options.visualVariant) ? options.visualVariant : null,
   };
+  if (!def.fortification && !def.wallAttachment) {
+    building.rotation = normalizeBuildingRotation(options.rotation);
+  }
   if (def.fortification) {
     building.orientation = normalizeFortificationOrientation(options.orientation);
     if (type === 'gate') building.gateOpen = options.gateOpen !== false;
@@ -424,12 +434,14 @@ export function validatePlacement(world, side, type, x, y, options = {}) {
       snappedToId: null });
   const candidate = {
     type, x: snapped.x, y: snapped.y, orientation: snapped.orientation,
+    rotation: fortification || wallAttachment ? null : normalizeBuildingRotation(options.rotation),
     wallId: snapped.wallId ?? null,
   };
   const placement = {
     x: candidate.x,
     y: candidate.y,
     orientation: candidate.orientation,
+    rotation: candidate.rotation,
     snappedToId: snapped.snappedToId,
     millId: snapped.millId ?? null,
     fieldSlot: snapped.fieldSlot ?? null,
@@ -767,6 +779,7 @@ export function placeBuilding(world, sideIndex, type, x, y, builders, options = 
     false,
     {
       orientation: placement.orientation,
+      rotation: placement.rotation,
       millId: placement.millId,
       fieldSlot: placement.fieldSlot,
       wallId: placement.wallId,
