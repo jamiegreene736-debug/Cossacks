@@ -469,7 +469,8 @@ export const BUILDING_TYPES = {
     cost: { wood: 90, stone: 30 }, peacefulCivic: true, variants: 5, hotkey: 'P',
   },
   playground: {
-    label: 'Inclusive Playground', description: 'A protected civic playground where children remain non-combatants.',
+    label: 'Inclusive Playground',
+    description: 'A protected civic playground where wizard boys and girls play as non-combatants.',
     w: 158, h: 116, radius: 84, visualScale: 1.25, hp: 999999, buildTime: 13,
     cost: { wood: 110, stone: 20 }, peacefulCivic: true, hotkey: 'Y',
   },

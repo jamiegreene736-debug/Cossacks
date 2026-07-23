@@ -11,7 +11,9 @@ import {
 } from '../js/countries.js';
 import { createBuilding, queueUnit, stepEconomy } from '../js/economy.js';
 import { applyAttackOrder } from '../js/formations.js';
-import { getBuildingProductionArtSpec } from '../js/gfx/buildings.js';
+import {
+  getBuildingProductionArtSpec, getWizardPlaygroundChildLayout,
+} from '../js/gfx/buildings.js';
 import { getSpecialProjectileVisualProfile } from '../js/gfx/effects.js';
 import { getMilitaryFrame } from '../js/military-animation.js';
 import { getFactionCharacterFrameSources } from '../js/render.js';
@@ -194,6 +196,24 @@ test('magic attacks travel visibly while protected parks and children cannot be 
   assert.equal(damage(world, playground, integrity + 1, clown), false);
   assert.equal(playground.alive, true);
   assert.equal(playground.hp, integrity);
+});
+
+test('the protected playground contains animated wizard boys and girls at play', () => {
+  const morning = getWizardPlaygroundChildLayout(15, 12345);
+  const later = getWizardPlaygroundChildLayout(18.4, 12345);
+  assert.equal(morning.length, 8);
+  assert.ok(morning.some(child => child.gender === 'boy'));
+  assert.ok(morning.some(child => child.gender === 'girl'));
+  assert.deepEqual(new Set(morning.map(child => child.play)), new Set([
+    'wand-chase', 'rope-bridge', 'slide', 'swing',
+    'sandbox-spell', 'spell-circle', 'tower-lookout',
+  ]));
+  assert.ok(morning.every(child => child.x >= -64 && child.x <= 64));
+  assert.ok(morning.every(child => child.y >= -36 && child.y <= 42));
+  assert.ok(morning.every(child => child.scale >= 0.74 && child.scale <= 1.01));
+  assert.ok(morning.some((child, index) => (
+    Math.hypot(child.x - later[index].x, child.y - later[index].y) > 2
+  )), 'at least one wizard child should visibly move between frames');
 });
 
 test('fantasy architecture is backed by substantial high-detail production assets', async () => {

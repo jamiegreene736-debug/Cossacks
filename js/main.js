@@ -240,6 +240,7 @@ async function startBattle(opts) {
   setupLocalWomanVillagerPreview(world);
   setupLocalOpeningTrucePreview(world);
   setupLocalFantasyFactionPreview(world);
+  setupLocalWizardChildrenPreview(world);
   setupLocalCharacterAnimationPreview(world);
   setupLocalEnglandHousePreview(world);
   setupLocalThemedArchitecturePreview(world);
@@ -315,6 +316,41 @@ function setupLocalFantasyFactionPreview(activeWorld) {
   camera.x = 2540;
   camera.y = 1450;
   camera.zoom = 0.72;
+  clampCamera();
+}
+
+function setupLocalWizardChildrenPreview(activeWorld) {
+  const debugName = new URLSearchParams(window.location.search).get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'wizard-children') return;
+
+  const previewBounds = { left: 880, right: 1880, top: 1060, bottom: 1960 };
+  activeWorld.resources = activeWorld.resources.filter(resource => (
+    resource.x < previewBounds.left || resource.x > previewBounds.right
+    || resource.y < previewBounds.top || resource.y > previewBounds.bottom
+  ));
+  activeWorld.buildings = activeWorld.buildings.filter(building => (
+    building.x < previewBounds.left || building.x > previewBounds.right
+    || building.y < previewBounds.top || building.y > previewBounds.bottom
+  ));
+  activeWorld.time = OPENING_PEACE_SECONDS;
+
+  const playground = createBuilding(2, 'playground', 1360, 1500, true, {
+    team: activeWorld.sides[2]?.team,
+  });
+  playground.selected = true;
+  activeWorld.buildings.push(playground);
+
+  const park = createBuilding(2, 'park', 1035, 1460, true, {
+    team: activeWorld.sides[2]?.team,
+    visualVariant: 0,
+  });
+  activeWorld.buildings.push(park);
+
+  camera.x = 1265;
+  camera.y = 1490;
+  camera.zoom = 1.15;
   clampCamera();
 }
 
