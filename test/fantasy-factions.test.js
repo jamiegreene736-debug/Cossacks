@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 
 import { Commander } from '../js/ai.js';
 import {
@@ -24,6 +24,31 @@ function factionWorld(worldCountry = 'GB') {
     playerNation: 'england', enemyNation: 'ottoman',
     allyNations: ['hogwarts', 'starwars'], enemyAllyNation: 'nightmare_circus', worldCountry,
   });
+}
+
+function webpDimensions(buffer) {
+  assert.equal(buffer.toString('ascii', 0, 4), 'RIFF');
+  assert.equal(buffer.toString('ascii', 8, 12), 'WEBP');
+  for (let offset = 12; offset + 8 <= buffer.length;) {
+    const chunk = buffer.toString('ascii', offset, offset + 4);
+    const size = buffer.readUInt32LE(offset + 4);
+    const data = offset + 8;
+    if (chunk === 'VP8X') {
+      return {
+        width: 1 + buffer.readUIntLE(data + 4, 3),
+        height: 1 + buffer.readUIntLE(data + 7, 3),
+      };
+    }
+    if (chunk === 'VP8L') {
+      const bits = buffer.readUInt32LE(data + 1);
+      return {
+        width: (bits & 0x3fff) + 1,
+        height: ((bits >> 14) & 0x3fff) + 1,
+      };
+    }
+    offset = data + size + (size % 2);
+  }
+  throw new Error('Unsupported WebP encoding');
 }
 
 test('the world catalogue represents 193 UN members and two observer states exactly once', () => {
@@ -207,7 +232,7 @@ test('fantasy architecture is backed by substantial high-detail production asset
     ['hogwarts', 'stable', 'hogwartsStable', 'hogwarts-stable.webp', 160_000],
     ['hogwarts', 'foundry', 'hogwartsFoundry', 'hogwarts-foundry.webp', 160_000],
     ['hogwarts', 'tower', 'hogwartsTower', 'hogwarts-tower.webp', 160_000],
-    ['hogwarts', 'castle', 'hogwartsCastle', 'hogwarts-castle.webp', 160_000],
+    ['hogwarts', 'castle', 'hogwartsCastle', 'hogwarts-castle.webp', 300_000],
     ['hogwarts', 'school', 'hogwartsGreatHall', 'hogwarts-great-hall.webp', 160_000],
     ['hogwarts', 'pool', 'hogwartsPool', 'hogwarts-pool.webp', 160_000],
     ['hogwarts', 'beach', 'hogwartsBeach', 'hogwarts-beach.webp', 160_000],
@@ -229,8 +254,12 @@ test('fantasy architecture is backed by substantial high-detail production asset
   ];
   for (const [nation, type, key, filename, minimumBytes] of fixtures) {
     assert.deepEqual(getBuildingProductionArtSpec(nation, type), { key });
-    const metadata = await stat(new URL(`../assets/buildings/${filename}`, import.meta.url));
+    const assetUrl = new URL(`../assets/buildings/${filename}`, import.meta.url);
+    const metadata = await stat(assetUrl);
     assert.ok(metadata.size > minimumBytes, `${filename} should retain its source depth`);
+    if (filename === 'hogwarts-castle.webp') {
+      assert.deepEqual(webpDimensions(await readFile(assetUrl)), { width: 768, height: 1024 });
+    }
   }
 });
 
