@@ -63,7 +63,7 @@ test('England marketplace has production art and resource trading metadata', asy
   assert.deepEqual(getBuildingProductionArtSpec('england', 'marketplace'), { key: 'englishMarketplace' });
 
   const metadata = await stat(new URL('../assets/buildings/english-marketplace.webp', import.meta.url));
-  assert.ok(metadata.size > 100_000, 'english-marketplace.webp should retain rendered market-house detail');
+  assert.ok(metadata.size > 150_000, 'english-marketplace.webp should retain rendered market-house detail');
 });
 
 test('villagers place the selected English house type instead of a random variant', () => {
