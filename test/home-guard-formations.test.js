@@ -18,6 +18,7 @@ test('allied AI home guards form type-separated rows near their own Town Center'
   const soldiers = [
     'wizard_duelist', 'wizard_duelist',
     'witch_duelist', 'witch_duelist',
+    'broom_rider', 'broom_rider',
     'moaning_myrtle', 'moaning_myrtle',
   ].map((unitType, index) => spawnUnit(
     world,
@@ -30,7 +31,7 @@ test('allied AI home guards form type-separated rows near their own Town Center'
   const assignments = commander.arrangeHomeGuard();
 
   assert.deepEqual(assignments.map(assignment => assignment.type), [
-    'wizard_duelist', 'witch_duelist', 'moaning_myrtle',
+    'wizard_duelist', 'witch_duelist', 'broom_rider', 'moaning_myrtle',
   ]);
   for (const soldier of soldiers) {
     assert.equal(soldier.state, 'move');

@@ -41,7 +41,7 @@ const FACTION_CHARACTER_ART_SPECS = Object.freeze({
     sourceW: 362, sourceH: 362,
     unitRows: Object.freeze({
       wizard_worker: 0, witch_worker: 1,
-      wizard_duelist: 0, witch_duelist: 1, moaning_myrtle: 2,
+      wizard_duelist: 0, witch_duelist: 1, broom_rider: 1, moaning_myrtle: 2,
     }),
   }),
   starwars: Object.freeze({

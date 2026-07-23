@@ -34,14 +34,10 @@ test('CPU difficulty defaults safely and scales strategic pressure', () => {
   assert.ok(medium.maxWaveSize < hard.maxWaveSize);
 });
 
-test('difficulty controls normal production batch sizes without changing unit rules', () => {
-  const expected = {
-    low: { barracks: 3, stable: 2, foundry: 1 },
-    medium: { barracks: 4, stable: 2, foundry: 1 },
-    hard: { barracks: 5, stable: 3, foundry: 2 },
-  };
+test('difficulty keeps production batch sizes even while changing attack pressure', () => {
+  const expected = { barracks: 4, stable: 2, foundry: 1 };
 
-  for (const difficulty of Object.keys(expected)) {
+  for (const difficulty of Object.keys(CPU_DIFFICULTIES)) {
     const world = makeWorld(difficulty);
     const side = world.sides[1];
     side.resources = { food: 100_000, wood: 100_000, gold: 100_000, stone: 100_000 };
@@ -54,9 +50,9 @@ test('difficulty controls normal production batch sizes without changing unit ru
     const commander = new Commander(world, 1, difficulty);
     commander.manageProduction();
 
-    assert.equal(barracks.queue.length, expected[difficulty].barracks);
-    assert.equal(stable.queue.length, expected[difficulty].stable);
-    assert.equal(foundry.queue.length, expected[difficulty].foundry);
+    assert.equal(barracks.queue.length, expected.barracks);
+    assert.equal(stable.queue.length, expected.stable);
+    assert.equal(foundry.queue.length, expected.foundry);
   }
 });
 

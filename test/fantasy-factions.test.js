@@ -29,6 +29,40 @@ function factionWorld(worldCountry = 'GB') {
   });
 }
 
+function advanceCpuOpening(world, seconds, difficulty = 'hard') {
+  const commanders = [1, 2, 3, 4].map(sideIndex => new Commander(world, sideIndex, difficulty));
+  const dt = 1 / 30;
+  for (let tick = 0; tick < seconds * 30; tick++) {
+    for (const commander of commanders) commander.update(dt);
+    step(world, dt);
+  }
+}
+
+function militaryStrength(world, sideIndex) {
+  const trained = world.units.filter(unit => (
+    unit.alive && unit.side === sideIndex && !UNIT_TYPES[unit.unitType]?.worker
+  )).length;
+  const queued = world.buildings
+    .filter(building => building.side === sideIndex)
+    .flatMap(building => building.queue)
+    .filter(order => !UNIT_TYPES[order.type]?.worker).length;
+  return trained + queued;
+}
+
+function useSeededRandom(seed, callback) {
+  const originalRandom = Math.random;
+  let state = seed >>> 0;
+  Math.random = () => {
+    state = (1664525 * state + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+  try {
+    return callback();
+  } finally {
+    Math.random = originalRandom;
+  }
+}
+
 function webpDimensions(buffer) {
   assert.equal(buffer.toString('ascii', 0, 4), 'RIFF');
   assert.equal(buffer.toString('ascii', 8, 12), 'WEBP');
@@ -83,7 +117,8 @@ test('the authored allied story launches England, Hogwarts, and StarWars against
     .filter(building => building.side === 2)
     .map(building => building.type);
   assert.deepEqual(new Set(alliedTypes), new Set([
-    'town_center', 'house', 'school', 'castle', 'pool', 'beach', 'park', 'playground',
+    'town_center', 'house', 'mill', 'lumber_camp', 'mine', 'barracks', 'stable',
+    'foundry', 'tower', 'school', 'castle', 'pool', 'beach', 'park', 'playground',
   ]));
   assert.ok(world.buildings.filter(building => building.side === 2).every(building => building.complete));
   assert.equal(world.sides[2].resources.stone, 120, 'the allied castle and civic district are free');
@@ -96,6 +131,100 @@ test('the authored allied story launches England, Hogwarts, and StarWars against
     'barracks', 'stable', 'foundry', 'tower', 'castle',
   ]));
   assert.ok(world.buildings.filter(building => building.side === 4).every(building => building.complete));
+});
+
+test('all non-woman villagers share the same economy and militia balance', () => {
+  const balancedWorkerFields = [
+    'hp', 'speed', 'radius', 'range', 'acquire', 'reload', 'dmg', 'acc',
+    'meleeDmg', 'meleeRate', 'chase', 'cost', 'trainTime', 'pop',
+  ];
+  const standard = UNIT_TYPES.villager;
+  for (const unitType of [
+    'wizard_worker', 'witch_worker', 'circus_worker',
+    'starwars_mechanic', 'starwars_robed_villager',
+  ]) {
+    const worker = UNIT_TYPES[unitType];
+    assert.equal(worker.worker, true);
+    for (const field of balancedWorkerFields) {
+      assert.deepEqual(worker[field], standard[field], `${unitType} should match villager ${field}`);
+    }
+  }
+  assert.notDeepEqual(UNIT_TYPES.woman_villager.cost, standard.cost);
+  assert.ok(UNIT_TYPES.woman_villager.range > standard.range);
+});
+
+test('themed soldiers keep faction visuals but use equal combat archetype costs and power', () => {
+  const fields = [
+    'hp', 'speed', 'radius', 'range', 'acquire', 'reload', 'dmg', 'acc',
+    'meleeDmg', 'meleeRate', 'chase', 'cost', 'trainTime', 'pop',
+  ];
+  const groups = [
+    ['musk', ['wizard_duelist', 'captain_spaulding', 'starwars_sentinel']],
+    ['pike', ['witch_duelist', 'art_clown', 'twisty_clown', 'starwars_blade_guard']],
+    ['cav', ['broom_rider', 'pennywise', 'starwars_skiff_rider']],
+    ['gun', ['moaning_myrtle', 'killer_klown', 'starwars_pulse_cannon']],
+  ];
+  for (const [standardType, themedTypes] of groups) {
+    const standard = UNIT_TYPES[standardType];
+    for (const unitType of themedTypes) {
+      const unit = UNIT_TYPES[unitType];
+      for (const field of fields) {
+        assert.deepEqual(unit[field], standard[field], `${unitType} should match ${standardType} ${field}`);
+      }
+    }
+  }
+  assert.equal(UNIT_TYPES.starwars_sentinel.projectileKind, 'plasma');
+  assert.equal(UNIT_TYPES.wizard_duelist.projectileKind, 'arcane');
+  assert.equal(UNIT_TYPES.broom_rider.projectileKind, 'arcane');
+  assert.equal(UNIT_TYPES.killer_klown.projectileKind, 'cotton_candy');
+});
+
+test('every CPU faction queues the same army batch from equivalent production buildings', () => {
+  const world = factionWorld();
+  for (const sideIndex of [1, 2, 3, 4]) {
+    const side = world.sides[sideIndex];
+    side.resources = { food: 100_000, wood: 100_000, gold: 100_000, stone: 100_000 };
+    side.popCap = 1200;
+    side.queuedPopulation = 0;
+    world.buildings = world.buildings.filter(building => (
+      building.side !== sideIndex
+        || !['barracks', 'stable', 'foundry', 'castle'].includes(building.type)
+    ));
+    const townCenter = world.buildings.find(building => (
+      building.side === sideIndex && building.type === 'town_center'
+    ));
+    const barracks = createBuilding(sideIndex, 'barracks', townCenter.x + 120, townCenter.y - 170, true, {
+      team: side.team,
+    });
+    const stable = createBuilding(sideIndex, 'stable', townCenter.x + 245, townCenter.y, true, {
+      team: side.team,
+    });
+    const foundry = createBuilding(sideIndex, 'foundry', townCenter.x + 120, townCenter.y + 170, true, {
+      team: side.team,
+    });
+    world.buildings.push(barracks, stable, foundry);
+
+    const commander = new Commander(world, sideIndex, 'hard');
+    commander.manageProduction();
+
+    assert.equal(barracks.queue.length, 4, `${side.nation} barracks batch`);
+    assert.equal(stable.queue.length, 2, `${side.nation} stable batch`);
+    assert.equal(foundry.queue.length, 1, `${side.nation} foundry batch`);
+  }
+});
+
+test('all CPU factions develop comparable opening armies', () => {
+  useSeededRandom(1700, () => {
+    const world = factionWorld();
+    advanceCpuOpening(world, 480);
+
+    const strengths = [1, 2, 3, 4].map(sideIndex => militaryStrength(world, sideIndex));
+    const weakest = Math.min(...strengths);
+    const strongest = Math.max(...strengths);
+
+    assert.ok(weakest >= 90, `weakest CPU army should be battle-ready, got ${strengths.join(', ')}`);
+    assert.ok(strongest / weakest <= 1.6, `CPU army spread should stay fair, got ${strengths.join(', ')}`);
+  });
 });
 
 test('Hogwarts trains wizards, witches, and Moaning Myrtle from faction buildings', () => {
@@ -113,6 +242,7 @@ test('Hogwarts trains wizards, witches, and Moaning Myrtle from faction building
   assert.deepEqual(getTrainableUnitTypes('hogwarts', 'town_center'), [
     'wizard_worker', 'witch_worker', 'moaning_myrtle',
   ]);
+  assert.deepEqual(getTrainableUnitTypes('hogwarts', 'stable'), ['broom_rider']);
   assert.equal(queueUnit(world, townCenter, 'pennywise', 1, { free: true }).ok, false);
 });
 
@@ -205,7 +335,7 @@ test('magic attacks travel visibly while protected parks and children cannot be 
   const world = factionWorld();
   world.time = OPENING_PEACE_SECONDS;
   const wizard = spawnUnit(world, 2, 'wizard_duelist', 900, 1500);
-  const sentinel = spawnUnit(world, 4, 'starwars_sentinel', 910, 1630);
+  const sentinel = spawnUnit(world, 4, 'starwars_sentinel', 940, 1620);
   const clown = spawnUnit(world, 3, 'captain_spaulding', 1080, 1500);
   wizard.reload = 0;
   sentinel.reload = 0;
@@ -297,6 +427,7 @@ test('the Great Hall keeps its opacity-corrected production artwork', async () =
 test('world-country identity and fantasy units survive save and resume', () => {
   const world = factionWorld('OM');
   const myrtle = spawnUnit(world, 2, 'moaning_myrtle', 800, 1800);
+  const broomRider = spawnUnit(world, 2, 'broom_rider', 880, 1880);
   const pennywise = spawnUnit(world, 3, 'pennywise', 4200, 1800);
   const sentinel = spawnUnit(world, 4, 'starwars_sentinel', 820, 1960);
   const snapshot = createGameSnapshot(world, [
@@ -309,6 +440,7 @@ test('world-country identity and fantasy units survive save and resume', () => {
   const restored = restoreGameSnapshot(snapshot).world;
   assert.equal(restored.worldCountry, 'OM');
   assert.equal(restored.units.find(unit => unit.id === myrtle.id).unitType, 'moaning_myrtle');
+  assert.equal(restored.units.find(unit => unit.id === broomRider.id).unitType, 'broom_rider');
   assert.equal(restored.units.find(unit => unit.id === pennywise.id).unitType, 'pennywise');
   assert.equal(restored.units.find(unit => unit.id === sentinel.id).unitType, 'starwars_sentinel');
 });

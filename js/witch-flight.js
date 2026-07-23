@@ -16,7 +16,8 @@ export const WITCH_HOVER_HEIGHT = 13;
 export const WITCH_BANK_LIMIT = 0.14;
 
 export function isBroomWitch(unit) {
-  return unit?.unitType === 'witch_worker' || unit?.unitType === 'witch_duelist';
+  return unit?.unitType === 'witch_worker' || unit?.unitType === 'witch_duelist'
+    || unit?.unitType === 'broom_rider';
 }
 
 function clamp(value, low, high) {

@@ -23,9 +23,10 @@ function factionWorld() {
   return world;
 }
 
-test('only witch workers and duelists use the broom-flight controller', () => {
+test('only broom-mounted Hogwarts units use the broom-flight controller', () => {
   assert.equal(isBroomWitch({ unitType: 'witch_worker' }), true);
   assert.equal(isBroomWitch({ unitType: 'witch_duelist' }), true);
+  assert.equal(isBroomWitch({ unitType: 'broom_rider' }), true);
   assert.equal(isBroomWitch({ unitType: 'wizard_worker' }), false);
   assert.equal(isBroomWitch({ unitType: 'moaning_myrtle' }), false);
 });

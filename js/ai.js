@@ -187,30 +187,47 @@ export class Commander {
 
   manageProduction() {
     const world = this.world;
-    const nation = world.sides[this.side].nation;
+    const side = world.sides[this.side];
+    const nation = side.nation;
     const military = unitsOf(world, this.side).filter(isMilitaryUnit);
     const tc = getTownCenter(world, this.side);
     const dir = sideFrontDirection(world, this.side);
     const hasFoundry = buildingsOf(world, this.side, 'foundry').length > 0;
+    const workers = unitsOf(world, this.side).filter(unit => UNIT_TYPES[unit.unitType || unit.type]?.worker);
+    const queuedWorkers = tc?.queue.filter(item => UNIT_TYPES[item.type]?.worker).length || 0;
+    const workerRoster = getTrainableUnitTypes(nation, 'town_center')
+      .filter(unitType => UNIT_TYPES[unitType]?.worker);
+    const workerFoodReserve = Math.min(...workerRoster.map(unitType => (
+      UNIT_TYPES[unitType].cost?.food ?? Number.POSITIVE_INFINITY
+    )));
+    const needsWorkers = workers.length + queuedWorkers < this.profile.villagerTarget;
+    const reserveFoodForWorkers = needsWorkers && Number.isFinite(workerFoodReserve)
+      && side.resources.food < workerFoodReserve * 3;
     for (const building of buildingsOf(world, this.side, null, true)) {
       const trains = getTrainableUnitTypes(nation, building.type)
         .filter(unitType => !UNIT_TYPES[unitType]?.worker);
       if (trains.length === 0 || building.type === 'town_center'
           || building.queue.length >= this.profile.productionQueueLimit) continue;
+      if (building.type === 'castle' && isPeaceTime(world)) continue;
       if (building.type === 'barracks') {
         const unitType = trains[(military.length + building.queue.length) % trains.length];
+        if (reserveFoodForWorkers && UNIT_TYPES[unitType].cost?.food) continue;
         queueUnit(world, building, unitType, this.profile.productionBatch.barracks);
       } else if (building.type === 'stable') {
         if (hasFoundry || world.time > this.profile.cavalryFallbackTime) {
-          queueUnit(world, building, trains[military.length % trains.length], this.profile.productionBatch.stable);
+          const unitType = trains[military.length % trains.length];
+          if (reserveFoodForWorkers && UNIT_TYPES[unitType].cost?.food) continue;
+          queueUnit(world, building, unitType, this.profile.productionBatch.stable);
         }
       } else if (building.type === 'foundry') {
         const unitType = trains[(military.length + building.queue.length) % trains.length];
         const count = unitType === 'killer_klown' ? 1 : this.profile.productionBatch.foundry;
+        if (reserveFoodForWorkers && UNIT_TYPES[unitType].cost?.food) continue;
         queueUnit(world, building, unitType, count);
       } else if (building.type === 'castle') {
         const unitType = trains[(military.length + building.queue.length) % trains.length];
         const count = UNIT_TYPES[unitType].splash ? 1 : UNIT_TYPES[unitType].pop > 1 ? 2 : 3;
+        if (reserveFoodForWorkers && UNIT_TYPES[unitType].cost?.food) continue;
         queueUnit(world, building, unitType, count);
       }
       if (tc) {

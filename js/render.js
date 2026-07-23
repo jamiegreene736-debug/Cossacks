@@ -622,10 +622,11 @@ function buildFactionCharacterDefs(nationKey, side, nat) {
   const normalizeScale = nationKey === 'hogwarts' || nationKey === 'starwars';
   for (const [unitType, sourceRow] of Object.entries(spec.unitRows)) {
     const worker = Boolean(UNIT_TYPES[unitType]?.worker);
-    const broomWitch = unitType === 'witch_worker' || unitType === 'witch_duelist';
+    const broomWitch = unitType === 'witch_worker' || unitType === 'witch_duelist'
+      || unitType === 'broom_rider';
     const isGhost = unitType === 'moaning_myrtle';
     const isHeavy = unitType === 'killer_klown' || unitType === 'starwars_pulse_cannon';
-    const isMounted = unitType === 'starwars_skiff_rider';
+    const isMounted = unitType === 'starwars_skiff_rider' || unitType === 'broom_rider';
     const frame = normalizeScale
       ? worker ? PRODUCTION_WORKER
         : isHeavy ? MILITARY_ART_SPECS.gun
