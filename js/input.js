@@ -30,7 +30,7 @@ let currentFormation = 'line';
 let controlledSide = 0;
 let placement = null;
 let wallDrag = null;
-let primaryTownCenterRallyArmed = false;
+let primaryBuildingRallyArmed = false;
 const groups = {};
 const keys = new Set();
 
@@ -105,10 +105,10 @@ export function initInput(canvas, minimap, worldGetter, cbs) {
         panDrag = { sx: event.clientX, sy: event.clientY, camX: camera.x, camY: camera.y };
       } else {
         const point = screenToWorld(event.clientX, event.clientY);
-        const rally = primaryTownCenterRallyArmed
-          ? setTownCenterPrimaryRallyAt(world, getSelection(), point.x, point.y) : null;
+        const rally = primaryBuildingRallyArmed
+          ? setProductionBuildingPrimaryRallyAt(world, getSelection(), point.x, point.y) : null;
         if (rally) {
-          primaryTownCenterRallyArmed = false;
+          primaryBuildingRallyArmed = false;
           announceBuildingRally(world, rally.buildings, point, rally);
           return;
         }
@@ -292,9 +292,11 @@ function setSelection(entities) {
   for (const entity of selection) entity.selected = false;
   selection = entities.filter(entity => canPlayerSelectEntity(world, entity));
   for (const entity of selection) entity.selected = true;
-  primaryTownCenterRallyArmed = selection.length === 1
+  primaryBuildingRallyArmed = selection.length === 1
     && selection[0].side === controlledSide
-    && selection[0].type === 'town_center';
+    && selection[0].entityKind === 'building'
+    && selection[0].complete
+    && Boolean(BUILDING_TYPES[selection[0].type]?.trains);
   callbacks.onSelection?.(selection);
   updateResourceHover(mouseX, mouseY);
 }
@@ -439,13 +441,22 @@ export function setTownCenterPrimaryRallyAt(world, selected, x, y) {
   return rally ? { ...rally, buildings } : null;
 }
 
+export function setProductionBuildingPrimaryRallyAt(world, selected, x, y) {
+  const buildings = selected.filter(entity => entity?.alive && entity.entityKind === 'building'
+    && entity.complete && BUILDING_TYPES[entity.type]?.trains);
+  if (!world || buildings.length !== 1) return null;
+  if (buildings[0].type === 'town_center') return setTownCenterPrimaryRallyAt(world, buildings, x, y);
+  const rally = setBuildingRallyAt(world, buildings, x, y);
+  return rally ? { ...rally, buildings } : null;
+}
+
 function announceBuildingRally(world, selectedBuildings, point, rally) {
   const rallyTarget = rally.target;
   const targetX = rallyTarget?.x ?? point.x;
   const targetY = rallyTarget?.y ?? point.y;
   world.flags.push({ x: targetX, y: targetY, life: 1.2, max: 1.2, rally: true });
   const townCenterSelected = selectedBuildings.some(building => building.type === 'town_center');
-  if (townCenterSelected) primaryTownCenterRallyArmed = false;
+  if (townCenterSelected) primaryBuildingRallyArmed = false;
   const targetDef = rallyTarget?.entityKind === 'building' ? BUILDING_TYPES[rallyTarget.type] : null;
   const autoWorks = townCenterSelected && rallyTarget && (
     rallyTarget.entityKind === 'resource'

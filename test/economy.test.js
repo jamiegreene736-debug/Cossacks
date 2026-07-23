@@ -228,6 +228,38 @@ test('ordinary buildings remain waypoints and invalid rally targets fall back to
   assert.equal(fallback.orderY, forest.y);
 });
 
+test('military production buildings send trained units to their selected waypoint', () => {
+  const world = makeWorld();
+  clearOpeningQueue(world);
+  Object.assign(world.sides[0].resources, {
+    food: 5000, wood: 5000, gold: 5000, stone: 5000,
+  });
+  const cases = [
+    ['barracks', 'musk'],
+    ['stable', 'cav'],
+    ['castle', 'gun'],
+  ];
+
+  for (let index = 0; index < cases.length; index++) {
+    const [buildingType, unitType] = cases[index];
+    const building = createBuilding(0, buildingType, 900 + index * 220, 1700, true);
+    world.buildings.push(building);
+    const x = building.x + 420;
+    const y = building.y + 160;
+
+    assert.equal(setRallyPoint(building, x, y), true);
+    const result = queueUnit(world, building, unitType, 1, { trainTime: 0.01 });
+    assert.equal(result.ok, true);
+    stepEconomy(world, 0.02);
+
+    const unit = world.units.find(candidate => candidate.side === 0 && candidate.type === unitType);
+    assert.ok(unit, `${unitType} should be trained`);
+    assert.equal(unit.state, 'move');
+    assert.equal(unit.orderX, x);
+    assert.equal(unit.orderY, y);
+  }
+});
+
 test('villagers carry gathered resources to the Town Center before the stockpile increases', () => {
   const world = makeWorld();
   advance(world, 4.1);
