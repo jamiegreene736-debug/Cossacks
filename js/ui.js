@@ -189,13 +189,19 @@ export function showBattleHud(world) {
     .filter((_side, sideIndex) => sideIndex !== localSide && world.sides[sideIndex]?.team === localTeam)
     .map(side => NATIONS[side.nation].name);
   const playerNames = [NATIONS[world.sides[localSide].nation].name, ...playerAllies];
-  $('hud-player-nation').textContent = playerNames.join(' + ');
+  const playerTeamLabel = playerNames.join(' + ');
+  $('hud-player-nation').textContent = playerTeamLabel;
+  $('hud-player-nation').title = playerTeamLabel;
   const rivals = world.sides
     .filter((_side, sideIndex) => world.sides[sideIndex]?.team !== localTeam)
     .map(side => NATIONS[side.nation].name);
-  $('hud-enemy-nation').textContent = rivals.join(' + ');
+  const rivalTeamLabel = rivals.join(' + ');
+  $('hud-enemy-nation').textContent = rivalTeamLabel;
+  $('hud-enemy-nation').title = rivalTeamLabel;
   const difficulty = CPU_DIFFICULTIES[world.difficulty] || CPU_DIFFICULTIES[DEFAULT_CPU_DIFFICULTY];
-  $('hud-enemy-role').textContent = `${difficulty.name} CPU rival team`;
+  const rivalRoleLabel = `${difficulty.name} CPU rival team`;
+  $('hud-enemy-role').textContent = rivalRoleLabel;
+  $('hud-enemy-role').title = rivalRoleLabel;
   $('player-crest').textContent = NATIONS[world.sides[localSide].nation].name[0];
   $('player-crest').style.background = NATIONS[world.sides[localSide].nation].coat;
   const country = WORLD_COUNTRY_BY_CODE[world.worldCountry];
