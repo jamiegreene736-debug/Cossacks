@@ -6,7 +6,7 @@ import { BUILDING_TYPES } from '../js/config.js';
 import {
   bdConstructionArtFrame, getBuildingPresentation, getFortificationConstructionStage,
   getFortificationMasonryDetailProfile, getFortificationRenderProfile,
-  usesFixedFortificationFrameArt,
+  getProductionBuildingVisibleSize, usesFixedFortificationFrameArt,
 } from '../js/gfx/buildings.js';
 import { MILITARY_ART_SPECS } from '../js/gfx/art-assets.js';
 
@@ -33,7 +33,7 @@ test('building silhouettes preserve the settlement scale hierarchy', () => {
   assert.ok(width('stable') > width('mill') * 1.5);
   assert.ok(width('stable') > width('lumber_camp') * 1.5);
   assert.ok(width('barracks') > width('house') * 1.7);
-  assert.ok(width('tower') < width('house'));
+  assert.ok(width('tower') < width('house') * 1.2);
   assert.ok(width('gate') > width('wall'));
 });
 
@@ -54,18 +54,58 @@ test('displayed architecture remains decisively larger than human-scale units', 
   assert.ok(BUILDING_TYPES.wall.visualScale > BUILDING_TYPES.barracks.visualScale);
 });
 
-test('Hogwarts and StarWars buildings use a restrained themed presentation scale', () => {
+test('Hogwarts and StarWars buildings use role-specific presentation scale', () => {
   for (const nation of ['hogwarts', 'starwars']) {
     const townCenter = getBuildingPresentation('town_center', undefined, nation);
     const castle = getBuildingPresentation('castle', undefined, nation);
     const house = getBuildingPresentation('house', undefined, nation);
+    const tower = getBuildingPresentation('tower', undefined, nation);
     const defaultTownCenter = getBuildingPresentation('town_center');
+    const defaultTower = getBuildingPresentation('tower');
 
     assert.ok(townCenter.visualScale < defaultTownCenter.visualScale);
     assert.ok(townCenter.displayArtWidth < defaultTownCenter.displayArtWidth);
     assert.ok(townCenter.displayArtWidth > house.displayArtWidth * 2);
     assert.ok(castle.displayArtWidth > townCenter.displayArtWidth);
+    assert.equal(tower.visualScale, defaultTower.visualScale);
+    assert.ok(tower.visualScale > house.visualScale);
   }
+});
+
+test('themed production silhouettes preserve human-readable architectural proportions', () => {
+  const hogwarts = {
+    house: getProductionBuildingVisibleSize('house', 'hogwarts', 335, 424),
+    tower: getProductionBuildingVisibleSize('tower', 'hogwarts', 378, 465),
+    townCenter: getProductionBuildingVisibleSize('town_center', 'hogwarts', 531, 705),
+    stable: getProductionBuildingVisibleSize('stable', 'hogwarts', 380, 451),
+    castle: getProductionBuildingVisibleSize('castle', 'hogwarts', 384, 483),
+  };
+  const starwars = {
+    house: getProductionBuildingVisibleSize('house', 'starwars', 720, 560),
+    tower: getProductionBuildingVisibleSize('tower', 'starwars', 720, 560),
+    townCenter: getProductionBuildingVisibleSize('town_center', 'starwars', 720, 560),
+    stable: getProductionBuildingVisibleSize('stable', 'starwars', 720, 560),
+    castle: getProductionBuildingVisibleSize('castle', 'starwars', 720, 560),
+  };
+
+  for (const [nation, sizes] of Object.entries({ hogwarts, starwars })) {
+    assert.ok(sizes.house.height >= 85, `${nation} housing should exceed a human-scale unit`);
+    assert.ok(sizes.tower.height > sizes.house.height * 1.1, `${nation} tower should rise above housing`);
+    assert.ok(sizes.stable.width > sizes.house.width * 1.75, `${nation} stable should span more than housing`);
+    assert.ok(sizes.townCenter.width > sizes.stable.width * 1.15, `${nation} civic core should dominate a stable`);
+    assert.ok(sizes.castle.width > sizes.townCenter.width * 1.55, `${nation} fortress should dominate the civic core`);
+  }
+});
+
+test('StarWars source trimming removes authored transparent-canvas scale drift', () => {
+  const tower = getProductionBuildingVisibleSize('tower', 'starwars', 720, 560);
+  const house = getProductionBuildingVisibleSize('house', 'starwars', 720, 560);
+  const castle = getProductionBuildingVisibleSize('castle', 'starwars', 720, 560);
+
+  assert.deepEqual(tower.sourceRect, { x: 220, y: 48, width: 280, height: 512 });
+  assert.ok(tower.sourceRect.width < house.sourceRect.width);
+  assert.ok(castle.sourceRect.width > house.sourceRect.width);
+  assert.ok(tower.height > 220);
 });
 
 test('production construction art advances continuously through four authored stages', () => {
