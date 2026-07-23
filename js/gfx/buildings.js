@@ -5074,7 +5074,7 @@ const BD_TOP_EXTRA = {
   town_center: 112, house: 118, english_cottage: 108, english_townhouse: 116,
   english_mansion: 148, spooky_house: 146, farm: 30, mill: 104, lumber_camp: 54,
   mine: 74, barracks: 78, stable: 72, foundry: 108, tower: 106,
-  marketplace: 118, castle: 162,
+  marketplace: 162, castle: 162,
   wall: 72, gate: 94, wall_stairs: 92,
 };
 
@@ -5278,7 +5278,7 @@ const BD_BUILDING_PRESENTATION = Object.freeze({
   mill: { artWidthScale: 1.42, apronWidthScale: 0.86, apronDepthScale: 0.58 },
   lumber_camp: { artWidthScale: 1.44, apronWidthScale: 0.86, apronDepthScale: 0.58 },
   mine: { artWidthScale: 1.42, apronWidthScale: 0.86, apronDepthScale: 0.58 },
-  marketplace: { artWidthScale: 1.52, apronWidthScale: 0.96, apronDepthScale: 0.64 },
+  marketplace: { artWidthScale: 2.12, apronWidthScale: 1.18, apronDepthScale: 0.72 },
   barracks: { artWidthScale: 1.44, apronWidthScale: 0.90, apronDepthScale: 0.60 },
   stable: { artWidthScale: 1.48, apronWidthScale: 0.94, apronDepthScale: 0.62 },
   foundry: { artWidthScale: 1.40, apronWidthScale: 0.92, apronDepthScale: 0.60 },

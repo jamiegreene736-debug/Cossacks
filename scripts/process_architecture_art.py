@@ -24,6 +24,7 @@ BUILDING_SLUGS = frozenset(
         "mill",
         "lumber-camp",
         "mine",
+        "marketplace",
         "barracks",
         "stable",
         "foundry",
