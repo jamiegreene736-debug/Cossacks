@@ -97,10 +97,21 @@ export function createResourceVisualLayout(resource) {
   for (let index = 0; index < profile.treeCount; index++) {
     const angle = random() * Math.PI * 2;
     const distance = Math.sqrt(random());
+    const scale = 0.82 + random() * 0.34;
+    let x = Math.cos(angle) * distance * radius * 0.76;
+    let y = Math.sin(angle) * distance * radius * 0.47;
+    x += (random() - 0.5) * radius * 0.14 * distance;
+    y += (random() - 0.5) * radius * 0.045 * distance;
+    const outer = Math.hypot(x, y);
+    if (outer > radius * 0.86) {
+      const clamp = (radius * 0.86) / outer;
+      x *= clamp;
+      y *= clamp;
+    }
     positions.push({
-      x: Math.cos(angle) * distance * radius * 0.76,
-      y: Math.sin(angle) * distance * radius * 0.47,
-      scale: 0.82 + random() * 0.34,
+      x,
+      y,
+      scale,
       flip: random() > 0.5,
       harvestRank: random(),
     });

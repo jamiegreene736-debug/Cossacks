@@ -52,6 +52,7 @@ test('resource layouts are deterministic and species profiles never mix tree fra
     assert.deepEqual(createResourceVisualLayout(resource), first);
     assert.equal(first.length, getResourceVisualProfile(resource).treeCount);
     assert.ok(first.every(tree => Math.hypot(tree.x, tree.y) < resource.radius));
+    assert.ok(first.every(tree => Math.abs(tree.x) < resource.radius * 0.86));
   }
 });
 

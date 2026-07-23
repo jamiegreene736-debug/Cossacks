@@ -6336,23 +6336,51 @@ const BD_RESOURCE_ART = Object.freeze({
 
 const BD_VEGETATION_CELL = 512;
 
+function bdVegetationFramePath(g, left, top, width, height) {
+  const cx = left + width * 0.5;
+  const crownTop = top + height * 0.025;
+  const shoulderY = top + height * 0.30;
+  const waistY = top + height * 0.67;
+  const baseY = top + height;
+  g.beginPath();
+  g.moveTo(cx, crownTop);
+  g.bezierCurveTo(
+    left + width * 0.20, top + height * 0.05,
+    left + width * 0.065, shoulderY,
+    left + width * 0.15, waistY,
+  );
+  g.quadraticCurveTo(left + width * 0.24, top + height * 0.93, cx, baseY);
+  g.quadraticCurveTo(left + width * 0.76, top + height * 0.93, left + width * 0.85, waistY);
+  g.bezierCurveTo(
+    left + width * 0.935, shoulderY,
+    left + width * 0.80, top + height * 0.05,
+    cx, crownTop,
+  );
+  g.closePath();
+}
+
 function bdDrawVegetationFrame(g, image, frame, x, baseY, width, flip, alpha = 1) {
   if (!image) return false;
+  const height = width;
+  const left = x - width / 2;
+  const top = baseY - height;
   g.save();
   g.globalAlpha *= alpha;
+  bdVegetationFramePath(g, left, top, width, height);
+  g.clip();
   if (flip) {
     g.translate(x, 0);
     g.scale(-1, 1);
     g.drawImage(
       image,
       frame * BD_VEGETATION_CELL, 0, BD_VEGETATION_CELL, BD_VEGETATION_CELL,
-      -width / 2, baseY - width, width, width,
+      -width / 2, top, width, height,
     );
   } else {
     g.drawImage(
       image,
       frame * BD_VEGETATION_CELL, 0, BD_VEGETATION_CELL, BD_VEGETATION_CELL,
-      x - width / 2, baseY - width, width, width,
+      left, top, width, height,
     );
   }
   g.restore();
