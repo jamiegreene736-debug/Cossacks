@@ -6359,6 +6359,33 @@ function bdVegetationFramePath(g, left, top, width, height) {
   g.closePath();
 }
 
+function bdDrawSoftSourceRect(g, image, sx, sy, sw, sh, dx, dy, dw, dh, insetK = 0.055, fadeK = 0.10) {
+  const canvasWidth = Math.max(1, Math.ceil(dw));
+  const canvasHeight = Math.max(1, Math.ceil(dh));
+  const c = document.createElement('canvas');
+  c.width = canvasWidth;
+  c.height = canvasHeight;
+  const s = c.getContext('2d');
+  const insetX = Math.round(sw * insetK);
+  const sourceWidth = Math.max(1, sw - insetX * 2);
+  s.drawImage(
+    image,
+    sx + insetX, sy, sourceWidth, sh,
+    0, 0, canvasWidth, canvasHeight,
+  );
+
+  const fade = Math.max(10, canvasWidth * fadeK);
+  const mask = s.createLinearGradient(0, 0, canvasWidth, 0);
+  mask.addColorStop(0, 'rgba(0,0,0,0)');
+  mask.addColorStop(Math.min(0.5, fade / canvasWidth), 'rgba(0,0,0,1)');
+  mask.addColorStop(Math.max(0.5, 1 - fade / canvasWidth), 'rgba(0,0,0,1)');
+  mask.addColorStop(1, 'rgba(0,0,0,0)');
+  s.globalCompositeOperation = 'destination-in';
+  s.fillStyle = mask;
+  s.fillRect(0, 0, canvasWidth, canvasHeight);
+  g.drawImage(c, dx, dy, dw, dh);
+}
+
 function bdDrawVegetationFrame(g, image, frame, x, baseY, width, flip, alpha = 1) {
   if (!image) return false;
   const height = width;
@@ -6371,20 +6398,23 @@ function bdDrawVegetationFrame(g, image, frame, x, baseY, width, flip, alpha = 1
   if (flip) {
     g.translate(x, 0);
     g.scale(-1, 1);
-    g.drawImage(
-      image,
-      frame * BD_VEGETATION_CELL, 0, BD_VEGETATION_CELL, BD_VEGETATION_CELL,
-      -width / 2, top, width, height,
-    );
+    bdDrawSoftSourceRect(g, image, frame * BD_VEGETATION_CELL, 0,
+      BD_VEGETATION_CELL, BD_VEGETATION_CELL, -width / 2, baseY - width,
+      width, width, 0.045, 0.09);
   } else {
-    g.drawImage(
-      image,
-      frame * BD_VEGETATION_CELL, 0, BD_VEGETATION_CELL, BD_VEGETATION_CELL,
-      left, top, width, height,
-    );
+    bdDrawSoftSourceRect(g, image, frame * BD_VEGETATION_CELL, 0,
+      BD_VEGETATION_CELL, BD_VEGETATION_CELL, x - width / 2, baseY - width,
+      width, width, 0.045, 0.09);
   }
   g.restore();
   return true;
+}
+
+function bdDrawSoftOrganicStamp(g, image, x, y, width, height) {
+  bdDrawSoftSourceRect(
+    g, image, 0, 0, image.naturalWidth, image.naturalHeight,
+    x, y, width, height, 0.065, 0.12,
+  );
 }
 
 function bdPaintResourceFloor(g, res, profile, rr) {
@@ -6496,7 +6526,7 @@ function bdDrawBerryGarden(g, res, frac, rr) {
     bdContactShadow(g, 0, bottom - 5, width * 0.39, height * 0.38, 0.72);
     g.save();
     g.globalAlpha = 0.68 + frac * 0.32;
-    g.drawImage(image, -width / 2, bottom - height, width, height);
+    bdDrawSoftOrganicStamp(g, image, -width / 2, bottom - height, width, height);
     g.restore();
   } else {
     for (let index = 0; index < 9; index++) {
