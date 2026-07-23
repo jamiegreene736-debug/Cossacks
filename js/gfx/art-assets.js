@@ -63,6 +63,11 @@ const FACTION_CHARACTER_ART_SPECS = Object.freeze({
   }),
 });
 
+const WITCH_BROOM_ART_SPEC = Object.freeze({
+  key: 'witchBroomFlight', file: 'witch-broom-flight.webp', columns: 8, rows: 1,
+  sourceW: 272, sourceH: 724,
+});
+
 const WALK_ART_SPECS = Object.freeze({
   musk: Object.freeze({
     key: 'musketeersWalk', file: 'musketeers-walk.webp', columns: 6, rows: 2,
@@ -239,6 +244,7 @@ const ART_URLS = Object.freeze({
   ottomanWomanVillager: new URL('../../assets/units/ottoman-woman-villager.webp', import.meta.url).href,
   womanVillagerCannon: new URL('../../assets/units/woman-villager-cannon.webp', import.meta.url).href,
   hogwartsMagic: new URL('../../assets/units/hogwarts-magic.webp', import.meta.url).href,
+  witchBroomFlight: new URL('../../assets/units/witch-broom-flight.webp', import.meta.url).href,
   starwarsCitizens: new URL('../../assets/units/starwars-citizens.webp', import.meta.url).href,
   nightmareClowns: new URL('../../assets/units/nightmare-clowns.webp', import.meta.url).href,
   musketeers: new URL('../../assets/units/musketeers.webp', import.meta.url).href,
@@ -294,6 +300,7 @@ export {
   WOMAN_VILLAGER_ART_SPECS,
   WOMAN_VILLAGER_CANNON_ART_SPEC,
   FACTION_CHARACTER_ART_SPECS,
+  WITCH_BROOM_ART_SPEC,
   getProductionFrameSlice,
   preloadProductionArt,
   getProductionArt,
