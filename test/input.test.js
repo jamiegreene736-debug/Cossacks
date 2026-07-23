@@ -6,13 +6,14 @@ import { WORLD } from '../js/config.js';
 import { OPENING_PEACE_SECONDS } from '../js/truce.js';
 import {
   assignVillagersToConstruction, assignVillagersToRepair, canPlayerSelectEntity,
-  findPlayerSelectableEntityAt, getVillagerAttackTargetAt, getVillagerRepairTargetAt,
-  isOpenGroundMoveTarget,
+  findPlayerSelectableEntityAt, findSelectableUnitsOfType, getSelection,
+  getVillagerAttackTargetAt, getVillagerRepairTargetAt, initInput, isOpenGroundMoveTarget,
   isSecondaryPointerEvent, issuePrimaryUnitCommand, issueVillagerAttack,
-  issueVillagerGroundMove, setBuildingRallyAt, setControlledSide,
-  setProductionBuildingPrimaryRallyAt, setTownCenterPrimaryRallyAt,
+  issueVillagerGroundMove, selectEntitiesById, setBuildingRallyAt,
+  setControlledSide, setProductionBuildingPrimaryRallyAt, setTownCenterPrimaryRallyAt,
 } from '../js/input.js';
 import { createBuilding } from '../js/economy.js';
+import { camera, screenToWorld } from '../js/render.js';
 
 class FakeElement extends EventTarget {
   constructor(tagName = 'DIV') {
@@ -39,6 +40,7 @@ function mouseEvent(type, button, extra = {}) {
     shiftKey: { value: Boolean(extra.shiftKey) },
     ctrlKey: { value: Boolean(extra.ctrlKey) },
     metaKey: { value: Boolean(extra.metaKey) },
+    detail: { value: Number(extra.detail) || 0 },
   });
   return event;
 }
@@ -200,6 +202,73 @@ test('Mac secondary clicks accept both trackpad button 2 and Control-click', () 
   assert.equal(isSecondaryPointerEvent(mouseEvent('mousedown', 0, { ctrlKey: true })), true);
   assert.equal(isSecondaryPointerEvent(mouseEvent('mousedown', 0)), false);
   assert.equal(isSecondaryPointerEvent(mouseEvent('mousedown', 0, { metaKey: true })), false);
+});
+
+test('double-clicking a unit selects every living friendly unit of that exact type', () => {
+  const previousWindow = globalThis.window;
+  const previousDocument = globalThis.document;
+  const fakeWindow = new FakeElement('WINDOW');
+  const fakeDocument = new FakeElement('DOCUMENT');
+  const canvas = new FakeElement('CANVAS');
+  const minimap = new FakeElement('CANVAS');
+  fakeDocument.getElementById = id => id === 'minimap' ? minimap : null;
+  globalThis.window = fakeWindow;
+  globalThis.document = fakeDocument;
+
+  try {
+    const world = makeWorld();
+    camera.x = 660;
+    camera.y = WORLD.h / 2;
+    camera.zoom = 0.9;
+    camera.rotation = 0;
+    const click = { clientX: 120, clientY: 90 };
+    const point = screenToWorld(click.clientX, click.clientY);
+    const clicked = spawnUnit(world, 0, 'musk', point.x, point.y);
+    const matching = spawnUnit(world, 0, 'musk', point.x + 240, point.y);
+    const deadMatch = spawnUnit(world, 0, 'musk', point.x + 280, point.y);
+    deadMatch.alive = false;
+    const otherSoldier = spawnUnit(world, 0, 'pike', point.x + 320, point.y);
+    const villager = spawnUnit(world, 0, 'villager', point.x + 360, point.y);
+    const enemyMatch = spawnUnit(world, 1, 'musk', point.x + 400, point.y);
+
+    setControlledSide(0);
+    initInput(canvas, minimap, () => world, {});
+    canvas.dispatchEvent(mouseEvent('dblclick', 0, click));
+
+    assert.deepEqual(getSelection(), [clicked, matching]);
+    assert.equal(clicked.selected, true);
+    assert.equal(matching.selected, true);
+    assert.equal(deadMatch.selected, false);
+    assert.equal(otherSoldier.selected, false);
+    assert.equal(villager.selected, false);
+    assert.equal(enemyMatch.selected, false);
+
+    selectEntitiesById(world, [otherSoldier.id]);
+    canvas.dispatchEvent(mouseEvent('dblclick', 0, { ...click, shiftKey: true }));
+    assert.deepEqual(getSelection(), [otherSoldier, clicked, matching]);
+  } finally {
+    setControlledSide(0);
+    globalThis.window = previousWindow;
+    globalThis.document = previousDocument;
+  }
+});
+
+test('same-type selection groups every controlled villager but ignores buildings and allies', () => {
+  const world = createWorld({
+    playerNation: 'england',
+    enemyNation: 'ottoman',
+    allyNations: ['hogwarts', 'starwars'],
+  });
+  const villager = spawnUnit(world, 0, 'villager', 760, 1420);
+  const secondVillager = spawnUnit(world, 0, 'villager', 800, 1420);
+  const alliedWorker = spawnUnit(world, 2, 'wizard_worker', 840, 1420);
+  const townCenter = world.buildings.find(building => building.side === 0
+    && building.type === 'town_center');
+
+  setControlledSide(0);
+  assert.deepEqual(findSelectableUnitsOfType(world, villager), [villager, secondVillager]);
+  assert.deepEqual(findSelectableUnitsOfType(world, alliedWorker), []);
+  assert.deepEqual(findSelectableUnitsOfType(world, townCenter), []);
 });
 
 test('allied buildings are selectable inspection targets without granting allied unit control', () => {
