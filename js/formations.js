@@ -117,6 +117,8 @@ export function applyMoveOrder(units, dx, dy, formation, options = {}) {
   });
   const sharedAnimT = sortedUnits.find(unit => ANIMATED_MILITARY_TYPES.has(unit.type))
     ?.animT || 0;
+  const sharedGaitDistance = sortedUnits.find(unit => ANIMATED_MILITARY_TYPES.has(unit.type))
+    ?.gaitDistance || 0;
 
   for (let i = 0; i < sortedUnits.length; i++) {
     const u = sortedUnits[i];
@@ -127,6 +129,7 @@ export function applyMoveOrder(units, dx, dy, formation, options = {}) {
     u.formation = formation;
     if (ANIMATED_MILITARY_TYPES.has(u.type) && !u.moving) {
       u.animT = sharedAnimT;
+      u.gaitDistance = sharedGaitDistance;
       // Three coordinated cohorts keep a regiment from changing every large
       // silhouette on the same render frame without returning to random noise.
       u.walkPhaseOffset = ((s.row + s.col * 2) % 3)
@@ -217,11 +220,14 @@ export function applyAttackOrder(units, target) {
   const orderedUnits = units.slice().sort((a, b) => a.id - b.id);
   const sharedAnimT = orderedUnits.find(unit => ANIMATED_MILITARY_TYPES.has(unit.type))
     ?.animT || 0;
+  const sharedGaitDistance = orderedUnits.find(unit => ANIMATED_MILITARY_TYPES.has(unit.type))
+    ?.gaitDistance || 0;
   for (let index = 0; index < orderedUnits.length; index++) {
     const u = orderedUnits[index];
     if (u.state === 'flee') continue;
     if (ANIMATED_MILITARY_TYPES.has(u.type) && !u.moving) {
       u.animT = sharedAnimT;
+      u.gaitDistance = sharedGaitDistance;
       u.walkPhaseOffset = (index % 3) * (MILITARY_WALK_FRAME_COUNT / 3);
     }
     u.orderTarget = target;

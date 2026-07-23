@@ -12,6 +12,9 @@ import {
 import { createBuilding, queueUnit, stepEconomy } from '../js/economy.js';
 import { applyAttackOrder } from '../js/formations.js';
 import { getBuildingProductionArtSpec } from '../js/gfx/buildings.js';
+import { getSpecialProjectileVisualProfile } from '../js/gfx/effects.js';
+import { getMilitaryFrame } from '../js/military-animation.js';
+import { getFactionCharacterFrameSources } from '../js/render.js';
 import { createGameSnapshot, restoreGameSnapshot } from '../js/savegame.js';
 import { createWorld, damage, spawnUnit, step } from '../js/sim.js';
 import { OPENING_PEACE_SECONDS } from '../js/truce.js';
@@ -108,6 +111,23 @@ test('StarWars trains detailed villagers and galactic defenders from faction bui
   assert.equal(queueUnit(world, townCenter, 'moaning_myrtle', 1, { free: true }).ok, false);
 });
 
+test('StarWars attacks retain distinct authored weapon and effect contracts', () => {
+  assert.deepEqual(getFactionCharacterFrameSources('starwars_pulse_cannon'), [0, 2]);
+  assert.equal(getMilitaryFrame({
+    type: 'starwars_pulse_cannon', unitType: 'starwars_pulse_cannon', fireT: 0.1, moving: false,
+  }), 1);
+  assert.equal(getFactionCharacterFrameSources('starwars_sentinel').at(-1), 2);
+  assert.deepEqual(getFactionCharacterFrameSources('starwars_sentinel').slice(1, 7), [1, 0, 3, 1, 0, 3]);
+  assert.equal(getFactionCharacterFrameSources('starwars_mechanic').length, 29);
+
+  const plasma = getSpecialProjectileVisualProfile('plasma');
+  const ion = getSpecialProjectileVisualProfile('ion');
+  assert.equal(plasma.shape, 'orb');
+  assert.equal(ion.shape, 'discharge');
+  assert.ok(ion.trail > plasma.trail);
+  assert.notEqual(plasma.shell, ion.shell);
+});
+
 test('allied StarWars defenses do not target England or Hogwarts units', () => {
   const world = factionWorld();
   world.time = OPENING_PEACE_SECONDS;
@@ -141,6 +161,16 @@ test('Nightmare Circus AI production rotates through its five hostile clown iden
   for (const unitType of ['pennywise', 'art_clown', 'twisty_clown', 'captain_spaulding', 'killer_klown']) {
     assert.ok(UNIT_TYPES[unitType], `${unitType} should be a distinct combat identity`);
   }
+});
+
+test('Nightmare Circus projectiles use dimensional smoke and spun-sugar treatments', () => {
+  const nightmare = getSpecialProjectileVisualProfile('nightmare');
+  const cottonCandy = getSpecialProjectileVisualProfile('cotton_candy');
+  assert.equal(nightmare.shape, 'nightmare');
+  assert.equal(cottonCandy.shape, 'spun_sugar');
+  assert.ok(nightmare.trail >= 34);
+  assert.ok(cottonCandy.trail >= 34);
+  assert.notEqual(nightmare.shell, cottonCandy.shell);
 });
 
 test('magic attacks travel visibly while protected parks and children cannot be damaged', () => {

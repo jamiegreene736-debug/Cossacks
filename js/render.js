@@ -27,7 +27,8 @@ import {
 } from './gfx/art-assets.js';
 import { fortificationCorners, isFortificationType } from './fortifications.js';
 import { getWomanVillagerFrame, getWorkerFrame } from './worker-animation.js';
-import { getMilitaryFrame, getMilitaryVerticalOffset } from './military-animation.js';
+import { getMilitaryFrame } from './military-animation.js';
+import { getCharacterMotion } from './character-animation.js';
 import {
   chooseRenderDpr, circleIntersectsBounds, getVisibleWorldBounds,
 } from './render-performance.js';
@@ -208,6 +209,52 @@ function drawThrowingTorch(unit, x, y, visualFacing = unit.facing) {
   ctx.quadraticCurveTo(headX - 5, headY + 3, headX - 4, headY); ctx.fill();
   ctx.fillStyle = '#FFE08A';
   ctx.beginPath(); ctx.ellipse(headX, headY, 2.1, 4.2, 0.3 * facing, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function drawStarWarsEnergyBlade(unit, visualFacing = unit.facing) {
+  if (unit.unitType !== 'starwars_blade_guard' || !(unit.fireT > 0)) return;
+  const facing = visualFacing >= 0 ? 1 : -1;
+  const attack = Math.max(0, Math.min(1, 1 - unit.fireT / 0.12));
+  const pivotX = facing * 2;
+  const pivotY = -23;
+  const startAngle = facing > 0 ? -2.35 : Math.PI + 2.35;
+  const endAngle = facing > 0 ? 0.32 : Math.PI - 0.32;
+  const currentAngle = startAngle + (endAngle - startAngle) * attack;
+  const bladeLength = 31;
+  const tipX = pivotX + Math.cos(currentAngle) * bladeLength;
+  const tipY = pivotY + Math.sin(currentAngle) * bladeLength;
+  const fade = 0.68 + Math.sin(attack * Math.PI) * 0.32;
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
+  ctx.globalAlpha = 0.17 * fade;
+  ctx.strokeStyle = '#278dff';
+  ctx.lineWidth = 9;
+  ctx.beginPath();
+  ctx.arc(pivotX, pivotY, bladeLength, startAngle, currentAngle, facing < 0);
+  ctx.stroke();
+  ctx.globalAlpha = 0.5 * fade;
+  ctx.strokeStyle = '#4ed8ff';
+  ctx.lineWidth = 3.8;
+  ctx.stroke();
+  ctx.globalAlpha = 0.92 * fade;
+  ctx.strokeStyle = '#f6ffff';
+  ctx.lineWidth = 1.25;
+  ctx.stroke();
+
+  ctx.globalAlpha = 0.34 * fade;
+  ctx.strokeStyle = '#2da8ff';
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.moveTo(pivotX, pivotY);
+  ctx.lineTo(tipX, tipY);
+  ctx.stroke();
+  ctx.globalAlpha = 0.98 * fade;
+  ctx.strokeStyle = '#f8ffff';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -583,9 +630,7 @@ function buildFactionCharacterDefs(nationKey, side, nat) {
     const h = frame?.h ?? (isHeavy ? 66 : isMounted ? 62 : isGhost ? 64 : 62);
     const ax = frame?.ax ?? w / 2;
     const ay = frame?.ay ?? h - 5;
-    const sourceFrames = worker
-      ? [0, 1, 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 0, 1, 2, 3, 1, 1, 1, 1, 1, 1, 1, 1]
-      : [0, 1, 1, 1, 1, 1, 1, 2];
+    const sourceFrames = getFactionCharacterFrameSources(unitType, worker);
     defs[unitType] = {
       w, h, ax, ay,
       military: !worker,
@@ -601,6 +646,22 @@ function buildFactionCharacterDefs(nationKey, side, nat) {
     };
   }
   return defs;
+}
+
+export function getFactionCharacterFrameSources(unitType, worker = Boolean(UNIT_TYPES[unitType]?.worker)) {
+  if (worker) {
+    return [
+      0,
+      1, 0, 3, 1, 0, 3,
+      3, 0, 3, 0, 3, 0, 3, 0, 3, 0,
+      0, 1, 2, 3,
+      1, 0, 3, 1, 1, 0, 3, 1,
+    ];
+  }
+  // Artillery uses a two-frame runtime contract. Its second runtime frame must
+  // address the authored firing column rather than the locomotion column.
+  if (unitType === 'starwars_pulse_cannon') return [0, 2];
+  return [0, 1, 0, 3, 1, 0, 3, 2];
 }
 
 
@@ -619,7 +680,9 @@ function buildNationSprites(nationKey, side = 0) {
   const productionWomanWorker = womanArtSpec ? getProductionArt(womanArtSpec.key) : null;
   const productionWomanCannon = getProductionArt(WOMAN_VILLAGER_CANNON_ART_SPEC.key);
   const workerFrames = [
-    ['idle', 0, null, 0], ['idle', 1, null, 1], ['idle', 2, null, 2],
+    ['idle', 0, null, 0],
+    ['idle', 1, null, 1], ['idle', 0, null, 0], ['idle', 2, null, 2],
+    ['idle', 2, null, 2], ['idle', 0, null, 0], ['idle', 1, null, 1],
     ['build', 0, 'build', 3], ['build', 1, 'build', 0],
     ['work', 0, 'chop', 3], ['work', 1, 'chop', 0],
     ['work', 0, 'mine', 3], ['work', 1, 'mine', 0],
@@ -676,8 +739,8 @@ function buildNationSprites(nationKey, side = 0) {
   };
   const womanWorkerFrames = [
     ['idle', 0, null, 0],
-    ['idle', 1, null, 1],
-    ['idle', 2, null, 2],
+    ['idle', 1, null, 1], ['idle', 0, null, 0], ['idle', 2, null, 2],
+    ['idle', 2, null, 2], ['idle', 0, null, 0], ['idle', 1, null, 1],
     ['build', 0, 'build', 3],
     ['deploy', 0, null, 0, 'combat'],
     ['aim', 0, null, 1, 'combat'],
@@ -823,6 +886,40 @@ function buildNationSprites(nationKey, side = 0) {
 // ---------- Frame draw ----------
 
 const sortBuf = [];
+
+function drawAnimatedCharacterFrame(context, image, sprite, motion) {
+  const left = -sprite.ax;
+  const top = -sprite.ay;
+  context.save();
+  context.translate(motion.shiftX, motion.shiftY);
+  context.rotate(motion.rotation);
+  context.scale(motion.scaleX, motion.scaleY);
+
+  if (!motion.articulateHead) {
+    context.drawImage(image, left, top, sprite.w, sprite.h);
+    context.restore();
+    return;
+  }
+
+  const neckY = top + sprite.h * 0.31;
+  context.save();
+  context.beginPath();
+  context.rect(left - 2, neckY - 1, sprite.w + 4, sprite.h - (neckY - top) + 3);
+  context.clip();
+  context.drawImage(image, left, top, sprite.w, sprite.h);
+  context.restore();
+
+  context.save();
+  context.beginPath();
+  context.rect(left - 3, top - 3, sprite.w + 6, neckY - top + 5);
+  context.clip();
+  context.translate(motion.headShiftX, neckY + motion.headShiftY);
+  context.rotate(motion.headRotation);
+  context.translate(0, -neckY);
+  context.drawImage(image, left, top, sprite.w, sprite.h);
+  context.restore();
+  context.restore();
+}
 
 function drawResourceHover(target, zoom, kind = 'resource') {
   if (!target?.alive) return;
@@ -1204,12 +1301,13 @@ export function draw(
     }
     const rearView = viewMirrorsHorizontalFacing(rotation);
     const dir = (u.facing >= 0) !== rearView ? 0 : 1;
+    const visualFacing = dir === 0 ? 1 : -1;
     ctx.save();
-    const verticalOffset = u.type === 'villager' ? 0 : getMilitaryVerticalOffset(u);
-    ctx.translate(ix, iy + verticalOffset);
+    ctx.translate(ix, iy);
     ctx.rotate(-rotation);
-    ctx.drawImage(sp.frames[dir][frame], -sp.ax, -sp.ay, sp.w, sp.h);
-    drawThrowingTorch(u, 0, 0, dir === 0 ? 1 : -1);
+    drawAnimatedCharacterFrame(ctx, sp.frames[dir][frame], sp, getCharacterMotion(u, visualFacing));
+    drawThrowingTorch(u, 0, 0, visualFacing);
+    drawStarWarsEnergyBlade(u, visualFacing);
     ctx.restore();
   }
 

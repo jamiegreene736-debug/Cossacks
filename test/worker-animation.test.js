@@ -27,36 +27,41 @@ test('worker jobs resolve to historically legible tool actions', () => {
 
 test('work animation alternates two cached frames for each tool', () => {
   const worker = { state: 'work', moving: false, workAction: 'mine', animT: 0 };
-  assert.equal(getWorkerFrame(worker), 7);
+  assert.equal(getWorkerFrame(worker), 11);
   worker.animT = 0.5;
-  assert.equal(getWorkerFrame(worker), 8);
+  assert.equal(getWorkerFrame(worker), 12);
   worker.workAction = 'farm';
-  assert.equal(getWorkerFrame(worker), 10);
+  assert.equal(getWorkerFrame(worker), 14);
 });
 
-test('walking and idle workers keep the established civilian frames', () => {
+test('walking workers use all six distance-synchronized civilian poses', () => {
   assert.equal(getWorkerFrame({ state: 'idle', moving: false, animT: 0 }), 0);
-  assert.equal(getWorkerFrame({ state: 'move', moving: true, animT: 0 }), 1);
-  assert.equal(getWorkerFrame({ state: 'move', moving: true, animT: 0.2 }), 2);
+  const worker = { state: 'move', type: 'villager', moving: true, gaitDistance: 0 };
+  const frames = [];
+  for (let index = 0; index < 6; index++) {
+    worker.gaitDistance = index * (29 / 6);
+    frames.push(getWorkerFrame(worker));
+  }
+  assert.deepEqual(frames, [1, 2, 3, 4, 5, 6]);
 });
 
 test('villagers carrying gathered resources use the laden walking frames', () => {
   const worker = {
-    state: 'move', moving: true, animT: 0,
+    state: 'move', type: 'villager', moving: true, animT: 0, gaitDistance: 0,
     job: {
       kind: 'gather', targetId: 1, carriedAmount: 10, phase: 'deliver', resourceType: 'wood',
     },
   };
   assert.equal(getWorkerFrame(worker), CARRY_FRAMES.woodFirst);
-  worker.animT = 0.2;
+  worker.gaitDistance = 29 / 4;
   assert.equal(getWorkerFrame(worker), CARRY_FRAMES.woodFirst + 1);
-  worker.animT = 0.6;
+  worker.gaitDistance = 29 * 3 / 4;
   assert.equal(getWorkerFrame(worker), CARRY_FRAMES.woodLast);
 
   worker.job.resourceType = 'stone';
-  worker.animT = 0;
+  worker.gaitDistance = 0;
   assert.equal(getWorkerFrame(worker), CARRY_FRAMES.resourceFirst);
-  worker.animT = 0.6;
+  worker.gaitDistance = 29 * 3 / 4;
   assert.equal(getWorkerFrame(worker), CARRY_FRAMES.resourceLast);
 });
 
