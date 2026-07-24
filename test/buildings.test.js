@@ -7,7 +7,8 @@ import {
   bdConstructionArtFrame, BUILDING_HUMAN_REFERENCE_HEIGHT,
   getBuildingConstructionArtWidth, getBuildingPresentation, getFortificationConstructionStage,
   getFortificationMasonryDetailProfile, getFortificationRenderProfile,
-  getProductionBuildingVisibleSize, usesFixedFortificationFrameArt,
+  getProductionBuildingVisibleSize, quantizeFortificationVisualOrientation,
+  usesFixedFortificationFrameArt,
 } from '../js/gfx/buildings.js';
 import { MILITARY_ART_SPECS } from '../js/gfx/art-assets.js';
 
@@ -279,17 +280,33 @@ test('connected wall frames expose only the two ends of the complete run', () =>
     joinedEnds: [false, true],
     useProductionFrame: false,
     interiorSide: 1,
+    nation: 'england',
+    connectedWall: true,
   });
   assert.deepEqual(getFortificationRenderProfile(right, world), {
     joinedEnds: [true, false],
     useProductionFrame: false,
     interiorSide: 1,
+    nation: 'england',
+    connectedWall: true,
   });
   assert.equal(getFortificationRenderProfile(left, { buildings: [left] }).useProductionFrame, false);
-  assert.equal(getFortificationRenderProfile(left, {
+  const ottomanProfile = getFortificationRenderProfile(left, {
     buildings: [left],
     sides: [{ nation: 'ottoman' }],
-  }).useProductionFrame, true);
+  });
+  assert.equal(ottomanProfile.useProductionFrame, false);
+  assert.equal(ottomanProfile.nation, 'ottoman');
+});
+
+test('fortification cache orientations stay bounded without flattening curved runs', () => {
+  const bins = new Set();
+  for (let angle = -Math.PI; angle <= Math.PI; angle += 0.001) {
+    bins.add(quantizeFortificationVisualOrientation(angle));
+  }
+  assert.ok(bins.size <= 65);
+  const angle = 0.413;
+  assert.ok(Math.abs(quantizeFortificationVisualOrientation(angle) - angle) < 0.05);
 });
 
 test('detailed wall masonry keeps curved, gate and stair attachment contracts explicit', () => {
@@ -329,5 +346,17 @@ test('curved walls use a substantial high-resolution masonry material', async ()
     assert.ok(metadata.size > minimumBytes, `${file} should retain weathered source detail`);
     assert.equal(header.subarray(0, 4).toString('ascii'), 'RIFF');
     assert.equal(header.subarray(8, 12).toString('ascii'), 'WEBP');
+  }
+});
+
+test('both nations ship substantial high-resolution fortification masonry', async () => {
+  for (const nation of ['english', 'ottoman']) {
+    const url = new URL(
+      `../assets/buildings/${nation}-fortification-masonry.png`,
+      import.meta.url,
+    );
+    const [metadata, bytes] = await Promise.all([stat(url), readFile(url)]);
+    assert.ok(metadata.size > 750_000, `${nation} masonry should retain gameplay detail`);
+    assert.deepEqual([...bytes.subarray(1, 4)], [80, 78, 71]);
   }
 });

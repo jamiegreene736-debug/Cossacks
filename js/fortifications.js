@@ -15,6 +15,8 @@ export const WALL_WALK_ELEVATION = 40;
 const GATE_WALK_ELEVATION = 57;
 export const WALL_STAIR_ATTACH_DISTANCE = 58;
 export const GATE_TRAVEL_SECONDS = 0.9;
+export const WALL_ASCENT_SECONDS = 1.15;
+export const GATE_PASSABLE_PROGRESS = 0.72;
 
 const AXES = Object.freeze({
   horizontal: Object.freeze({ x: 1, y: 0 }),
@@ -63,6 +65,11 @@ export function getGateOpenProgress(building, worldTime) {
     ? Math.max(0, Math.min(1, building.gateTransitionFrom))
     : 1 - target;
   return from + (target - from) * eased;
+}
+
+export function isGatePassable(building, worldTime) {
+  return building?.type === 'gate'
+    && getGateOpenProgress(building, worldTime) >= GATE_PASSABLE_PROGRESS;
 }
 
 export function normalizeFortificationOrientation(orientation) {
@@ -279,6 +286,7 @@ export function assignMusketeersToWall(world, units, target) {
     }, null)?.stair;
     if (!stair) break;
     unit.wallMount = null;
+    unit.wallAscent = null;
     unit.wallElevation = 0;
     unit.wallOrder = { ...slot, stairId: stair.id };
     unit.orderX = stair.x;
@@ -295,7 +303,7 @@ export function assignMusketeersToWall(world, units, target) {
   return { assigned, capacity, message };
 }
 
-export function updateWallAssignment(world, unit) {
+export function updateWallAssignment(world, unit, dt = Infinity) {
   if (unit.wallMount) {
     const wall = world.buildings.find(building => building.id === unit.wallMount.wallId);
     const stair = world.buildings.find(building => building.id === unit.wallMount.stairId);
@@ -320,14 +328,53 @@ export function updateWallAssignment(world, unit) {
     unit.wallOrder = null;
     return 'cancelled';
   }
-  if (Math.hypot(unit.x - stair.x, unit.y - stair.y) > 11) return 'approaching';
+  if (!unit.wallAscent && Math.hypot(unit.x - stair.x, unit.y - stair.y) > 11) {
+    return 'approaching';
+  }
   const slot = wallSlot(wall, unit.wallOrder.slotIndex);
   if (!slot) {
     unit.wallOrder = null;
     return 'cancelled';
   }
+  if (!unit.wallAscent) {
+    const frame = fortificationFrame(
+      'wall_stairs', stair.x, stair.y, stair.orientation,
+    );
+    const side = stair.stairSide === -1 ? -1 : 1;
+    const footAcross = frame.halfThickness * 0.68 * side;
+    const landingAcross = -frame.halfThickness * 0.68 * side;
+    unit.wallAscent = {
+      elapsed: 0,
+      footX: stair.x + frame.normal.x * footAcross,
+      footY: stair.y + frame.normal.y * footAcross,
+      landingX: stair.x + frame.normal.x * landingAcross,
+      landingY: stair.y + frame.normal.y * landingAcross,
+    };
+  }
+  unit.wallAscent.elapsed += Number.isFinite(dt) ? Math.max(0, dt) : WALL_ASCENT_SECONDS;
+  const ascentT = Math.min(1, unit.wallAscent.elapsed / WALL_ASCENT_SECONDS);
+  const eased = ascentT * ascentT * (3 - 2 * ascentT);
+  const routeStart = unit.wallAscent;
+  if (ascentT < 0.74) {
+    const flightT = Math.min(1, eased / 0.74);
+    unit.x = routeStart.footX + (routeStart.landingX - routeStart.footX) * flightT;
+    unit.y = routeStart.footY + (routeStart.landingY - routeStart.footY) * flightT;
+  } else {
+    const walkT = (ascentT - 0.74) / 0.26;
+    unit.x = routeStart.landingX + (slot.x - routeStart.landingX) * walkT;
+    unit.y = routeStart.landingY + (slot.y - routeStart.landingY) * walkT;
+  }
+  unit.px = unit.x;
+  unit.py = unit.y;
+  unit.wallElevation = slot.elevation * eased;
+  unit.orderX = unit.x;
+  unit.orderY = unit.y;
+  unit.state = 'move';
+  unit.moving = true;
+  if (ascentT < 1) return 'ascending';
   unit.wallMount = { ...slot, stairId: stair.id };
   unit.wallOrder = null;
+  unit.wallAscent = null;
   unit.wallElevation = slot.elevation;
   unit.x = slot.x;
   unit.y = slot.y;
@@ -354,6 +401,7 @@ export function dismountWallUnit(world, unit) {
   }
   unit.wallMount = null;
   unit.wallOrder = null;
+  unit.wallAscent = null;
   unit.wallElevation = 0;
   if (unit.state === 'wall') unit.state = 'idle';
 }

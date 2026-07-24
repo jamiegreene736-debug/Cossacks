@@ -155,6 +155,31 @@ test('wall staircase links and mounted firing positions survive save and resume'
   assert.equal(restoredDefender.wallElevation, 40);
 });
 
+test('a soldier midway up a wall staircase resumes the same ascent after restore', () => {
+  const world = createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
+  const wall = createBuilding(0, 'wall', 900, 1600, true, { orientation: 'horizontal' });
+  const stairs = createBuilding(0, 'wall_stairs', 900, 1633, true, {
+    orientation: 'horizontal', wallId: wall.id, stairSide: 1, stairAlong: 0,
+  });
+  world.buildings.push(wall, stairs);
+  const defender = spawnUnit(world, 0, 'musk', stairs.x, stairs.y);
+  assignMusketeersToWall(world, [defender], wall);
+  updateWallAssignment(world, defender, 0.4);
+  assert.ok(defender.wallAscent);
+  assert.ok(defender.wallElevation > 0 && defender.wallElevation < 40);
+
+  const restored = restoreGameSnapshot(createGameSnapshot(
+    world, new Commander(world, 1), { x: 900, y: 1600, zoom: 1 },
+  )).world;
+  const restoredDefender = restored.units.find(unit => unit.id === defender.id);
+  assert.equal(restoredDefender.wallAscent.elapsed, 0.4);
+  for (let tick = 0; tick < 30 && !restoredDefender.wallMount; tick++) {
+    updateWallAssignment(restored, restoredDefender, 1 / 30);
+  }
+  assert.equal(restoredDefender.wallMount.wallId, wall.id);
+  assert.equal(restoredDefender.wallElevation, 40);
+});
+
 test('legacy standalone fields attach to the nearest completed mill on restore', () => {
   const world = createWorld({ playerNation: 'england', enemyNation: 'ottoman' });
   const mill = createBuilding(0, 'mill', 900, 1500, true);

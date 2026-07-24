@@ -29,7 +29,7 @@ function distanceToSegment(px, py, x0, y0, x1, y1) {
 export function pointBlocksGround(world, x, y, clearance = 7) {
   if (x < clearance || y < clearance || x > WORLD.w - clearance || y > WORLD.h - clearance) return true;
   for (const building of world.buildings) {
-    if (structureBlocksGround(building)
+    if (structureBlocksGround(building, world.time)
       && pointInsideStructure(building, x, y, clearance)) return true;
   }
   for (const resource of world.resources) {
@@ -41,7 +41,7 @@ export function pointBlocksGround(world, x, y, clearance = 7) {
 
 export function segmentBlocksGround(world, x0, y0, x1, y1, clearance = 7) {
   for (const building of world.buildings) {
-    if (structureBlocksGround(building)
+    if (structureBlocksGround(building, world.time)
       && segmentIntersectsStructure(building, x0, y0, x1, y1, clearance)) return true;
   }
   for (const resource of world.resources) {

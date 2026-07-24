@@ -948,7 +948,48 @@ function setupLocalCurvedWallPreview(activeWorld) {
   const debugName = new URLSearchParams(window.location.search).get('debug');
   const localHost = window.location.hostname === 'localhost'
     || window.location.hostname === '127.0.0.1';
-  if (!localHost || !['curved-wall', 'wall-construction'].includes(debugName)) return;
+  if (!localHost || !['curved-wall', 'wall-construction', 'fortification-gallery'].includes(debugName)) return;
+
+  if (debugName === 'fortification-gallery') {
+    activeWorld.buildings = activeWorld.buildings.filter(building => (
+      !['wall', 'gate', 'wall_stairs'].includes(building.type)
+    ));
+    for (const row of [{ side: 0, y: 1280 }, { side: 1, y: 1700 }]) {
+      const straight = createBuilding(row.side, 'wall', 900, row.y, true, { orientation: 0 });
+      const bendA = createBuilding(row.side, 'wall', 1088, row.y, true, { orientation: 0 });
+      const bendB = createBuilding(row.side, 'wall', 1176, row.y + 24, true, { orientation: 0.54 });
+      const gate = createBuilding(row.side, 'gate', 1350, row.y + 76, true, {
+        orientation: 0.20, gateOpen: row.side === 1,
+      });
+      const stairSide = 1;
+      const axis = fortificationAxis(straight.orientation);
+      const normal = { x: -axis.y, y: axis.x };
+      const stairs = createBuilding(
+        row.side, 'wall_stairs',
+        straight.x + normal.x * stairSide * 42,
+        straight.y + normal.y * stairSide * 42,
+        true,
+        {
+          orientation: straight.orientation, wallId: straight.id,
+          stairSide, stairAlong: 0,
+        },
+      );
+      const damaged = createBuilding(row.side, 'wall', 1580, row.y + 50, true, {
+        orientation: -0.34,
+      });
+      damaged.hp = damaged.maxHp * 0.24;
+      activeWorld.buildings.push(straight, bendA, bendB, gate, stairs, damaged);
+      for (let index = 0; index < 3; index++) {
+        const defender = spawnUnit(activeWorld, row.side, 'musk', stairs.x, stairs.y);
+        assignMusketeersToWall(activeWorld, [defender], straight);
+      }
+    }
+    camera.x = 1240;
+    camera.y = 1490;
+    camera.zoom = 0.82;
+    clampCamera();
+    return;
+  }
 
   const wallWidth = BUILDING_TYPES.wall.w;
   const angles = [-0.52, -0.36, -0.20, -0.04, 0.12, 0.28, 0.44];

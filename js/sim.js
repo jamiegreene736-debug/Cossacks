@@ -21,7 +21,7 @@ import { initializeEconomy, stepEconomy, onUnitKilled, onBuildingDestroyed } fro
 import { corpseDecalTiming } from './gfx/decals.js';
 import {
   dismountWallUnit, lineIntersectsFortification, resolveUnitFortificationCollision,
-  updateWallAssignment,
+  isGatePassable, updateWallAssignment,
 } from './fortifications.js';
 import {
   assignUnitPath, clearUnitPath, segmentBlocksGround,
@@ -684,7 +684,7 @@ function updateUnit(world, u, dt) {
 
   if (u.morale < 100) u.morale = Math.min(100, u.morale + 1.5 * dt);
 
-  const wallState = updateWallAssignment(world, u);
+  const wallState = updateWallAssignment(world, u, dt);
   if (wallState === 'mounted') u.state = 'wall';
 
   // -- Target upkeep / acquisition (staggered) --
@@ -947,11 +947,12 @@ export function step(world, dt) {
     const blockingWall = building.type === 'wall'
       && (building.complete || building.progress >= 0.24);
     const blockingGate = building.type === 'gate' && building.complete
-      && building.gateOpen === false;
+      && !isGatePassable(building, world.time);
     if (building.alive && (blockingWall || blockingGate)) {
       blockingFortifications.push(building);
     }
-    if (structureBlocksGround(building) && !BUILDING_TYPES[building.type]?.fortification) {
+    if (structureBlocksGround(building, world.time)
+      && !BUILDING_TYPES[building.type]?.fortification) {
       blockingStructures.push(building);
     }
   }
