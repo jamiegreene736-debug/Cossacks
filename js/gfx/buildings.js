@@ -5356,6 +5356,25 @@ const BD_MINIMUM_HUMAN_HEIGHTS = Object.freeze({
   wall_stairs: 1.4,
 });
 
+const BD_NATION_MINIMUM_HUMAN_HEIGHTS = Object.freeze({
+  starwars: Object.freeze({
+    // The StarWars village uses broad cinematic silhouettes with very small
+    // painted doors and vents. Give that faction a taller human yardstick so
+    // soldiers read as people standing beside real structures, not peers of
+    // the buildings themselves.
+    town_center: 5.55,
+    house: 3.45,
+    mill: 3.55,
+    lumber_camp: 3.55,
+    mine: 3.55,
+    barracks: 4.15,
+    stable: 4.15,
+    foundry: 4.25,
+    tower: 5.15,
+    castle: 8.60,
+  }),
+});
+
 const BD_NATION_PRESENTATION_SCALE = Object.freeze({
   // Themed architecture used to receive one blanket reduction. That flattened
   // its hierarchy: a cottage, utility shed and tower all lost the same share
@@ -5403,7 +5422,8 @@ function getBuildingPresentation(type, def = BUILDING_TYPES[type], nation = null
   const nationScale = nationProfile?.[type] ?? nationProfile?.default ?? 1;
   const visualScale = Math.max(1, (def.visualScale || 1) * nationScale);
   const artWidth = def.w * profile.artWidthScale;
-  const minimumHumanHeights = BD_MINIMUM_HUMAN_HEIGHTS[type] || 0;
+  const minimumHumanHeights = BD_NATION_MINIMUM_HUMAN_HEIGHTS[nation]?.[type]
+    ?? BD_MINIMUM_HUMAN_HEIGHTS[type] ?? 0;
   return {
     visualScale,
     artWidth,
