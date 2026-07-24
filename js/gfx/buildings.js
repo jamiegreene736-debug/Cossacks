@@ -747,6 +747,55 @@ function bdAtPaver(g, paver, paint) {
   g.restore();
 }
 
+const BD_PAVING_STYLES = Object.freeze({
+  brick: Object.freeze({
+    key: 'brick',
+    wornMix: 0.10,
+    mortar: () => bdLawful(bdMix(BT.ROCK_DARK, BT.EARTH, 0.54)),
+    palette: sideHex => {
+      const paverBase = bdLawful(bdMix(BMAT.BRICK_RED, BT.EARTH_LIGHT, 0.20));
+      return {
+        base: paverBase,
+        sideTrace: sideHex,
+        pavers: [
+          paverBase,
+          bdLawful(bdMix(BMAT.BRICK, BT.EARTH, 0.12)),
+          bdLawful(bdMix(BMAT.BRICK_RED, BT.ROCK, 0.12)),
+          bdLawful(bdMix(BMAT.BRICK, BT.EARTH_DARK, 0.28)),
+          bdLawful(bdMix(BMAT.BRICK_RED, BT.STRAW, 0.18)),
+        ],
+      };
+    },
+  }),
+  starwars: Object.freeze({
+    key: 'starwars',
+    wornMix: 0.06,
+    mortar: () => bdLawful(bdMix(BT.ROCK_DARK, '#26313A', 0.52)),
+    palette: sideHex => {
+      const panelBase = bdLawful(bdMix(BMAT.SLATE, BT.ROCK_LIGHT, 0.26));
+      return {
+        base: panelBase,
+        sideTrace: bdLawful(bdMix(sideHex || '#7365D6', '#7D8FA0', 0.58)),
+        pavers: [
+          panelBase,
+          bdLawful(bdMix(BMAT.IRON, BT.ROCK_LIGHT, 0.24)),
+          bdLawful(bdMix(BMAT.SLATE, '#7E8A94', 0.30)),
+          bdLawful(bdMix(BT.ROCK_DARK, '#56606A', 0.34)),
+          bdLawful(bdMix(BT.ROCK, '#C0B08A', 0.16)),
+        ],
+      };
+    },
+  }),
+});
+
+function bdPavingStyleForNation(nation) {
+  return nation === 'starwars' ? BD_PAVING_STYLES.starwars : BD_PAVING_STYLES.brick;
+}
+
+export function getBuildingPavingStyle(nation = null) {
+  return bdPavingStyleForNation(nation).key;
+}
+
 /**
  * PASS E — a complete, weathered brick courtyard and soft ground bed, painted
  * below the building with 'destination-over'. The stamp is still baked once,
@@ -762,16 +811,12 @@ function bdPassGroundApron(g, cx, cy, rx, sideHex, options) {
   const ry = o.ry || rx * bdSUN.squash;
   const seed = o.seed || ((rx * 71 + ry * 131) | 0);
   const layout = getBuildingPavingLayout(rx, ry, seed);
-  const worn = bdLawful(bdMix(BT.EARTH, sideHex || BT.EARTH, 0.10));
-  const mortar = bdLawful(bdMix(BT.ROCK_DARK, BT.EARTH, 0.54));
-  const paverBase = bdLawful(bdMix(BMAT.BRICK_RED, BT.EARTH_LIGHT, 0.20));
-  const paverPalette = [
-    paverBase,
-    bdLawful(bdMix(BMAT.BRICK, BT.EARTH, 0.12)),
-    bdLawful(bdMix(BMAT.BRICK_RED, BT.ROCK, 0.12)),
-    bdLawful(bdMix(BMAT.BRICK, BT.EARTH_DARK, 0.28)),
-    bdLawful(bdMix(BMAT.BRICK_RED, BT.STRAW, 0.18)),
-  ];
+  const style = bdPavingStyleForNation(o.nation);
+  const palette = style.palette(sideHex);
+  const worn = bdLawful(bdMix(BT.EARTH, palette.sideTrace || sideHex || BT.EARTH, style.wornMix));
+  const mortar = style.mortar();
+  const paverBase = palette.base;
+  const paverPalette = palette.pavers;
   const jointShadow = bdMix(mortar, '#171512', 0.38);
   const bevelLight = bdLawful(bdMix(paverBase, bdSUN.key, 0.34));
   const bevelShade = bdLawful(bdMix(paverBase, BT.EARTH_DARK, 0.42));
@@ -897,7 +942,7 @@ function bdPassGroundApron(g, cx, cy, rx, sideHex, options) {
     const paver = layout.pavers[index];
     bdAtPaver(g, paver, function () {
       const clay = paver.kind === 'border'
-        ? bdLawful(bdMix(paverPalette[paver.tone], sideHex || paverBase, 0.10))
+        ? bdLawful(bdMix(paverPalette[paver.tone], palette.sideTrace || sideHex || paverBase, 0.10))
         : paverPalette[paver.tone];
       g.fillStyle = bdRgba(clay, 0.97);
       bdPaverPath(g, paver, 0);
@@ -5445,14 +5490,21 @@ function getBuildingPresentation(type, def = BUILDING_TYPES[type], nation = null
   const artWidth = def.w * profile.artWidthScale;
   const minimumHumanHeights = BD_NATION_MINIMUM_HUMAN_HEIGHTS[nation]?.[type]
     ?? BD_MINIMUM_HUMAN_HEIGHTS[type] ?? 0;
+  const apronRx = nation === 'starwars'
+    ? Math.max(def.w * profile.apronWidthScale, artWidth * visualScale * 0.58)
+    : def.w * profile.apronWidthScale;
+  const apronRy = nation === 'starwars'
+    ? Math.max(def.h * profile.apronDepthScale, artWidth * visualScale * 0.36)
+    : def.h * profile.apronDepthScale;
   return {
     visualScale,
+    nation,
     artWidth,
     displayArtWidth: artWidth * visualScale,
     minimumHumanHeights,
     minimumDisplayHeight: minimumHumanHeights * BUILDING_HUMAN_REFERENCE_HEIGHT,
-    apronRx: def.w * profile.apronWidthScale,
-    apronRy: def.h * profile.apronDepthScale,
+    apronRx,
+    apronRy,
     // The selection footprint is the shared visual centre of the structure
     // and its courtyard. Keeping this in the presentation contract prevents
     // production sprites and procedural painters from independently anchoring
@@ -5912,6 +5964,7 @@ function bdProductionBuildingSprite(type, def, image, nation, side, damageStage,
       presentation.apronRx, BD_SIDE[side].rim, {
       ry: presentation.apronRy,
       seed,
+      nation,
     });
   });
 }

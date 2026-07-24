@@ -134,6 +134,7 @@ export function createBuilding(side, type, x, y, complete = false, options = {})
   const building = {
     id: nextEntityId++, entityKind: 'building', side,
     team: Number.isInteger(options.team) ? options.team : null,
+    nation: typeof options.nation === 'string' ? options.nation : null,
     type,
     x, y, radius: def.radius, w: def.w, h: def.h,
     hp: complete ? def.hp : Math.max(1, def.hp * 0.08), maxHp: def.hp,
@@ -244,6 +245,7 @@ export function initializeEconomy(world) {
     const start = side.startPosition || defaultStartPositionForSide(world.sides, sideIndex);
     const tc = createBuilding(sideIndex, 'town_center', start.x, start.y, true, {
       team: side.team,
+      nation: side.nation,
     });
     world.buildings.push(tc);
     side.townCenterId = tc.id;
@@ -268,6 +270,7 @@ export function initializeEconomy(world) {
       for (const [type, dx, dy] of landmarks) {
         const landmark = createBuilding(sideIndex, type, start.x + dx, start.y + dy, true, {
           team: side.team,
+          nation: side.nation,
           visualVariant: type === 'park' ? countryParkVariant(world.worldCountry) : null,
         });
         world.buildings.push(landmark);
@@ -278,19 +281,20 @@ export function initializeEconomy(world) {
     }
     if (side.nation === 'starwars') {
       const landmarks = [
-        ['house', -255, -180],
-        ['mill', 210, -240],
-        ['lumber_camp', -330, 25],
-        ['mine', 315, 45],
-        ['barracks', -185, 250],
-        ['stable', 120, 275],
-        ['foundry', 360, 270],
-        ['tower', -450, -80],
-        ['castle', 95, -470],
+        ['house', -300, -190],
+        ['mill', 235, -260],
+        ['lumber_camp', -390, 35],
+        ['mine', 395, 35],
+        ['barracks', -300, 285],
+        ['stable', 105, 330],
+        ['foundry', 540, 300],
+        ['tower', -560, -95],
+        ['castle', 120, -540],
       ];
       for (const [type, dx, dy] of landmarks) {
         const landmark = createBuilding(sideIndex, type, start.x + dx, start.y + dy, true, {
           team: side.team,
+          nation: side.nation,
         });
         world.buildings.push(landmark);
         if (BUILDING_TYPES[type].popCap) {
@@ -450,6 +454,7 @@ export function validatePlacement(world, side, type, x, y, options = {}) {
   const candidate = {
     type, x: snapped.x, y: snapped.y, orientation: snapped.orientation,
     rotation: fortification || wallAttachment ? null : normalizeBuildingRotation(options.rotation),
+    nation: world.sides[side]?.nation || null,
     wallId: snapped.wallId ?? null,
   };
   const placement = {
@@ -790,6 +795,7 @@ export function placeBuilding(world, sideIndex, type, x, y, builders, options = 
       stairSide: placement.stairSide,
       stairAlong: placement.stairAlong,
       team: side.team,
+      nation: side.nation,
     },
   );
   world.buildings.push(building);

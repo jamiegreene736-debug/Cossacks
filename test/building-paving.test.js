@@ -4,6 +4,7 @@ import test from 'node:test';
 import { BUILDING_TYPES } from '../js/config.js';
 import {
   getBuildingPavingLayout,
+  getBuildingPavingStyle,
   getBuildingPresentation,
 } from '../js/gfx/buildings.js';
 
@@ -71,6 +72,32 @@ test('every courtyard shares the building selection footprint centre', () => {
       presentation.pavingCenterY,
       definition.h * 0.22,
       `${type} paving should remain centred beneath its building footprint`,
+    );
+  }
+});
+
+test('StarWars buildings use larger sci-fi paving under their full visual mass', () => {
+  assert.equal(getBuildingPavingStyle('starwars'), 'starwars');
+  assert.equal(getBuildingPavingStyle('england'), 'brick');
+
+  for (const type of [
+    'town_center', 'house', 'mill', 'lumber_camp', 'mine',
+    'barracks', 'stable', 'foundry', 'tower', 'castle',
+  ]) {
+    const def = BUILDING_TYPES[type];
+    const normal = getBuildingPresentation(type, def);
+    const starwars = getBuildingPresentation(type, def, 'starwars');
+    assert.ok(
+      starwars.apronRx >= normal.apronRx,
+      `${type} StarWars paving should not be narrower than ordinary paving`,
+    );
+    assert.ok(
+      starwars.apronRy >= normal.apronRy,
+      `${type} StarWars paving should not be shallower than ordinary paving`,
+    );
+    assert.ok(
+      starwars.apronRx >= starwars.displayArtWidth * 0.58 - 0.001,
+      `${type} StarWars paving should reach under the broad rendered facade`,
     );
   }
 });

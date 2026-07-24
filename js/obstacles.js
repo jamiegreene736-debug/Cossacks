@@ -16,7 +16,7 @@ function ordinaryStructureFrame(building, padding = 0) {
   const rotation = Number.isFinite(building.rotation) ? building.rotation : 0;
   const axis = { x: Math.cos(rotation), y: Math.sin(rotation) };
   const normal = { x: -axis.y, y: axis.x };
-  const presentation = getBuildingPresentation(building.type, def);
+  const presentation = getBuildingPresentation(building.type, def, building.nation || null);
   const scale = presentation?.visualScale || Math.max(1, def.visualScale || 1);
   const displayArtWidth = presentation?.displayArtWidth || def.w * scale;
   return {

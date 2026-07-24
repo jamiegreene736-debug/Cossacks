@@ -842,22 +842,28 @@ function setupLocalThemedArchitecturePreview(activeWorld) {
     ['pool', 3020, 1490], ['beach', 3560, 1490],
   ];
   for (const [type, x, y] of hogwartsBuildings) {
-    activeWorld.buildings.push(createBuilding(hogwartsSide, type, x, y, true));
+    activeWorld.buildings.push(createBuilding(hogwartsSide, type, x, y, true, {
+      nation: 'hogwarts',
+      team: activeWorld.sides[hogwartsSide].team,
+    }));
   }
 
   const starwarsBuildings = [
-    ['town_center', 1340, 2060], ['house', 1685, 2060], ['mill', 2025, 2060],
-    ['lumber_camp', 2365, 2060], ['mine', 2705, 2060], ['barracks', 3060, 2060],
-    ['stable', 3425, 2060], ['foundry', 3785, 2060],
-    ['tower', 1760, 2390], ['castle', 2520, 2410],
+    ['town_center', 1340, 2060], ['house', 1730, 2060], ['mill', 2120, 2060],
+    ['lumber_camp', 2530, 2060], ['mine', 2940, 2060], ['barracks', 3375, 2060],
+    ['stable', 3800, 2060], ['foundry', 4225, 2060],
+    ['tower', 1790, 2425], ['castle', 2710, 2440],
   ];
   for (const [type, x, y] of starwarsBuildings) {
-    activeWorld.buildings.push(createBuilding(starwarsSide, type, x, y, true));
+    activeWorld.buildings.push(createBuilding(starwarsSide, type, x, y, true, {
+      nation: 'starwars',
+      team: activeWorld.sides[starwarsSide].team,
+    }));
   }
 
-  camera.x = 2540;
+  camera.x = 2700;
   camera.y = 1840;
-  camera.zoom = 0.50;
+  camera.zoom = 0.46;
   clampCamera();
 }
 
