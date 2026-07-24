@@ -8,6 +8,11 @@ import { BUILDING_TYPES, WORLD } from './config.js';
 export const FORTIFICATION_ORIENTATIONS = Object.freeze(['horizontal', 'diagonal']);
 export const FORTIFICATION_SNAP_DISTANCE = 34;
 export const FORTIFICATION_ENDPOINT_PICK_DISTANCE = 64;
+
+/** Curtain segments that form the walkable wall run (full and short modules). */
+export function isWallSegmentType(type) {
+  return type === 'wall' || type === 'wall_short';
+}
 // The firing walk follows the enlarged fortification presentation. This is a
 // visual elevation only: wall collision, placement and projectile blocking
 // continue to use the unchanged gameplay footprint.
@@ -114,7 +119,8 @@ function clamp(value, low, high) {
 }
 
 function isCompletedWallWalkSegment(entity, side = null) {
-  return Boolean(entity?.alive && entity.complete && (entity.type === 'wall' || entity.type === 'gate')
+  return Boolean(entity?.alive && entity.complete
+    && (isWallSegmentType(entity.type) || entity.type === 'gate')
     && (side === null || entity.side === side));
 }
 
@@ -124,7 +130,7 @@ export function resolveWallStairAttachment(world, side, x, y) {
   let bestDistance = WALL_STAIR_ATTACH_DISTANCE;
 
   for (const wall of world.buildings) {
-    if (!isCompletedWallWalkSegment(wall, side) || wall.type !== 'wall') continue;
+    if (!isCompletedWallWalkSegment(wall, side) || !isWallSegmentType(wall.type)) continue;
     const frame = fortificationFrame(wall.type, wall.x, wall.y, wall.orientation);
     const local = pointLocal(frame, x, y);
     const along = clamp(local.along, -frame.halfLength + stairDef.w * 0.55,
@@ -205,7 +211,7 @@ function connectedWallWalk(world, start) {
 
 function wallWalkTarget(world, target) {
   if (!target?.alive || !target.complete) return null;
-  if (target.type === 'wall' || target.type === 'gate') return target;
+  if (isWallSegmentType(target.type) || target.type === 'gate') return target;
   if (target.type !== 'wall_stairs') return null;
   return world.buildings.find(building => building.id === target.wallId) || null;
 }
@@ -213,7 +219,9 @@ function wallWalkTarget(world, target) {
 function wallSlot(segment, slotIndex) {
   const fractions = segment.type === 'gate'
     ? [-0.72, -0.36, 0.36, 0.72]
-    : [-0.72, -0.36, 0, 0.36, 0.72];
+    : segment.type === 'wall_short'
+      ? [-0.5, 0.5]
+      : [-0.72, -0.36, 0, 0.36, 0.72];
   const fraction = fractions[slotIndex];
   if (fraction == null) return null;
   const frame = fortificationFrame(segment.type, segment.x, segment.y, segment.orientation);
@@ -238,7 +246,7 @@ function wallWalkSlots(world, target) {
   });
   const slots = [];
   for (const segment of connected) {
-    const count = segment.type === 'gate' ? 4 : 5;
+    const count = segment.type === 'gate' ? 4 : segment.type === 'wall_short' ? 2 : 5;
     for (let slotIndex = 0; slotIndex < count; slotIndex++) {
       slots.push(wallSlot(segment, slotIndex));
     }
@@ -549,7 +557,7 @@ export function lineIntersectsFortification(x0, y0, x1, y1, entity, padding = 0)
 export function resolveUnitFortificationCollision(unit, fortifications) {
   let resolved = false;
   for (const wall of fortifications) {
-    const solidWall = wall.type === 'wall' && (wall.complete || wall.progress >= 0.24);
+    const solidWall = isWallSegmentType(wall.type) && (wall.complete || wall.progress >= 0.24);
     const closedGate = wall.type === 'gate' && wall.complete && !isGateOpen(wall);
     if (!wall.alive || (!solidWall && !closedGate)) continue;
     const frame = fortificationFrame(wall.type, wall.x, wall.y, wall.orientation, unit.radius + 1.5);

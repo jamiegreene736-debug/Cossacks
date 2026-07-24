@@ -6,6 +6,7 @@
   "scripts": {
     "start": "python3 -m http.server 8000",
     "check": "for file in js/*.js js/gfx/*.js test/*.js; do node --check \"$file\"; done",
+    "generate:wall-textures": "python3 scripts/generate_rubble_masonry_textures.py",
     "test": "node --test"
   }
 }

@@ -8,8 +8,11 @@ import { BUILDING_TYPES, NATIONS } from '../config.js';
 import {
   fortificationAxis, fortificationEndpoints, fortificationInteriorSide,
   fortificationsShareEndpoint, getGateOpenProgress, isFortificationType,
-  normalizeFortificationOrientation, WALL_WALK_ELEVATION,
+  isWallSegmentType, normalizeFortificationOrientation, WALL_WALK_ELEVATION,
 } from '../fortifications.js';
+import {
+  classifyWallKitTopology, wallKitWorldUvOrigin, WALL_KIT_SEAM_OVERLAP,
+} from '../wall-kit.js';
 import { viewMirrorsHorizontalFacing } from '../camera.js';
 import { createResourceVisualLayout, getResourceVisualProfile } from '../resource-visuals.js';
 import { getProductionArt } from './art-assets.js';
@@ -4038,83 +4041,145 @@ function bdFortBlock(g, axis, normal, along, across, halfLength, halfThickness,
   return { l, r, back, front, bottom, top, fl, fr, tfl, tfr };
 }
 
+/**
+ * Irregular random-rubble / roughly squared rubble face for 18th-century
+ * Eastern/Central European curtain walls. Stones vary in height and width,
+ * mortar joints stay thick, and no two courses align into brick rows.
+ */
 function bdFortStoneFace(g, axis, normal, along, across, halfLength,
-  baseElevation, height, seed, coarse) {
+  baseElevation, height, seed, coarse, options) {
+  const o = options || {};
   const rr = bdRnd(seed || 1);
-  const courseHeight = coarse ? 6.2 : 5.1;
-  const courses = Math.max(1, Math.floor(height / courseHeight));
-  const left = along - halfLength, right = along + halfLength;
+  const left = along - halfLength;
+  const right = along + halfLength;
+  const top = baseElevation + height;
   const ottoman = bdFortificationMaterialKey === 'ottomanFortificationMasonry';
-  const mortar = bdRgba(ottoman ? '#B9B3A3' : '#777C73', ottoman ? 0.30 : 0.24);
-  const darkMortar = bdRgba(ottoman ? '#37362F' : '#171B18', 0.92);
+  const mortarFill = bdRgba(ottoman ? '#A9A291' : '#6E746B', ottoman ? 0.55 : 0.48);
+  const darkMortar = bdRgba(ottoman ? '#2F2E28' : '#121612', 0.88);
+  const limeMortar = bdRgba(ottoman ? '#C7C0AE' : '#8B9187', 0.34);
   const stones = (ottoman
-    ? ['#777267', '#666359', '#898277', '#57564F']
-    : ['#3C443E', '#303832', '#4A5049', '#252D28'])
+    ? ['#7A7468', '#6A655A', '#8C8578', '#58564F', '#746F63', '#635E54', '#504E47']
+    : ['#3A423C', '#2C342E', '#4A524B', '#232B26', '#353D37', '#414943', '#1C241F'])
     .map(colour => bdRamp(colour));
 
-  for (let row = 0; row < courses; row++) {
-    const e0 = baseElevation + row * height / courses;
-    const e1 = baseElevation + (row + 1) * height / courses;
-    const blocks = Math.max(4, Math.round((halfLength * 2) / (coarse ? 13 : 10.5)));
-    const offset = row & 1 ? 0.5 : 0;
-    for (let index = -1; index <= blocks; index++) {
-      const s0 = left + (index + offset) * (right - left) / blocks + rr(-0.5, 0.5);
-      const s1 = left + (index + 1 + offset) * (right - left) / blocks + rr(-0.5, 0.5);
-      const lo = Math.max(left, s0 + 0.35), hi = Math.min(right, s1 - 0.35);
-      if (hi <= lo) continue;
+  // Recessed lime bed first so every irregular joint reads as mortar, not gap.
+  const bed = [
+    bdFortPoint(axis, normal, left, across + 0.02, baseElevation),
+    bdFortPoint(axis, normal, right, across + 0.02, baseElevation),
+    bdFortPoint(axis, normal, right, across + 0.02, top),
+    bdFortPoint(axis, normal, left, across + 0.02, top),
+  ];
+  g.fillStyle = mortarFill;
+  g.beginPath();
+  g.moveTo(bed[0].x, bed[0].y);
+  for (let i = 1; i < bed.length; i++) g.lineTo(bed[i].x, bed[i].y);
+  g.closePath();
+  g.fill();
+
+  const minStoneW = coarse ? 5.8 : 4.2;
+  const maxStoneW = coarse ? 14.5 : 11.2;
+  const minStoneH = coarse ? 3.4 : 2.6;
+  const maxStoneH = coarse ? 7.8 : 6.4;
+  let rowBottom = baseElevation + 0.15;
+  let rowIndex = 0;
+  while (rowBottom < top - 1.1) {
+    const rowHeight = Math.min(maxStoneH, Math.max(minStoneH, rr(minStoneH, maxStoneH)));
+    // Drift the start of each row so vertical joints never form a grid.
+    let cursor = left + rr(-maxStoneW * 0.35, maxStoneW * 0.15)
+      + (rowIndex % 3 === 0 ? rr(0.8, 2.4) : 0);
+    let stoneIndex = 0;
+    while (cursor < right - 0.8) {
+      const remain = right - cursor;
+      let stoneW = rr(minStoneW, maxStoneW);
+      if (remain < minStoneW * 1.35) stoneW = remain;
+      else stoneW = Math.min(stoneW, remain - rr(0.35, 1.1));
+      const lo = Math.max(left + 0.15, cursor + rr(0.25, 0.7));
+      const hi = Math.min(right - 0.15, lo + stoneW);
+      if (hi - lo < 1.4) break;
+      const localH = Math.min(
+        top - rowBottom - 0.2,
+        rowHeight * rr(0.72, 1.18) * (stoneIndex % 5 === 0 ? 1.22 : 1),
+      );
+      if (localH < 1.2) break;
+      const overhang = rr(-0.22, 0.38);
+      const bevel = rr(0.18, 0.55);
       const material = stones[Math.floor(rr(0, stones.length)) % stones.length];
-      const p0 = bdFortPoint(axis, normal, lo, across + 0.08, e0 + 0.3);
-      const p1 = bdFortPoint(axis, normal, hi, across + 0.08, e0 + 0.3);
-      const p2 = bdFortPoint(axis, normal, hi, across + 0.08, e1 - 0.3);
-      const p3 = bdFortPoint(axis, normal, lo, across + 0.08, e1 - 0.3);
+      const e0 = rowBottom + rr(0.05, 0.28);
+      const e1 = e0 + localH;
+      const p0 = bdFortPoint(axis, normal, lo, across + 0.10 + overhang * 0.04, e0 + bevel * 0.2);
+      const p1 = bdFortPoint(axis, normal, hi, across + 0.10 + overhang * 0.04, e0);
+      const p2 = bdFortPoint(axis, normal, hi - rr(0, 0.45), across + 0.14 + overhang, e1);
+      const p3 = bdFortPoint(axis, normal, lo + rr(0, 0.45), across + 0.14 + overhang, e1 - bevel * 0.15);
       bdPoly(g, bdFortFlat([p0, p1, p2, p3]), material, {
         line: false, lit: false, shade: false,
       });
-      if ((row + index) % 3 === 0) {
-        const pit = bdFortPoint(axis, normal,
-          (lo + hi) * 0.5 + rr(-1.4, 1.4), across + 0.22,
-          (e0 + e1) * 0.5 + rr(-0.8, 0.8));
-        g.strokeStyle = bdRgba(ottoman ? '#4B4941' : '#171B18', 0.44);
-        g.lineWidth = 0.46;
+      // Soft lit arris on the upper edge so bevels catch the gallery light.
+      g.strokeStyle = bdRgba(material.lit, rr(0.18, 0.34));
+      g.lineWidth = 0.42;
+      g.beginPath(); g.moveTo(p3.x, p3.y); g.lineTo(p2.x, p2.y); g.stroke();
+      g.strokeStyle = darkMortar;
+      g.lineWidth = rr(0.55, 0.95);
+      g.beginPath(); g.moveTo(p0.x, p0.y); g.lineTo(p1.x, p1.y); g.stroke();
+      if (stoneIndex > 0) {
+        g.strokeStyle = (stoneIndex + rowIndex) % 3 ? darkMortar : limeMortar;
+        g.lineWidth = rr(0.7, 1.15);
+        g.beginPath(); g.moveTo(p0.x, p0.y); g.lineTo(p3.x, p3.y); g.stroke();
+      }
+      // Tool marks / chips — sparse, never a repeating hatch.
+      if ((stoneIndex + rowIndex) % 4 === 0) {
+        const chip = bdFortPoint(axis, normal,
+          (lo + hi) * 0.5 + rr(-1.6, 1.6), across + 0.22 + overhang,
+          (e0 + e1) * 0.5 + rr(-0.9, 0.9));
+        g.strokeStyle = bdRgba(ottoman ? '#3F3D36' : '#141814', 0.40);
+        g.lineWidth = 0.38;
         g.beginPath();
-        g.moveTo(pit.x - axis.x * 1.0, pit.y - axis.y * 1.0);
-        g.lineTo(pit.x + axis.x * 1.0, pit.y + axis.y * 1.0);
+        g.moveTo(chip.x - axis.x * 1.1, chip.y - axis.y * 1.1);
+        g.lineTo(chip.x + axis.x * 0.9, chip.y + axis.y * 0.9);
         g.stroke();
       }
-      if (index >= 0 && index < blocks) {
-        const joint = bdFortPoint(axis, normal, hi, across + 0.14, e1 - 0.35);
-        const jointBottom = bdFortPoint(axis, normal, hi, across + 0.14, e0 + 0.35);
-        g.strokeStyle = index % 3 ? darkMortar : mortar;
-        g.lineWidth = 0.86;
-        g.beginPath(); g.moveTo(joint.x, joint.y); g.lineTo(jointBottom.x, jointBottom.y); g.stroke();
+      cursor = hi + rr(0.55, 1.35);
+      stoneIndex++;
+    }
+    rowBottom += rowHeight * rr(0.82, 1.05) + rr(0.35, 0.85);
+    rowIndex++;
+    if (rowIndex > 28) break;
+  }
+
+  // Optional dressed quoin band for exposed ends / gate flanks only.
+  if (o.dressedQuoins) {
+    const limestone = bdRamp(ottoman ? '#8F897B' : '#6F746C');
+    for (const edge of [-1, 1]) {
+      if (o.exposedEnds && !o.exposedEnds[edge < 0 ? 0 : 1]) continue;
+      const quoinAlong = along + edge * (halfLength - 1.7);
+      for (let step = 0; step < Math.max(2, Math.floor(height / 5.5)); step++) {
+        const e0 = baseElevation + step * 5.5 + 0.2;
+        const e1 = Math.min(top - 0.3, e0 + 4.6);
+        bdFortBlock(g, axis, normal, quoinAlong, across - 0.4,
+          1.7 + (step & 1 ? 0.25 : -0.1), 1.1, Math.max(0.8, e1 - e0), e0,
+          limestone, { lineW: 0.4, litW: 0.36, endPlane: false });
       }
     }
-    const leftCourse = bdFortPoint(axis, normal, left, across + 0.15, e1);
-    const rightCourse = bdFortPoint(axis, normal, right, across + 0.15, e1);
-    g.strokeStyle = row & 1 ? darkMortar : mortar;
-    g.lineWidth = 1.04;
-    g.beginPath(); g.moveTo(leftCourse.x, leftCourse.y); g.lineTo(rightCourse.x, rightCourse.y); g.stroke();
-    const leftHighlight = bdFortPoint(axis, normal, left, across + 0.22, e1 - 0.72);
-    const rightHighlight = bdFortPoint(axis, normal, right, across + 0.22, e1 - 0.72);
-    g.strokeStyle = mortar;
-    g.lineWidth = 0.42;
-    g.beginPath(); g.moveTo(leftHighlight.x, leftHighlight.y);
-    g.lineTo(rightHighlight.x, rightHighlight.y); g.stroke();
   }
 }
 
-export function getFortificationMasonryDetailProfile(type = 'wall', joinedEnds = [false, false]) {
+export function getFortificationMasonryDetailProfile(type = 'wall', joinedEnds = [false, false], topology = null) {
   const gate = type === 'gate';
+  const shortWall = type === 'wall_short';
   return Object.freeze({
-    faceCourses: gate ? 8 : 7,
+    faceCourses: gate ? 8 : shortWall ? 6 : 7,
     plinthCourses: gate ? 3 : 2,
-    capSpacing: gate ? 8.5 : 9,
-    reliefBlocks: gate ? 18 : 14,
+    capSpacing: gate ? 8.5 : shortWall ? 8 : 9,
+    reliefBlocks: gate ? 18 : shortWall ? 9 : 14,
     exposedEnds: joinedEnds.map(joined => !joined),
     hasBatteredPlinth: !gate,
     supportsCurvedRuns: true,
     supportsGateAttachment: true,
-    supportsStairAttachment: !gate,
+    supportsStairAttachment: isWallSegmentType(type),
+    pieceId: topology?.pieceId || (gate ? 'gate' : shortWall ? 'straight_2m' : 'straight_4m'),
+    isOuterCorner: Boolean(topology?.isOuterCorner),
+    isInnerCorner: Boolean(topology?.isInnerCorner),
+    isTJunction: Boolean(topology?.isTJunction),
+    mossBias: topology?.isInnerCorner ? 1.25 : topology?.isTerminal ? 0.85 : 1,
   });
 }
 
@@ -4129,6 +4194,7 @@ function bdFortTexturedStoneFace(
   baseElevation,
   height,
   seed,
+  worldUvAlong = null,
 ) {
   const image = getProductionArt(bdFortificationMaterialKey)
     || getProductionArt('fortificationMasonry');
@@ -4142,14 +4208,15 @@ function bdFortTexturedStoneFace(
   const topLeft = bdFortPoint(axis, normal, left, across + 0.18, baseElevation + height);
   const widthFraction = bdClamp(halfLength / Math.max(halfLength, fullHalfLength), 0.04, 1);
   // Sample a close crop rather than crushing the entire source sheet into a
-  // 30-pixel-high facade. Six readable ashlar courses retain pores, chipped
-  // corners and joint depth at gameplay zoom; the old full-sheet projection
-  // averaged that information into a nearly uniform beige rectangle.
+  // 30-pixel-high facade. World-space UV keeps adjacent modules continuous so
+  // rubble joints do not seam or tile-repeat at snap points.
   const sourceWidth = Math.max(64, image.naturalWidth * widthFraction * 0.62);
   const sourceHeight = Math.max(64,
     image.naturalHeight * bdClamp(height / 50, 0.16, 0.72));
-  const variant = (Math.abs(seed | 0) % 997) / 997;
-  const sourceX = (image.naturalWidth - sourceWidth) * variant;
+  const texelsPerWorld = image.naturalWidth / Math.max(88, fullHalfLength * 2);
+  const worldOrigin = Number.isFinite(worldUvAlong) ? worldUvAlong : (Math.abs(seed | 0) % 997);
+  const sourceX = ((worldOrigin * texelsPerWorld) % Math.max(1, image.naturalWidth - sourceWidth)
+    + image.naturalWidth) % Math.max(1, image.naturalWidth - sourceWidth);
   const sourceY = image.naturalHeight - sourceHeight;
 
   g.save();
@@ -4168,14 +4235,7 @@ function bdFortTexturedStoneFace(
     topLeft.x,
     topLeft.y,
   );
-  // The authored masonry supplies the chips, stains and recessed mortar that
-  // make the fixed-angle production wall convincing. Keep that surface detail
-  // intact when it is projected onto a curved/free-angle section.
   g.globalCompositeOperation = 'source-over';
-  // This is the visible finish, not a faint colour wash over the old broad
-  // procedural courses. Keeping it opaque preserves the source's recessed
-  // mortar, chipped arrises and mineral variation after the cached stamp is
-  // reduced to gameplay scale.
   g.globalAlpha = 1;
   g.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight,
     0, 0, sourceWidth, sourceHeight);
@@ -4259,29 +4319,41 @@ function bdFortBatteredPlinth(g, axis, normal, halfLength, halfThickness, height
 
 function bdFortFacePatina(
   g, axis, normal, halfLength, across, baseElevation, height, seed,
+  mossBias = 1,
 ) {
   if (halfLength <= 2 || height <= 5) return;
   const rr = bdRnd(seed ^ 0x6d2b79f5);
+  const mossCount = Math.round(9 * bdClamp(mossBias, 0.55, 1.6));
 
-  // Water-darkened mortar and sparse moss collect at the plinth. The broken
-  // silhouette avoids the airbrushed green band that made older walls feel
-  // like a single flat card.
+  // Water-darkened mortar and sparse moss collect at the plinth and on the
+  // damper settlement/north-facing side. Broken silhouettes avoid a painted band.
   g.save();
-  for (let index = 0; index < 9; index++) {
+  for (let index = 0; index < mossCount; index++) {
     const along = rr(-halfLength * 0.92, halfLength * 0.92);
-    const elevation = rr(0.6, Math.min(6.8, height * 0.22));
+    const elevation = rr(0.6, Math.min(7.4, height * (0.18 + mossBias * 0.06)));
     const point = bdFortPoint(axis, normal, along, across + 0.34, elevation);
     g.fillStyle = index % 3 === 0
-      ? bdRgba('#777A4E', rr(0.18, 0.32))
-      : bdRgba('#4D5244', rr(0.10, 0.22));
+      ? bdRgba('#777A4E', rr(0.16, 0.30) * Math.min(1.15, mossBias))
+      : bdRgba('#4D5244', rr(0.10, 0.22) * Math.min(1.1, mossBias));
     g.beginPath();
     g.ellipse(point.x, point.y, rr(1.0, 3.3), rr(0.35, 1.0),
       Math.atan2(axis.y, axis.x), 0, BD_TAU);
     g.fill();
   }
 
-  // Fine cracks branch through only a few blocks. They are deliberately
-  // sub-pixel at final scale and read as surface age, never black outlines.
+  // Lichen freckles higher on the face — denser when mossBias is raised.
+  const lichen = Math.round(5 * mossBias);
+  for (let index = 0; index < lichen; index++) {
+    const along = rr(-halfLength * 0.88, halfLength * 0.88);
+    const elevation = rr(height * 0.28, height * 0.90);
+    const point = bdFortPoint(axis, normal, along, across + 0.38, elevation);
+    g.fillStyle = bdRgba(index & 1 ? '#9AA07A' : '#6E7358', rr(0.10, 0.22));
+    g.beginPath();
+    g.ellipse(point.x, point.y, rr(0.45, 1.4), rr(0.25, 0.7), rr(0, BD_TAU), 0, BD_TAU);
+    g.fill();
+  }
+
+  // Fine cracks branch through only a few blocks.
   g.strokeStyle = bdRgba('#3D3A34', 0.40);
   g.lineWidth = 0.42;
   for (let index = 0; index < 4; index++) {
@@ -4298,8 +4370,17 @@ function bdFortFacePatina(
     g.stroke();
   }
 
-  // A cool occlusion line and warm upper lip state the sun direction even on
-  // freely rotated sections where a fixed-angle painting cannot be used.
+  // Vertical water stains under a few joints.
+  for (let index = 0; index < 3; index++) {
+    const along = rr(-halfLength * 0.7, halfLength * 0.7);
+    const a = bdFortPoint(axis, normal, along, across + 0.36, baseElevation + height * 0.92);
+    const b = bdFortPoint(axis, normal, along + rr(-0.8, 0.8), across + 0.36,
+      baseElevation + rr(2.5, height * 0.4));
+    g.strokeStyle = bdRgba('#2A2E2A', rr(0.16, 0.28));
+    g.lineWidth = rr(0.55, 1.05);
+    g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke();
+  }
+
   const footA = bdFortPoint(axis, normal, -halfLength, across + 0.43, baseElevation + 0.5);
   const footB = bdFortPoint(axis, normal, halfLength, across + 0.43, baseElevation + 0.5);
   g.strokeStyle = bdRgba('#343631', 0.48);
@@ -4546,33 +4627,65 @@ function bdFortArrowSlit(g, axis, normal, along, across, elevation, height) {
   g.lineTo(sillRight.x, sillRight.y - 0.9); g.stroke();
 }
 
-function bdFortGateLeaf(g, axis, normal, sideSign, front, seed) {
-  const center = sideSign * 15.5;
+/**
+ * Separate timber gate leaf. `openProgress` 0 = barred, 1 = fully open.
+ * Leaves swing about their outer hinge so they can be re-skinned or driven by
+ * a future skeletal animation without touching the stone gatehouse.
+ */
+function bdFortGateLeaf(g, axis, normal, sideSign, front, seed, openProgress = 0) {
+  const hingeAlong = sideSign * 22.2;
+  const closedCenter = sideSign * 15.5;
   const half = 6.6;
-  const bottom = 3.5, top = 27;
-  const T = bdRamp(BMAT.DOOR), I = bdRamp(BMAT.IRON);
+  const bottom = 3.5;
+  const top = 27;
+  const swing = bdClamp(openProgress, 0, 1);
+  // Ease the leaf toward the flank and slightly into the passage depth so an
+  // open gate reads as a true door, not a vanishing texture.
+  const center = closedCenter + sideSign * swing * 5.8;
+  const depth = front + 0.5 + swing * 4.2;
+  const foreshorten = 1 - swing * 0.62;
+  const leafHalf = half * foreshorten;
+  if (leafHalf < 0.55) return;
+
+  const T = bdRamp(BMAT.DOOR);
+  const I = bdRamp(BMAT.IRON);
   const points = [
-    bdFortPoint(axis, normal, center - half, front + 0.5, bottom),
-    bdFortPoint(axis, normal, center + half, front + 0.5, bottom),
-    bdFortPoint(axis, normal, center + half, front + 0.5, top),
-    bdFortPoint(axis, normal, center - half, front + 0.5, top),
+    bdFortPoint(axis, normal, center - leafHalf, depth, bottom),
+    bdFortPoint(axis, normal, center + leafHalf, depth, bottom),
+    bdFortPoint(axis, normal, center + leafHalf, depth, top),
+    bdFortPoint(axis, normal, center - leafHalf, depth, top),
   ];
   bdPoly(g, bdFortFlat(points), T, { litW: 0.6, edge: true, lineW: 0.78 });
   for (let plank = -2; plank <= 2; plank++) {
-    const s = center + plank * half * 0.38;
-    const a = bdFortPoint(axis, normal, s, front + 0.62, bottom + 1);
-    const b = bdFortPoint(axis, normal, s, front + 0.62, top - 1);
+    const s = center + plank * leafHalf * 0.38;
+    const a = bdFortPoint(axis, normal, s, depth + 0.12, bottom + 1);
+    const b = bdFortPoint(axis, normal, s, depth + 0.12, top - 1);
     g.strokeStyle = bdRgba(T.shade, 0.72); g.lineWidth = 0.56;
     g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke();
   }
-  for (const elevation of [8, 21]) {
-    const a = bdFortPoint(axis, normal, center - half + 0.8, front + 0.72, elevation);
-    const b = bdFortPoint(axis, normal, center + half - 0.8, front + 0.72, elevation);
-    bdBeam(g, I, a.x, a.y, b.x, b.y, 1.3, { cap: 'butt', edgeA: 0.7 });
+  // Iron strap hinges, bolts and studs — period hardware, not fantasy braces.
+  for (const elevation of [7.5, 14.5, 21.5]) {
+    const a = bdFortPoint(axis, normal, center - leafHalf + 0.6, depth + 0.22, elevation);
+    const b = bdFortPoint(axis, normal, center + leafHalf - 0.6, depth + 0.22, elevation);
+    bdBeam(g, I, a.x, a.y, b.x, b.y, 1.15, { cap: 'butt', edgeA: 0.7 });
+    for (let stud = -2; stud <= 2; stud++) {
+      const studPoint = bdFortPoint(axis, normal,
+        center + stud * leafHalf * 0.32, depth + 0.34, elevation);
+      g.fillStyle = I.lit;
+      g.beginPath(); g.arc(studPoint.x, studPoint.y, 0.55, 0, BD_TAU); g.fill();
+      g.fillStyle = I.shade;
+      g.beginPath(); g.arc(studPoint.x + 0.15, studPoint.y + 0.12, 0.28, 0, BD_TAU); g.fill();
+    }
   }
-  const hinge = bdFortPoint(axis, normal, center + sideSign * half * 0.78, front + 0.8, 14);
+  const hinge = bdFortPoint(axis, normal, hingeAlong, depth + 0.3, 14);
+  g.fillStyle = I.base;
+  g.beginPath(); g.arc(hinge.x, hinge.y, 1.45 + (seed & 1) * 0.1, 0, BD_TAU); g.fill();
   g.fillStyle = I.lit;
-  g.beginPath(); g.arc(hinge.x, hinge.y, 1.25 + (seed & 1) * 0.1, 0, BD_TAU); g.fill();
+  g.beginPath(); g.arc(hinge.x - 0.25, hinge.y - 0.2, 0.55, 0, BD_TAU); g.fill();
+  if (swing < 0.35) {
+    const bolt = bdFortPoint(axis, normal, center - sideSign * leafHalf * 0.15, depth + 0.4, 15);
+    bdRect(g, bolt.x - 1.6, bolt.y - 0.7, 3.2, 1.4, I, { litW: 0.45, edge: true, lineW: 0.4 });
+  }
 }
 
 function bdFortArch(g, axis, normal, front, seed) {
@@ -4911,7 +5024,8 @@ function bdPaintWallStairs(g, building, progress, construction) {
 
 function bdPaintFortification(
   g, type, side, orientation, progress, seed, construction, joinedEnds = [false, false],
-  interiorSide = 1, gateOpenProgress = 1, nation = 'england',
+  interiorSide = 1, gateOpenProgress = 1, nation = 'england', topology = null,
+  worldUvAlong = 0,
 ) {
   bdFortificationMaterialKey = nation === 'ottoman'
     ? 'ottomanFortificationMasonry'
@@ -4921,16 +5035,18 @@ function bdPaintFortification(
   const isGate = type === 'gate';
   const nominalHalfLength = BUILDING_TYPES[type].w * 0.5;
   const connectedWall = !isGate && joinedEnds.some(Boolean);
-  const detail = getFortificationMasonryDetailProfile(type, joinedEnds);
-  // Adjacent sections overlap by a few pixels. Their thick top walks then
-  // mitre cleanly through a bend instead of exposing a triangular grass gap.
-  const halfLength = nominalHalfLength + (connectedWall ? 3 : 0);
+  const detail = getFortificationMasonryDetailProfile(type, joinedEnds, topology);
+  // Adjacent sections overlap by the kit seam so walks mitre cleanly through a
+  // bend instead of exposing a triangular grass gap or light leak.
+  const halfLength = nominalHalfLength + (connectedWall ? WALL_KIT_SEAM_OVERLAP : 0);
   const halfThickness = BUILDING_TYPES[type].h * 0.5;
   const p = bdClamp(progress == null ? 1 : progress, 0, 1);
   const ottoman = nation === 'ottoman';
   const stone = bdRamp(ottoman ? '#6A675D' : '#343A35');
   const rough = bdRamp(ottoman ? '#48473F' : '#242A26');
   const unfinishedCrown = bdRamp(ottoman ? '#3A3933' : '#1D221F');
+  // Damp / moss intensifies on the settlement-facing side and at inner corners.
+  const faceMossBias = detail.mossBias * (interiorSide === 1 ? 1.15 : 0.8);
 
   // A fitted cobble lane and shallow trench visually weld adjacent stamps into
   // one defensive work while remaining beneath the modelled masonry.
@@ -4945,30 +5061,32 @@ function bdPaintFortification(
       : { length: 1, height: 1, scaffold: 1, crown: 1 };
     const masonryHalfLength = halfLength * stage.length;
     const builtHeight = masonryHalfLength > 0.5 ? 2.2 + 29.8 * stage.height : 0;
-    const seamlessEnd = { endPlane: !joinedEnds[1] };
     if (masonryHalfLength > 0.5) {
       bdFortBlock(g, axis, normal, 0, 0, masonryHalfLength, halfThickness,
         Math.min(5.5, builtHeight), 0, rough, {
-          ...seamlessEnd,
+          endPlane: !joinedEnds[1],
           topMaterial: construction && stage.crown < 0.96 ? unfinishedCrown : undefined,
         });
       if (builtHeight > 4) {
         bdFortBlock(g, axis, normal, 0, -0.6,
           Math.max(0.8, masonryHalfLength - 1.2), halfThickness - 1.4,
           builtHeight - 4, 4, stone, {
-            ...seamlessEnd,
+            endPlane: !joinedEnds[1],
             topMaterial: construction && stage.crown < 0.96 ? unfinishedCrown : undefined,
           });
       }
       bdFortStoneFace(g, axis, normal, 0, halfThickness - 1.8,
         Math.max(0.8, masonryHalfLength - 1.0), 0, builtHeight,
-        seed ^ 0x35a9, false);
+        seed ^ 0x35a9 ^ Math.round(worldUvAlong * 10), false, {
+          dressedQuoins: detail.isOuterCorner || detail.isTJunction || detail.exposedEnds.some(Boolean),
+          exposedEnds: detail.exposedEnds,
+        });
       bdFortTexturedStoneFace(g, axis, normal, 0, halfThickness - 1.65,
         Math.max(0.8, masonryHalfLength - 1.0), halfLength - 1.0,
-        0, builtHeight, seed ^ 0x2947);
+        0, builtHeight, seed ^ 0x2947, worldUvAlong);
       bdFortFacePatina(g, axis, normal,
         Math.max(0.8, masonryHalfLength - 1.0), halfThickness - 1.52,
-        0, builtHeight, seed ^ 0x19f3);
+        0, builtHeight, seed ^ 0x19f3, faceMossBias);
       if (detail.hasBatteredPlinth) {
         bdFortBatteredPlinth(g, axis, normal,
           Math.max(0.8, masonryHalfLength - 1.0), halfThickness, builtHeight,
@@ -4984,6 +5102,19 @@ function bdPaintFortification(
       if (detail.exposedEnds[1]) {
         bdFortDressedEndCap(g, axis, normal, masonryHalfLength,
           halfThickness, builtHeight, seed ^ 0x9ad3);
+      }
+      // Corner / T-junction quoin piers reinforce topology without breaking the seam.
+      if (detail.isOuterCorner || detail.isInnerCorner || detail.isTJunction) {
+        for (const endIndex of [0, 1]) {
+          if (!joinedEnds[endIndex]) continue;
+          const along = (endIndex === 0 ? -1 : 1) * (nominalHalfLength - 1.2);
+          const quoin = bdRamp(ottoman ? '#7E796C' : '#5C615A');
+          bdFortBlock(g, axis, normal, along, 0.4, 3.4, halfThickness + 1.8,
+            Math.max(6, builtHeight - 1.5), 0, quoin, {
+              lineW: 0.5, litW: 0.42, endPlane: false,
+              topMaterial: bdRamp('#8A8D84'),
+            });
+        }
       }
 
       // Deeply modelled string courses divide the battered base, ashlar face
@@ -5123,12 +5254,15 @@ function bdPaintFortification(
       towerHeight, 1, side, seed ^ 0x7a51, interiorSide);
   }
   if (!construction || p > 0.86) {
-    bdFortGateLeaf(g, axis, normal, -1, halfThickness + 0.4, seed);
-    bdFortGateLeaf(g, axis, normal, 1, halfThickness + 0.4, seed + 1);
+    // Timber leaves are a separate animatable layer from the stone shell and
+    // iron portcullis. openProgress 0 = barred, 1 = swung clear of the passage.
+    const leafOpen = bdClamp(gateOpenProgress, 0, 1);
+    bdFortGateLeaf(g, axis, normal, -1, halfThickness + 0.4, seed, leafOpen);
+    bdFortGateLeaf(g, axis, normal, 1, halfThickness + 0.4, seed + 1, leafOpen);
     // The heavy portcullis travels vertically into the gatehouse. Its lower
     // teeth remain readable at both limits and during the drop.
     const iron = bdRamp(BMAT.IRON);
-    const lift = bdClamp(gateOpenProgress, 0, 1);
+    const lift = leafOpen;
     const bottomElevation = 3.5 + lift * 25.5;
     const topElevation = bottomElevation + 25;
     for (let along = -13; along <= 13; along += 4.3) {
@@ -5173,7 +5307,7 @@ const BD_TOP_EXTRA = {
   english_mansion: 148, spooky_house: 146, farm: 30, mill: 104, lumber_camp: 54,
   mine: 74, barracks: 78, stable: 72, foundry: 108, tower: 106,
   marketplace: 162, castle: 162,
-  wall: 72, gate: 94, wall_stairs: 92,
+  wall: 72, wall_short: 72, gate: 94, wall_stairs: 92,
 };
 
 function bdBoxFor(type, def) {
@@ -5237,7 +5371,7 @@ const BD_VARIANTS = {
   english_cottage: 1, english_townhouse: 1, english_mansion: 1, spooky_house: 1,
   mill: 2, lumber_camp: 2, mine: 2, barracks: 2, stable: 2, foundry: 2,
   marketplace: 1, school: 1, pool: 1, beach: 1, park: 5, playground: 1,
-  wall: 3, gate: 3, wall_stairs: 3,
+  wall: 3, wall_short: 3, gate: 3, wall_stairs: 3,
 };
 
 const BD_PAINTERS = {
@@ -5596,7 +5730,7 @@ function getBuildingConstructionArtWidth(type, nation, naturalWidth, naturalHeig
 
 function bdVisualGroundY(building) {
   if (building.type === 'gate') return building.h * 0.52 + 11;
-  if (building.type === 'wall') return building.h * 0.52 + 8;
+  if (isWallSegmentType(building.type)) return building.h * 0.52 + 8;
   return building.h * 0.48 + 8;
 }
 
@@ -5767,11 +5901,15 @@ function bdJoinedFortificationEnds(building, world, includeIncomplete = false) {
 }
 
 export function getFortificationRenderProfile(building, world) {
-  const joinedEnds = bdJoinedFortificationEnds(building, world);
+  const topology = classifyWallKitTopology(building, world);
+  const joinedEnds = topology?.joinedEnds || bdJoinedFortificationEnds(building, world);
   const nation = world?.sides?.[building?.side]?.nation;
-  const connectedWall = building?.type === 'wall' && joinedEnds.some(Boolean);
+  const connectedWall = isWallSegmentType(building?.type) && joinedEnds.some(Boolean);
+  const uv = wallKitWorldUvOrigin(building);
   return {
     joinedEnds,
+    topology,
+    worldUvAlong: uv.along,
     // Every faction and every orientation now uses the connected renderer.
     // A fixed sheet cannot preserve physical inside/outside faces through a
     // bend, gate or camera turn, and was the reason old saved Ottoman walls
@@ -5780,6 +5918,7 @@ export function getFortificationRenderProfile(building, world) {
     interiorSide: fortificationInteriorSide(world, building),
     nation: nation === 'ottoman' ? 'ottoman' : 'england',
     connectedWall,
+    pieceId: topology?.pieceId || null,
   };
 }
 
@@ -6373,7 +6512,7 @@ function bdBuildingSprite(type, def, side, nation, natRoof, variant, damageStage
     bdPaintDamage(g, G, opts, damage);
     bdPassSurfacePatina(g, box, seed + damage * 101 + frame * 17);
     bdPassRecessWash(g, scale);
-    if (type !== 'wall') {
+    if (!isWallSegmentType(type)) {
       bdPassGalleryLight(g, box);
       bdPassMatteVarnish(g, box);
     }
@@ -6431,7 +6570,7 @@ function bdFortificationDamage(g, structure, stage, seed) {
 
 function bdFortificationSprite(
   building, damageStage, joinedEnds = [false, false], interiorSide = 1,
-  gateOpenProgress = 1, nation = 'england',
+  gateOpenProgress = 1, nation = 'england', topology = null, worldUvAlong = 0,
 ) {
   const type = building.type;
   const def = BUILDING_TYPES[type];
@@ -6440,15 +6579,20 @@ function bdFortificationSprite(
   const variant = ((building.id % 3) + 3) % 3;
   const joinMask = joinedEnds.map(joined => Number(Boolean(joined))).join('');
   const gateFrame = type === 'gate' ? Math.round(bdClamp(gateOpenProgress, 0, 1) * 10) : 10;
-  const key = `fort-v2|${nation}|${type}|${building.side}|${orientation}|${variant}|${damageStage}|${joinMask}|${interiorSide}|${gateFrame}`;
+  const pieceId = topology?.pieceId || 'straight';
+  // Quantize world UV so the cache stays bounded while neighbouring modules
+  // that share an endpoint still sample continuous rubble texture.
+  const uvBin = Math.round(worldUvAlong / 4);
+  const key = `fort-v3|${nation}|${type}|${pieceId}|${building.side}|${orientation}|${variant}|${damageStage}|${joinMask}|${interiorSide}|${gateFrame}|${uvBin}`;
   let sprite = bdBuildingCache.get(key);
   if (sprite) return sprite;
   const box = bdBoxFor(type, def);
-  const seed = variant * 7919 + building.side * 104729 + (type === 'gate' ? 9109 : 3011);
+  const seed = variant * 7919 + building.side * 104729 + (type === 'gate' ? 9109 : 3011)
+    + uvBin * 17;
   sprite = bdBake(box, BD_SCALE, function (g, scale) {
     const structure = bdPaintFortification(
       g, type, building.side, orientation, 1, seed, false, joinedEnds,
-      interiorSide, gateFrame / 10, nation,
+      interiorSide, gateFrame / 10, nation, topology, worldUvAlong,
     );
     bdFortificationDamage(g, structure, damageStage, seed);
     bdPassSurfacePatina(g, box, seed + damageStage * 101);
@@ -7271,6 +7415,10 @@ function bdDrawFortificationFoundation(g, building, world) {
 
   // The modelled wall rises course by course, with its own foreground scaffold,
   // centering frame, hoist, ladder, lashings and unconsumed stone stock.
+  const constructionTopology = classifyWallKitTopology(building, world, {
+    includeIncomplete: true,
+  });
+  const constructionUv = wallKitWorldUvOrigin(building);
   bdPaintFortification(
     g,
     building.type,
@@ -7279,10 +7427,12 @@ function bdDrawFortificationFoundation(g, building, world) {
     building.progress,
     (building.id * 2654435761) | 0,
     true,
-    bdJoinedFortificationEnds(building, world, true),
-    1,
+    constructionTopology?.joinedEnds || bdJoinedFortificationEnds(building, world, true),
+    fortificationInteriorSide(world, building),
     1,
     world?.sides?.[building.side]?.nation || 'england',
+    constructionTopology,
+    constructionUv.along,
   );
 }
 
@@ -7604,6 +7754,8 @@ function drawCompleteBuilding(building, nation, worldTime, world = null) {
       renderProfile.interiorSide,
       gateOpenProgress,
       renderProfile.nation,
+      renderProfile.topology,
+      renderProfile.worldUvAlong,
     );
     if (fortification) {
       ctx.drawImage(fortification.c, fortification.x, fortification.y,
@@ -7649,7 +7801,7 @@ function bdDrawFortificationJunctions(building, world) {
   if (!building.complete || !isFortificationType(building.type)) return;
   // Connected wall sprites overlap their body and walk at the exact shared
   // endpoint, so adding another pier here would reintroduce a visible break.
-  if (building.type === 'wall' && bdJoinedFortificationEnds(building, world).some(Boolean)) return;
+  if (isWallSegmentType(building.type) && bdJoinedFortificationEnds(building, world).some(Boolean)) return;
   const nation = world?.sides?.[building.side]?.nation;
   const artSpec = getArchitectureProductionArtSpec(nation);
   if (nation !== 'england' && artSpec && getProductionArt(artSpec.fortifications)

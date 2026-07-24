@@ -489,14 +489,25 @@ export const BUILDING_TYPES = {
     cost: { wood: 110, stone: 20 }, peacefulCivic: true, hotkey: 'Y',
   },
   wall: {
-    label: 'Stone Wall', description: 'Heavy masonry that blocks troops and musket fire.',
+    label: 'Stone Wall',
+    description: '4 m rubble curtain with a walkable terreplein that blocks troops and musket fire.',
     w: 88, h: 22, radius: 46, visualScale: 1.32, hp: 1250, buildTime: 7,
     cost: { stone: 25 }, fortification: true, blocksUnits: true, hotkey: 'U',
+    wallModule: 'straight_4m',
+  },
+  wall_short: {
+    label: 'Short Stone Wall',
+    description: '2 m rubble filler for tight corners, gate flanks and uneven curtain runs.',
+    w: 44, h: 22, radius: 28, visualScale: 1.32, hp: 700, buildTime: 4,
+    cost: { stone: 14 }, fortification: true, blocksUnits: true, hotkey: 'J',
+    wallModule: 'straight_2m',
   },
   gate: {
-    label: 'Stone Gate', description: 'A fortified passage that can be opened or barred on command.',
+    label: 'Stone Gate',
+    description: 'A fortified arched passage with timber leaves that open or bar on command.',
     w: 104, h: 26, radius: 54, visualScale: 1.32, hp: 1650, buildTime: 10,
     cost: { wood: 20, stone: 45 }, fortification: true, gate: true, hotkey: 'G',
+    wallModule: 'gate',
   },
   wall_stairs: {
     label: 'Stone Staircase',
@@ -505,6 +516,7 @@ export const BUILDING_TYPES = {
     // only needs a slight breadth adjustment rather than the wall's full scale.
     w: 36, h: 50, radius: 29, visualScale: 1.05, hp: 760, buildTime: 9,
     cost: { wood: 15, stone: 55 }, wallAttachment: true, hotkey: 'X',
+    wallModule: 'ramp',
   },
 };
 

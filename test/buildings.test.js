@@ -41,7 +41,11 @@ test('building silhouettes preserve the settlement scale hierarchy', () => {
 
 test('displayed architecture remains decisively larger than human-scale units', () => {
   const infantryWidth = Math.max(MILITARY_ART_SPECS.musk.w, MILITARY_ART_SPECS.pike.w);
-  const architecturalTypes = BUILT_STRUCTURE_TYPES.filter(type => type !== 'wall_stairs');
+  // Short 2 m fillers are intentionally half-module; full curtain and civic
+  // architecture must still read larger than a soldier.
+  const architecturalTypes = BUILT_STRUCTURE_TYPES.filter(
+    type => type !== 'wall_stairs' && type !== 'wall_short',
+  );
 
   for (const type of architecturalTypes) {
     const presentation = getBuildingPresentation(type);
@@ -51,6 +55,11 @@ test('displayed architecture remains decisively larger than human-scale units', 
     );
     assert.ok(presentation.visualScale >= 1.25, `${type} should use the architectural scale tier`);
   }
+  assert.ok(
+    getBuildingPresentation('wall_short').displayArtWidth >= infantryWidth,
+    'short wall modules should still read at least as wide as an infantryman',
+  );
+  assert.ok(getBuildingPresentation('wall_short').visualScale >= 1.25);
 
   assert.ok(BUILDING_TYPES.town_center.visualScale > BUILDING_TYPES.house.visualScale);
   assert.ok(BUILDING_TYPES.wall.visualScale > BUILDING_TYPES.barracks.visualScale);
@@ -276,20 +285,22 @@ test('connected wall frames expose only the two ends of the complete run', () =>
   };
   const world = { buildings: [left, right] };
 
-  assert.deepEqual(getFortificationRenderProfile(left, world), {
-    joinedEnds: [false, true],
-    useProductionFrame: false,
-    interiorSide: 1,
-    nation: 'england',
-    connectedWall: true,
-  });
-  assert.deepEqual(getFortificationRenderProfile(right, world), {
-    joinedEnds: [true, false],
-    useProductionFrame: false,
-    interiorSide: 1,
-    nation: 'england',
-    connectedWall: true,
-  });
+  const leftProfile = getFortificationRenderProfile(left, world);
+  assert.deepEqual(leftProfile.joinedEnds, [false, true]);
+  assert.equal(leftProfile.useProductionFrame, false);
+  assert.equal(leftProfile.interiorSide, 1);
+  assert.equal(leftProfile.nation, 'england');
+  assert.equal(leftProfile.connectedWall, true);
+  assert.equal(leftProfile.pieceId, 'end');
+  assert.ok(leftProfile.topology);
+  assert.equal(typeof leftProfile.worldUvAlong, 'number');
+
+  const rightProfile = getFortificationRenderProfile(right, world);
+  assert.deepEqual(rightProfile.joinedEnds, [true, false]);
+  assert.equal(rightProfile.useProductionFrame, false);
+  assert.equal(rightProfile.connectedWall, true);
+  assert.equal(rightProfile.pieceId, 'end');
+
   assert.equal(getFortificationRenderProfile(left, { buildings: [left] }).useProductionFrame, false);
   const ottomanProfile = getFortificationRenderProfile(left, {
     buildings: [left],

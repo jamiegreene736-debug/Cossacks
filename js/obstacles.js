@@ -45,7 +45,9 @@ export function structureBlocksGround(building, worldTime) {
   // Farmers work inside crop rows, so a field is a managed work surface rather
   // than a solid structure. Its placement footprint still blocks other builds.
   if (!def || def.wallAttachment || building.type === 'farm') return false;
-  if (building.type === 'wall') return building.complete || building.progress >= 0.24;
+  if (building.type === 'wall' || building.type === 'wall_short') {
+    return building.complete || building.progress >= 0.24;
+  }
   if (def.gate) return building.complete && !isGatePassable(building, worldTime);
   return true;
 }

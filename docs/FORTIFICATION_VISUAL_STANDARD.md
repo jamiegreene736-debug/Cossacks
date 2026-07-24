@@ -10,18 +10,23 @@ outside faces required by the rotatable battlefield.
 2. **Rendering:** fortifications use the connected Canvas model for every
    faction and orientation. Legacy fixed-angle sheets must not replace a saved
    or newly built section.
-3. **Masonry:** English walls use dark, irregular fieldstone with dressed
-   repairs. Ottoman walls use warm, hand-cut limestone ashlar. Both carry
-   recessed mortar, chipped edges, restrained moss, lichen and damp staining.
-4. **Assembly:** joined sections overlap beneath their finish, suppress internal
-   end caps and retain exposed dressed caps only at true run ends. Free-angle
-   sections are cached in 64 visual bins to bound GPU memory.
+3. **Masonry:** English walls use dark, irregular fieldstone rubble with thick
+   lime mortar. Ottoman walls use warm limestone rubble (dressed ashlar only at
+   corners, gate surrounds and the coping). Both carry recessed mortar, chipped
+   edges, tool marks, moss, lichen and damp staining — never brick-like courses.
+4. **Assembly:** the modular kit in `js/wall-kit.js` / `docs/MODULAR_WALL_KIT.md`
+   guarantees zero-seam sockets. Joined sections overlap beneath their finish,
+   suppress internal end caps, share world-space UVs and retain exposed dressed
+   caps only at true run ends. Free-angle sections are cached in 64 visual bins
+   to bound GPU memory. Provide 4 m (`wall`) and 2 m (`wall_short`) straights.
 5. **Staircase:** the broad stone flight includes individual worn treads, cheek
    walls, coping, a flush landing and a construction scaffold. Soldiers climb
    it over time; they never teleport from the ground to the firing walk.
 6. **Gatehouse:** two masonry towers, an arched passage and a raised central
-   mass make the gate larger than a wall section. The portcullis travels
-   vertically and becomes passable only after clearing troop height.
+   mass make the gate larger than a wall section. Heavy timber double leaves are
+   a separate animatable layer (iron strap hinges, bolts, studs) and swing with
+   gate progress; the portcullis travels vertically and becomes passable only
+   after clearing troop height.
 7. **Grounding:** battered plinths, continuous contact shade, a fitted service
    lane, sparse foot moss and local rubble join the wall to the terrain.
 8. **States:** surveyed trench, rising masonry, scaffolding, incomplete crown,

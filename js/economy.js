@@ -1772,7 +1772,7 @@ export function onBuildingDestroyed(world, building) {
       });
     }
   }
-  if (building.type === 'wall') {
+  if (building.type === 'wall' || building.type === 'wall_short') {
     let removed = 0;
     for (const staircase of world.buildings) {
       if (!staircase.alive || staircase.type !== 'wall_stairs' || staircase.wallId !== building.id) continue;

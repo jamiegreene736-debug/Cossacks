@@ -97,7 +97,8 @@ does not alter unit combat stats or give the CPU free resources.
 - **Right-click / Mac two-finger click / Control-click** — alternate move, construct, attack, wall-mount, or rally command
 - **Town Center selected + primary click on a resource or worksite** — send newly trained villagers there to gather, work, or build
 - **Build card, then click terrain** — place a foundation
-- **Stone Wall, then press-drag-release** — preview and place the longest connected run your stone and open terrain allow
+- **Stone Wall, then press-drag-release** — preview and place the longest connected 4 m rubble run your stone and open terrain allow
+- **Short Stone Wall** — snap a 2 m filler beside gates, corners or uneven curtain ends
 - **Villager + open-ground click** — route around walls, buildings, and deposits on the way to the waypoint
 - **Cancel placement** — click the placement button or any HUD panel; Esc and secondary-click also work
 - **L / C / B** — line, column, or square formation
