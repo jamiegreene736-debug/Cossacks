@@ -473,6 +473,16 @@ test('the Great Hall keeps its opacity-corrected production artwork', async () =
   );
 });
 
+test('the Hogwarts Town Center keeps its solid masonry opacity', async () => {
+  const assetUrl = new URL('../assets/buildings/hogwarts-town-center.webp', import.meta.url);
+  const digest = createHash('sha256').update(await readFile(assetUrl)).digest('hex');
+  assert.equal(
+    digest,
+    '0a645bb73fdaedd3b06af0fb0b9d65f3263cf0f6d065c74548653a4e4c68b9ab',
+    'the Town Center must not regress to the translucent source sprite',
+  );
+});
+
 test('the Hogwarts tower stays a complete standalone structure', async () => {
   const assetUrl = new URL('../assets/buildings/hogwarts-tower.webp', import.meta.url);
   const digest = createHash('sha256').update(await readFile(assetUrl)).digest('hex');
