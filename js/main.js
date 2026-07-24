@@ -23,7 +23,9 @@ import { bindPageLifecycle } from './lifecycle.js';
 import {
   deleteCampaign, getCampaignSummary, loadCampaign, restoreGameSnapshot, saveCampaign,
 } from './savegame.js';
-import { toggleGate } from './fortifications.js';
+import {
+  assignMusketeersToWall, fortificationAxis, fortificationInteriorSide, toggleGate,
+} from './fortifications.js';
 import { applyAttackOrder, applyMoveOrder } from './formations.js';
 import { OPENING_PEACE_SECONDS } from './truce.js';
 import {
@@ -969,14 +971,45 @@ function setupLocalCurvedWallPreview(activeWorld) {
       y: endpoint.y + axis.y * wallWidth,
     };
   }
-  activeWorld.buildings.push(...walls);
+  const lastAngle = angles.at(-1);
+  const gateAxis = fortificationAxis(lastAngle);
+  const gate = createBuilding(
+    0,
+    'gate',
+    endpoint.x + gateAxis.x * BUILDING_TYPES.gate.w * 0.5,
+    endpoint.y + gateAxis.y * BUILDING_TYPES.gate.w * 0.5,
+    true,
+    { orientation: lastAngle, gateOpen: false },
+  );
+  const hostWall = walls[3];
+  const stairSide = fortificationInteriorSide(activeWorld, hostWall);
+  const hostAxis = fortificationAxis(hostWall.orientation);
+  const hostNormal = { x: -hostAxis.y, y: hostAxis.x };
+  const stairs = createBuilding(
+    0,
+    'wall_stairs',
+    hostWall.x + hostNormal.x * stairSide * 42,
+    hostWall.y + hostNormal.y * stairSide * 42,
+    true,
+    {
+      orientation: hostWall.orientation,
+      wallId: hostWall.id,
+      stairSide,
+      stairAlong: 0,
+    },
+  );
+  activeWorld.buildings.push(...walls, gate, stairs);
+  for (let index = 0; index < 4; index++) {
+    const defender = spawnUnit(activeWorld, 0, 'musk', hostWall.x, hostWall.y);
+    assignMusketeersToWall(activeWorld, [defender], hostWall);
+  }
   activeWorld.resources = activeWorld.resources.filter(resource => walls.every(wall => (
     Math.hypot(resource.x - wall.x, resource.y - wall.y)
       > resource.radius + wall.radius + 50
   )));
-  camera.x = (walls[0].x + walls.at(-1).x) * 0.5;
-  camera.y = (walls[0].y + walls.at(-1).y) * 0.5;
-  camera.zoom = 1.45;
+  camera.x = (walls[0].x + gate.x) * 0.5;
+  camera.y = (walls[0].y + gate.y) * 0.5;
+  camera.zoom = 1.25;
   clampCamera();
 }
 

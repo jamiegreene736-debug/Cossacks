@@ -7,7 +7,8 @@ import {
 } from '../js/economy.js';
 import {
   assignMusketeersToWall, dismountWallUnit, fortificationAxis,
-  fortificationEndpoints, lineIntersectsFortification, pointInsideFortification,
+  fortificationEndpoints, fortificationInteriorSide, getGateOpenProgress,
+  lineIntersectsFortification, pointInsideFortification,
   resolveUnitFortificationCollision, toggleGate, updateWallAssignment,
 } from '../js/fortifications.js';
 import { OPENING_PEACE_SECONDS } from '../js/truce.js';
@@ -179,6 +180,10 @@ test('wall masonry blocks units while a player-controlled gate opens and closes'
   assert.equal(closed.ok, true);
   assert.equal(closed.open, false);
   assert.equal(world.navigationVersion, navigationVersion + 1);
+  assert.equal(getGateOpenProgress(gate, world.time), 1);
+  assert.ok(getGateOpenProgress(gate, world.time + 0.45) > 0.45);
+  assert.ok(getGateOpenProgress(gate, world.time + 0.45) < 0.55);
+  assert.equal(getGateOpenProgress(gate, world.time + 0.9), 0);
   const blockedGateUnit = { x: gate.x, y: gate.y, radius: 5 };
   assert.equal(resolveUnitFortificationCollision(blockedGateUnit, [gate]), true);
   assert.ok(Math.abs(blockedGateUnit.y - gate.y) >= 19.5);
@@ -206,6 +211,18 @@ test('wall masonry blocks units while a player-controlled gate opens and closes'
       assert.equal(clearedWallEnd, true, 'the villager crosses only after routing around a wall end');
     }
   }
+});
+
+test('fortification interior follows the settlement instead of the camera', () => {
+  const world = makeWorld();
+  const townCenter = createBuilding(0, 'town_center', 900, 1750, true);
+  const wall = createBuilding(0, 'wall', 900, 1600, true, { orientation: 'horizontal' });
+  world.sides[0].townCenterId = townCenter.id;
+  world.buildings.push(townCenter, wall);
+
+  assert.equal(fortificationInteriorSide(world, wall), 1);
+  townCenter.y = 1450;
+  assert.equal(fortificationInteriorSide(world, wall), -1);
 });
 
 test('stone staircases snap to a completed wall and preserve their attachment', () => {

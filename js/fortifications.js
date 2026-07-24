@@ -14,6 +14,7 @@ export const FORTIFICATION_ENDPOINT_PICK_DISTANCE = 64;
 export const WALL_WALK_ELEVATION = 40;
 const GATE_WALK_ELEVATION = 57;
 export const WALL_STAIR_ATTACH_DISTANCE = 58;
+export const GATE_TRAVEL_SECONDS = 0.9;
 
 const AXES = Object.freeze({
   horizontal: Object.freeze({ x: 1, y: 0 }),
@@ -36,6 +37,8 @@ export function setGateOpen(world, building, open) {
   if (building.gateOpen === next) {
     return { ok: true, open: next, message: `Gate is already ${next ? 'open' : 'closed'}.` };
   }
+  building.gateTransitionFrom = getGateOpenProgress(building, world.time);
+  building.gateTransitionStartedAt = world.time;
   building.gateOpen = next;
   world.navigationVersion = (world.navigationVersion || 0) + 1;
   return {
@@ -47,6 +50,19 @@ export function setGateOpen(world, building, open) {
 
 export function toggleGate(world, building) {
   return setGateOpen(world, building, !isGateOpen(building));
+}
+
+export function getGateOpenProgress(building, worldTime) {
+  const target = isGateOpen(building) ? 1 : 0;
+  if (!Number.isFinite(building?.gateTransitionStartedAt)
+      || !Number.isFinite(worldTime)) return target;
+  const elapsed = Math.max(0, worldTime - building.gateTransitionStartedAt);
+  const t = Math.min(1, elapsed / GATE_TRAVEL_SECONDS);
+  const eased = t * t * (3 - 2 * t);
+  const from = Number.isFinite(building.gateTransitionFrom)
+    ? Math.max(0, Math.min(1, building.gateTransitionFrom))
+    : 1 - target;
+  return from + (target - from) * eased;
 }
 
 export function normalizeFortificationOrientation(orientation) {
@@ -149,6 +165,16 @@ function interiorReferencePoint(world, side, wall) {
     x: side === 0 ? WORLD.w * 0.2 : WORLD.w * 0.8,
     y: WORLD.h * 0.5,
   };
+}
+
+export function fortificationInteriorSide(world, building) {
+  if (!world || !building) return building?.stairSide === -1 ? -1 : 1;
+  const axis = fortificationAxis(building.orientation);
+  const normal = { x: -axis.y, y: axis.x };
+  const reference = interiorReferencePoint(world, building.side, building);
+  const across = (reference.x - building.x) * normal.x
+    + (reference.y - building.y) * normal.y;
+  return across < 0 ? -1 : 1;
 }
 
 function connectedWallWalk(world, start) {

@@ -10,7 +10,9 @@ import {
   getCampaignSummary, loadCampaign, restoreGameSnapshot, saveCampaign,
 } from '../js/savegame.js';
 import { createWorld, spawnUnit } from '../js/sim.js';
-import { assignMusketeersToWall, updateWallAssignment } from '../js/fortifications.js';
+import {
+  assignMusketeersToWall, getGateOpenProgress, updateWallAssignment,
+} from '../js/fortifications.js';
 
 function memoryStorage() {
   const values = new Map();
@@ -62,6 +64,8 @@ test('a campaign round trip preserves economy, AI, camera and entity references'
   const gate = createBuilding(0, 'gate', 920, 1380, true, {
     orientation: 'horizontal', gateOpen: false,
   });
+  gate.gateTransitionFrom = 1;
+  gate.gateTransitionStartedAt = world.time - 0.45;
   world.buildings.push(gate);
   const encoded = encodeSnapshot(createGameSnapshot(
     world, [commander, alliedCommander, secondRivalCommander, starWarsCommander],
@@ -102,7 +106,10 @@ test('a campaign round trip preserves economy, AI, camera and entity references'
   assert.equal(restoredField.millId, mill.id);
   assert.equal(restoredField.fieldSlot, 2);
   assert.deepEqual(restored.camera, { x: 777, y: 888, zoom: 1.4, rotation: Math.PI });
-  assert.equal(restored.world.buildings.find(building => building.id === gate.id).gateOpen, false);
+  const restoredGate = restored.world.buildings.find(building => building.id === gate.id);
+  assert.equal(restoredGate.gateOpen, false);
+  assert.ok(getGateOpenProgress(restoredGate, restored.world.time) > 0.45);
+  assert.ok(getGateOpenProgress(restoredGate, restored.world.time) < 0.55);
 
   const maxUnitId = Math.max(...restored.world.units.map(unit => unit.id));
   assert.ok(restored.world.spawnUnit(0, 'villager', 700, 1500).id > maxUnitId);

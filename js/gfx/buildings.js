@@ -6,8 +6,9 @@
 // baking would quantise the one value the art exists to show.
 import { BUILDING_TYPES, NATIONS } from '../config.js';
 import {
-  fortificationAxis, fortificationEndpoints, fortificationsShareEndpoint,
-  isFortificationType, normalizeFortificationOrientation, WALL_WALK_ELEVATION,
+  fortificationAxis, fortificationEndpoints, fortificationInteriorSide,
+  fortificationsShareEndpoint, getGateOpenProgress, isFortificationType,
+  normalizeFortificationOrientation, WALL_WALK_ELEVATION,
 } from '../fortifications.js';
 import { viewMirrorsHorizontalFacing } from '../camera.js';
 import { createResourceVisualLayout, getResourceVisualProfile } from '../resource-visuals.js';
@@ -4371,6 +4372,7 @@ function bdFortWallCrown(
   completion,
   side,
   seed,
+  interiorSide = 1,
 ) {
   const built = bdClamp(completion, 0, 1);
   if (built <= 0) return;
@@ -4388,24 +4390,28 @@ function bdFortWallCrown(
     crownHalfLength - 0.5, halfThickness - 3.7, elevation + 0.92,
     0.40, 0.18);
 
-  // Match the original production sheet: two continuous parapets with a
-  // dressed cap course, rather than the oversized castle teeth formerly used
-  // by the free-angle fallback.
+  // The outer defensive face carries the tall firing parapet. The settlement
+  // face has only a low safety kerb, leaving the wall walk and its defenders
+  // visible from behind. This asymmetry is physical geometry, never a mirrored
+  // camera trick, so rotating the map always puts the crown on the correct side.
   for (const edge of [-1, 1]) {
     const across = edge * (halfThickness - 2.15);
+    const isInterior = edge === interiorSide;
+    const parapetHeight = isInterior ? 2.35 : 8.4;
+    const parapetHalfThickness = isInterior ? 1.35 : 2.15;
     bdFortBlock(g, axis, normal, 0, across, crownHalfLength, 1.75,
-      5.4, elevation, dressed, {
+      parapetHeight, elevation, dressed, {
         lineW: 0.58, litW: 0.44, topMaterial: capStone,
       });
     bdFortStoneFace(g, axis, normal, 0,
       across + edge * 1.78, crownHalfLength - 0.45,
-      elevation, 5.4, 0x5a71 ^ (edge > 0 ? 0x2711 : 0x1187), false);
+      elevation, parapetHeight, 0x5a71 ^ (edge > 0 ? 0x2711 : 0x1187), false);
     bdFortTexturedStoneFace(g, axis, normal, 0,
       across + edge * 1.78, Math.max(0.8, crownHalfLength - 0.45),
-      Math.max(0.8, crownHalfLength - 0.45), elevation, 5.4,
+      Math.max(0.8, crownHalfLength - 0.45), elevation, parapetHeight,
       seed ^ (edge > 0 ? 0x25a1 : 0x6c13));
     bdFortFacePatina(g, axis, normal, Math.max(0.8, crownHalfLength - 0.6),
-      across + edge * 1.84, elevation, 5.4,
+      across + edge * 1.84, elevation, parapetHeight,
       seed ^ (edge > 0 ? 0x12d7 : 0x73b9));
     const capWidth = 9;
     for (let center = -crownHalfLength + capWidth * 0.5;
@@ -4413,18 +4419,21 @@ function bdFortWallCrown(
       const segmentHalfLength = Math.min(capWidth * 0.5,
         crownHalfLength - Math.abs(center));
       if (segmentHalfLength <= 0.35) continue;
-      bdFortBlock(g, axis, normal, center, across, segmentHalfLength, 2.05,
-        0.85, elevation + 5.2, capStone, {
+      bdFortBlock(g, axis, normal, center, across, segmentHalfLength,
+        parapetHalfThickness, 0.85, elevation + parapetHeight - 0.2, capStone, {
           lineW: 0.48, litW: 0.34, topMaterial: capStone,
         });
     }
     bdFortTexturedTopSurface(g, axis, normal, 0, across,
-      crownHalfLength - 0.35, 1.92, elevation + 6.08,
+      crownHalfLength - 0.35, parapetHalfThickness - 0.12,
+      elevation + parapetHeight + 0.68,
       edge > 0 ? 0.02 : 0.74, 0.22);
     for (let joint = -crownHalfLength + capWidth;
       joint < crownHalfLength; joint += capWidth) {
-      const back = bdFortPoint(axis, normal, joint, across - 1.9, elevation + 6.18);
-      const front = bdFortPoint(axis, normal, joint, across + 1.9, elevation + 6.18);
+      const back = bdFortPoint(axis, normal, joint, across - parapetHalfThickness,
+        elevation + parapetHeight + 0.78);
+      const front = bdFortPoint(axis, normal, joint, across + parapetHalfThickness,
+        elevation + parapetHeight + 0.78);
       g.strokeStyle = bdRgba('#4A463D', 0.62);
       g.lineWidth = 0.52;
       g.beginPath(); g.moveTo(back.x, back.y); g.lineTo(front.x, front.y); g.stroke();
@@ -4851,6 +4860,7 @@ function bdPaintWallStairs(g, building, progress, construction) {
 
 function bdPaintFortification(
   g, type, side, orientation, progress, seed, construction, joinedEnds = [false, false],
+  interiorSide = 1, gateOpenProgress = 1,
 ) {
   const axis = fortificationAxis(orientation);
   const normal = { x: -axis.y, y: axis.x };
@@ -4984,7 +4994,7 @@ function bdPaintFortification(
       }
     }
     bdFortWallCrown(g, axis, normal, masonryHalfLength, halfThickness,
-      builtHeight, stage.crown, side, seed);
+      builtHeight, stage.crown, side, seed, interiorSide);
     if (builtHeight > 16) {
       for (const along of [-26, 0, 26]) {
         if (Math.abs(along) < masonryHalfLength - 3) {
@@ -5002,16 +5012,16 @@ function bdPaintFortification(
 
   const rise = construction ? bdClamp((p - 0.04) / 0.78, 0, 1) : 1;
   const towerHeight = 5 + 47 * rise;
-  for (const along of [-32, 32]) {
-    bdFortBlock(g, axis, normal, along, 0, 12, halfThickness, Math.min(6, towerHeight), 0, rough);
+  for (const along of [-37, 37]) {
+    bdFortBlock(g, axis, normal, along, 0, 15, halfThickness, Math.min(6, towerHeight), 0, rough);
     if (towerHeight > 5) {
-      bdFortBlock(g, axis, normal, along, -0.4, 10.8, halfThickness - 1.4,
+      bdFortBlock(g, axis, normal, along, -0.4, 13.8, halfThickness - 1.4,
         towerHeight - 4.5, 4.5, stone);
-      bdFortStoneFace(g, axis, normal, along, halfThickness - 1.5, 10.8,
+      bdFortStoneFace(g, axis, normal, along, halfThickness - 1.5, 13.8,
         4.5, towerHeight - 4.5, seed ^ (along < 0 ? 0x9421 : 0x4291), true);
-      bdFortMasonryRelief(g, axis, normal, 10.0, halfThickness,
+      bdFortMasonryRelief(g, axis, normal, 13.0, halfThickness,
         towerHeight - 4.5, seed ^ (along < 0 ? 0x64af : 0x48d2), detail);
-      bdFortFacePatina(g, axis, normal, 10.0, halfThickness - 1.2,
+      bdFortFacePatina(g, axis, normal, 13.0, halfThickness - 1.2,
         4.5, towerHeight - 4.5, seed ^ (along < 0 ? 0x77c1 : 0x1ad5));
     }
     bdFortBlock(g, axis, normal, along, 2.8, 3.8, halfThickness + 3,
@@ -5032,19 +5042,30 @@ function bdPaintFortification(
     bdFortArch(g, axis, normal, halfThickness + 0.2, seed);
   }
   if (!construction || p > 0.90) {
-    const left = [-40, -32, -24], right = [24, 32, 40];
-    bdFortCrenels(g, axis, normal, left, 0, halfThickness - 1.5, towerHeight, side, seed);
-    bdFortCrenels(g, axis, normal, right, 0, halfThickness - 1.5, towerHeight, side, seed + 1);
+    bdFortWallCrown(g, axis, normal, halfLength - 2, halfThickness,
+      towerHeight, 1, side, seed ^ 0x7a51, interiorSide);
   }
   if (!construction || p > 0.86) {
     bdFortGateLeaf(g, axis, normal, -1, halfThickness + 0.4, seed);
     bdFortGateLeaf(g, axis, normal, 1, halfThickness + 0.4, seed + 1);
-    // Raised portcullis teeth read above the passable opening.
+    // The heavy portcullis travels vertically into the gatehouse. Its lower
+    // teeth remain readable at both limits and during the drop.
     const iron = bdRamp(BMAT.IRON);
+    const lift = bdClamp(gateOpenProgress, 0, 1);
+    const bottomElevation = 3.5 + lift * 25.5;
+    const topElevation = bottomElevation + 25;
     for (let along = -13; along <= 13; along += 4.3) {
-      const top = bdFortPoint(axis, normal, along, halfThickness + 0.8, 39);
-      const bottom = bdFortPoint(axis, normal, along, halfThickness + 0.8, 29 - Math.abs(along) * 0.08);
+      const top = bdFortPoint(axis, normal, along, halfThickness + 1.1, topElevation);
+      const bottom = bdFortPoint(axis, normal, along, halfThickness + 1.1,
+        bottomElevation - Math.abs(along) * 0.08);
       bdBeam(g, iron, top.x, top.y, bottom.x, bottom.y, 0.9, { cap: 'butt', edgeA: 0.65 });
+    }
+    for (let elevation = bottomElevation + 5; elevation < topElevation - 2; elevation += 6.2) {
+      const left = bdFortPoint(axis, normal, -14, halfThickness + 1.2, elevation);
+      const right = bdFortPoint(axis, normal, 14, halfThickness + 1.2, elevation);
+      bdBeam(g, iron, left.x, left.y, right.x, right.y, 0.72, {
+        cap: 'butt', edgeA: 0.58,
+      });
     }
   }
   if (construction) {
@@ -5659,10 +5680,18 @@ function bdJoinedFortificationEnds(building, world, includeIncomplete = false) {
 
 export function getFortificationRenderProfile(building, world) {
   const joinedEnds = bdJoinedFortificationEnds(building, world);
+  const nation = world?.sides?.[building?.side]?.nation;
   const connectedWall = building?.type === 'wall' && joinedEnds.some(Boolean);
   return {
     joinedEnds,
-    useProductionFrame: usesFixedFortificationFrameArt(building) && !connectedWall,
+    // English authored frames cannot represent a physical near/far side:
+    // mirroring keeps the tall parapet on the rear face. Its detailed
+    // procedural masonry is now the shared contract for straight, curved and
+    // gated runs. Keep the Ottoman faction's distinct fixed-angle production
+    // art when it does not need to flow through a connected curve.
+    useProductionFrame: nation === 'ottoman'
+      && usesFixedFortificationFrameArt(building) && !connectedWall,
+    interiorSide: fortificationInteriorSide(world, building),
   };
 }
 
@@ -6304,14 +6333,18 @@ function bdFortificationDamage(g, structure, stage, seed) {
   }
 }
 
-function bdFortificationSprite(building, damageStage, joinedEnds = [false, false]) {
+function bdFortificationSprite(
+  building, damageStage, joinedEnds = [false, false], interiorSide = 1,
+  gateOpenProgress = 1,
+) {
   const type = building.type;
   const def = BUILDING_TYPES[type];
   const normalized = normalizeFortificationOrientation(building.orientation);
   const orientation = Number.isFinite(normalized) ? Math.round(normalized * 1000) / 1000 : normalized;
   const variant = ((building.id % 3) + 3) % 3;
   const joinMask = joinedEnds.map(joined => Number(Boolean(joined))).join('');
-  const key = `fort|${type}|${building.side}|${orientation}|${variant}|${damageStage}|${joinMask}`;
+  const gateFrame = type === 'gate' ? Math.round(bdClamp(gateOpenProgress, 0, 1) * 10) : 10;
+  const key = `fort|${type}|${building.side}|${orientation}|${variant}|${damageStage}|${joinMask}|${interiorSide}|${gateFrame}`;
   let sprite = bdBuildingCache.get(key);
   if (sprite) return sprite;
   const box = bdBoxFor(type, def);
@@ -6319,6 +6352,7 @@ function bdFortificationSprite(building, damageStage, joinedEnds = [false, false
   sprite = bdBake(box, BD_SCALE, function (g, scale) {
     const structure = bdPaintFortification(
       g, type, building.side, orientation, 1, seed, false, joinedEnds,
+      interiorSide, gateFrame / 10,
     );
     bdFortificationDamage(g, structure, damageStage, seed);
     bdPassSurfacePatina(g, box, seed + damageStage * 101);
@@ -7453,7 +7487,16 @@ function drawCompleteBuilding(building, nation, worldTime, world = null) {
       bdDrawProductionFortification(ctx, building, productionArt, closedGateArt, 1);
       return;
     }
-    const fortification = bdFortificationSprite(building, damageStage, renderProfile.joinedEnds);
+    const gateOpenProgress = building.type === 'gate'
+      ? getGateOpenProgress(building, worldTime)
+      : 1;
+    const fortification = bdFortificationSprite(
+      building,
+      damageStage,
+      renderProfile.joinedEnds,
+      renderProfile.interiorSide,
+      gateOpenProgress,
+    );
     if (fortification) {
       ctx.drawImage(fortification.c, fortification.x, fortification.y,
         fortification.w, fortification.h);
