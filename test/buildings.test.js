@@ -130,6 +130,39 @@ test('production buildings enforce role-based human height floors across every f
   }
 });
 
+test('StarWars village buildings stay proportional to human-scale soldiers', () => {
+  const expectedHumanHeights = {
+    town_center: 5.55,
+    house: 3.45,
+    mill: 3.55,
+    lumber_camp: 3.55,
+    mine: 3.55,
+    barracks: 4.15,
+    stable: 4.15,
+    foundry: 4.25,
+    tower: 5.15,
+    castle: 8.60,
+  };
+
+  for (const [type, minimumHumanHeights] of Object.entries(expectedHumanHeights)) {
+    const presentation = getBuildingPresentation(type, undefined, 'starwars');
+    const visible = getProductionBuildingVisibleSize(type, 'starwars', 720, 560);
+
+    assert.equal(presentation.minimumHumanHeights, minimumHumanHeights);
+    assert.ok(
+      visible.humanHeightRatio >= minimumHumanHeights - 0.001,
+      `starwars ${type} should keep soldiers visibly smaller than the building`,
+    );
+  }
+
+  const house = getProductionBuildingVisibleSize('house', 'starwars', 720, 560);
+  const barracks = getProductionBuildingVisibleSize('barracks', 'starwars', 720, 560);
+  const townCenter = getProductionBuildingVisibleSize('town_center', 'starwars', 720, 560);
+  assert.ok(house.height > BUILDING_HUMAN_REFERENCE_HEIGHT * 3.4);
+  assert.ok(barracks.height > house.height * 1.15);
+  assert.ok(townCenter.height > barracks.height * 1.20);
+});
+
 test('construction art uses the completed building geometry instead of a fixed global minimum', () => {
   const cases = [
     ['england', 'house', 1024, 1024],
