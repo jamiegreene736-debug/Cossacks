@@ -91,6 +91,18 @@ function webpDimensions(buffer) {
   throw new Error('Unsupported WebP encoding');
 }
 
+function webpHasAlpha(buffer) {
+  for (let offset = 12; offset + 8 <= buffer.length;) {
+    const chunk = buffer.toString('ascii', offset, offset + 4);
+    const size = buffer.readUInt32LE(offset + 4);
+    const data = offset + 8;
+    if (chunk === 'VP8X') return (buffer[data] & 0x10) !== 0;
+    if (chunk === 'VP8L') return ((buffer.readUInt32LE(data + 1) >>> 28) & 1) === 1;
+    offset = data + size + (size % 2);
+  }
+  return false;
+}
+
 test('the world catalogue represents 193 UN members and two observer states exactly once', () => {
   assert.equal(WORLD_COUNTRIES.length, 195);
   assert.equal(new Set(WORLD_COUNTRIES.map(country => country.code)).size, 195);
@@ -416,6 +428,7 @@ test('fantasy architecture is backed by substantial high-detail production asset
     ['hogwarts', 'school', 'hogwartsGreatHall', 'hogwarts-great-hall.webp', 160_000],
     ['hogwarts', 'pool', 'hogwartsPool', 'hogwarts-pool.webp', 160_000],
     ['hogwarts', 'beach', 'hogwartsBeach', 'hogwarts-beach.webp', 160_000],
+    ['england', 'playground', 'worldPlayground', 'world-playground.webp', 600_000],
     ['nightmare_circus', 'town_center', 'circusTownCenter', 'circus-town-center.webp', 130_000],
     ['nightmare_circus', 'castle', 'circusCastle', 'circus-castle.webp', 130_000],
     ['starwars', 'town_center', 'starwarsTownCenter', 'starwars-town-center.webp', 190_000],
@@ -439,6 +452,11 @@ test('fantasy architecture is backed by substantial high-detail production asset
     assert.ok(metadata.size > minimumBytes, `${filename} should retain its source depth`);
     if (filename === 'hogwarts-castle.webp') {
       assert.deepEqual(webpDimensions(await readFile(assetUrl)), { width: 768, height: 1024 });
+    }
+    if (filename === 'world-playground.webp') {
+      const playground = await readFile(assetUrl);
+      assert.deepEqual(webpDimensions(playground), { width: 1136, height: 968 });
+      assert.equal(webpHasAlpha(playground), true, 'playground canvas must retain real transparency');
     }
   }
 });
