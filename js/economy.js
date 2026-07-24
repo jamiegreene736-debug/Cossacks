@@ -17,7 +17,8 @@ import {
   resolveWallStairAttachment, snapFortificationPlacement,
 } from './fortifications.js';
 import {
-  distanceToStructure, structureCorners, structuresOverlap,
+  distanceToStructure, nearestPointOutsideStructure, structureBlocksGround,
+  structureCorners, structuresOverlap,
 } from './obstacles.js';
 import { resolveWorkerAction } from './worker-animation.js';
 import { sfx } from './audio.js';
@@ -986,6 +987,10 @@ export function getRallyTarget(world, building) {
 
 function rallyDestination(unit, target, x, y) {
   if (!target) return { x, y };
+  if (target.entityKind === 'building' && structureBlocksGround(target)) {
+    const point = nearestPointOutsideStructure(target, unit.x, unit.y, unit.radius + 6);
+    if (point) return point;
+  }
   const dx = unit.x - target.x;
   const dy = unit.y - target.y;
   const distance = Math.hypot(dx, dy) || 1;
@@ -1064,6 +1069,18 @@ function nearestPoint(world, target, worker) {
       distance: 0,
       arrivalDistance: 0,
     };
+  }
+
+  if (target.entityKind === 'building' && structureBlocksGround(target)) {
+    const reach = worker.radius + 6;
+    const point = nearestPointOutsideStructure(target, worker.x, worker.y, reach);
+    if (point) {
+      return {
+        ...point,
+        distance: Math.hypot(worker.x - point.x, worker.y - point.y),
+        arrivalDistance: 14,
+      };
+    }
   }
 
   const reach = target.radius + 10;

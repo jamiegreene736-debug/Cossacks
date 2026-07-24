@@ -6,6 +6,7 @@ import { BUILDING_TYPES } from './config.js';
 import {
   fortificationFrame, isFortificationType, isGateOpen,
 } from './fortifications.js';
+import { getBuildingPresentation } from './gfx/buildings.js';
 
 const COLLISION_EPSILON = 0.05;
 
@@ -15,14 +16,16 @@ function ordinaryStructureFrame(building, padding = 0) {
   const rotation = Number.isFinite(building.rotation) ? building.rotation : 0;
   const axis = { x: Math.cos(rotation), y: Math.sin(rotation) };
   const normal = { x: -axis.y, y: axis.x };
-  const scale = Math.max(1, def.visualScale || 1);
+  const presentation = getBuildingPresentation(building.type, def);
+  const scale = presentation?.visualScale || Math.max(1, def.visualScale || 1);
+  const displayArtWidth = presentation?.displayArtWidth || def.w * scale;
   return {
     x: building.x,
     y: building.y,
     axis,
     normal,
-    halfLength: def.w * scale * 0.5 + padding,
-    halfThickness: def.h * scale * 0.5 + padding,
+    halfLength: Math.max(def.w * scale, displayArtWidth) * 0.5 + padding,
+    halfThickness: Math.max(def.h * scale, displayArtWidth * 0.68) * 0.5 + padding,
   };
 }
 
@@ -71,6 +74,26 @@ export function distanceToStructure(building, x, y) {
   const dx = Math.max(0, Math.abs(local.along) - frame.halfLength);
   const dy = Math.max(0, Math.abs(local.across) - frame.halfThickness);
   return Math.hypot(dx, dy);
+}
+
+export function nearestPointOutsideStructure(building, fromX, fromY, clearance = 0) {
+  const frame = structureObstacleFrame(building, clearance);
+  if (!frame) return null;
+  const local = localPoint(frame, fromX, fromY);
+  if (Math.abs(local.along) < 1e-6 && Math.abs(local.across) < 1e-6) {
+    local.along = (building.id || 0) % 2 ? frame.halfLength : -frame.halfLength;
+  }
+  const ratio = Math.max(
+    Math.abs(local.along) / frame.halfLength,
+    Math.abs(local.across) / frame.halfThickness,
+    1e-6,
+  );
+  const along = local.along / ratio;
+  const across = local.across / ratio;
+  return {
+    x: frame.x + frame.axis.x * along + frame.normal.x * across,
+    y: frame.y + frame.axis.y * along + frame.normal.y * across,
+  };
 }
 
 export function segmentIntersectsStructure(
