@@ -1156,8 +1156,10 @@ function drawSelection(ctx, units, alpha) {
     for (let i = 0; i < n; i++) {
       const u = units[i];
       if (!u.selected) continue;
-      const ix = u.px + (u.x - u.px) * alpha;
-      const iy = u.py + (u.y - u.py) * alpha - (u.wallElevation || 0);
+      const elevation = u.wallElevation || 0;
+      const rotation = camera.rotation || 0;
+      const ix = u.px + (u.x - u.px) * alpha - Math.sin(rotation) * elevation;
+      const iy = u.py + (u.y - u.py) * alpha - Math.cos(rotation) * elevation;
       ctx.drawImage(p.c, ix - pax, iy - pay, pw, ph);
       if (ix < minX) minX = ix; if (ix > maxX) maxX = ix;
       if (iy < minY) minY = iy; if (iy > maxY) maxY = iy;
@@ -1168,8 +1170,10 @@ function drawSelection(ctx, units, alpha) {
     for (let i = 0; i < n; i++) {
       const u = units[i];
       if (!u.selected) continue;
-      const ix = u.px + (u.x - u.px) * alpha;
-      const iy = u.py + (u.y - u.py) * alpha - (u.wallElevation || 0);
+      const elevation = u.wallElevation || 0;
+      const rotation = camera.rotation || 0;
+      const ix = u.px + (u.x - u.px) * alpha - Math.sin(rotation) * elevation;
+      const iy = u.py + (u.y - u.py) * alpha - Math.cos(rotation) * elevation;
       const r = u.radius | 0;
       const g = (r >= 0 && r < 17) ? rings[r] : cmp.ringFallback;
       ctx.drawImage(g.c, ix - g.ax, iy - g.ay, g.w, g.h);
@@ -1476,9 +1480,11 @@ function drawHealthBars(ctx, units, alpha, spritesRef) {
     const showBar = shouldRenderUnitHealthBar(u);
     if (!routing && !showBar) continue;
 
-    const ix = u.px + (u.x - u.px) * alpha;
+    const elevation = u.wallElevation || 0;
+    const rotation = camera.rotation || 0;
+    const ix = u.px + (u.x - u.px) * alpha - Math.sin(rotation) * elevation;
     const flightHeight = isBroomWitch(u) ? getWitchFlightVisual(u, alpha).height : 0;
-    const iy = u.py + (u.y - u.py) * alpha - (u.wallElevation || 0) - flightHeight;
+    const iy = u.py + (u.y - u.py) * alpha - Math.cos(rotation) * elevation - flightHeight;
     const sp = spritesRef[u.side][u.unitType || u.type];
     let top = -sp.ay - 2;
     ctx.save();
