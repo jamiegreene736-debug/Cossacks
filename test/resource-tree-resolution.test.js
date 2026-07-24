@@ -2,8 +2,12 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-test('resource trees bake at close-zoom density with scale-aware soft stamps', async () => {
+test('resource trees bake sharp full canopies at close zoom', async () => {
   const source = await readFile(new URL('../js/gfx/buildings.js', import.meta.url), 'utf8');
+  const vegetation = source.slice(
+    source.indexOf('function bdDrawVegetationFrame'),
+    source.indexOf('function bdDrawSoftOrganicStamp'),
+  );
 
   assert.match(source, /const BD_RES_SCALE = 4;/);
   assert.match(source, /function bdDrawSoftSourceRect\(/);
@@ -11,9 +15,34 @@ test('resource trees bake at close-zoom density with scale-aware soft stamps', a
   assert.match(
     source,
     /Math\.min\(dw \* bakeScale, sw\)/,
-    'soft stamps must rasterize at bake density, capped by source texels',
+    'berry soft stamps must rasterize at bake density, capped by source texels',
   );
-  assert.match(source, /bdDrawSoftSourceRect\(g, image, frame \* BD_VEGETATION_CELL/);
+  assert.match(vegetation, /g\.drawImage\(/);
+  assert.doesNotMatch(
+    vegetation,
+    /bdDrawSoftSourceRect|bdVegetationFramePath|g\.clip\(\)/,
+    'tree frames must keep their authored alpha silhouette, not a teardrop clip',
+  );
+  assert.match(
+    source,
+    /radius \* 2\.15 \+ 64/,
+    'organic resource bake boxes must fit full tree crowns',
+  );
+});
+
+test('terrain country vegetation keeps full authored tree frames', async () => {
+  const source = await readFile(new URL('../js/gfx/terrain.js', import.meta.url), 'utf8');
+  const vegetation = source.slice(
+    source.indexOf('function drawCountryVegetation'),
+    source.indexOf('function fillProductionMaterial'),
+  );
+
+  assert.match(vegetation, /g\.drawImage\(/);
+  assert.doesNotMatch(
+    vegetation,
+    /countryVegetationFramePath|g\.clip\(\)/,
+    'scenery trees must not be clipped to a teardrop path',
+  );
 });
 
 test('country tree sheet keeps full-resolution vegetation cells', async () => {
