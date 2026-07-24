@@ -106,8 +106,10 @@ Measured at 1,625 living units: 0.4ms median frame draw against a 16.7ms budget.
 | --- | --- |
 | `art-assets.js` | Central URL registry, preload lifecycle and lookup for production art. |
 | `terrain.js` | The board: material-aware meadow with directional micro-relief and modelled grass tussocks, faceted rocks, granular soil/sand, deadwood, river reeds, road/water materials, hedgerow and scrub art; material field and parcels. Bakes at 1.5 texels per world pixel into frustum-culled tiles; `drawTerrain()` is ≤12 blits. |
-| `buildings.js` | Nation-specific 18th-century architecture, farms, production and procedural resource nodes, scene props, waving Union flag, and cached damage/depletion states. |
+| `buildings.js` | Nation-specific 18th-century architecture, farms, production and procedural resource nodes, scene props, waving Union flag, and cached damage/depletion states. Connected fortifications paint irregular rubble with world-space UVs. |
+| `../wall-kit.js` | Modular stone wall catalogue (2 m / 4 m, corners, T-junctions, gate, ramp), topology classification, socket snap helpers and collision/LOD profiles. |
 | `assets/buildings/` | Transparent high-resolution sources for completed English and Ottoman structures, nation-specific four-stage construction, and completed/in-progress stone fortifications. |
+| `docs/MODULAR_WALL_KIT.md` | Piece list, zero-seam contract, LOD/collision notes and how to extend the fortification kit. |
 | `assets/resources/` | Transparent berry, stone, and gold sources; woodlands use individual high-resolution tree frames so oak, birch, and pine remain separate. |
 | `assets/terrain/` | Seamless meadow, road, water, soil and stubble materials plus alpha tree, rock, reed, deadwood and country-vegetation sources. |
 | `assets/units/` | English and Ottoman men/women civilian, musketeer, polearm-guard, cavalry, and artillery production sheets; women have nation-specific work sheets and a shared two-row cannon deployment/attack sheet, while mobile troops use separate lossless walk cycles. |

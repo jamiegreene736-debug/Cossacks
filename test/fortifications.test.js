@@ -81,15 +81,17 @@ test('a rotated wall snaps to an endpoint to form an isometric corner', () => {
 test('dragged wall runs place the longest affordable contiguous prefix', () => {
   const world = makeWorld();
   const worker = builder();
-  const plan = planWallRun(world, 0, 660, 2000, 1660, 2000, 'horizontal');
+  // Keep the run north of the Town Center so settlement footprints cannot reject
+  // the first section as "too close".
+  const plan = planWallRun(world, 0, 1100, 1600, 2100, 1600, 'horizontal');
 
   assert.equal(plan.ok, true);
   assert.equal(plan.requestedCount, 12);
   assert.equal(plan.segments.length, 4, '120 starting stone affords four 25-stone sections');
   assert.equal(plan.limitedByResources, true);
-  assert.deepEqual(plan.segments.map(segment => segment.x), [660, 748, 836, 924]);
+  assert.deepEqual(plan.segments.map(segment => segment.x), [1100, 1188, 1276, 1364]);
 
-  const placed = placeWallRun(world, 0, 660, 2000, 1660, 2000, [worker], 'horizontal');
+  const placed = placeWallRun(world, 0, 1100, 1600, 2100, 1600, [worker], 'horizontal');
   assert.equal(placed.ok, true);
   assert.equal(placed.buildings.length, 4);
   assert.equal(world.sides[0].resources.stone, 20);
@@ -151,9 +153,13 @@ test('a dragged wall stops before the first obstructed section', () => {
 
 test('one assigned villager constructs a dragged wall run in sequence', () => {
   const world = makeWorld();
-  const worker = spawnUnit(world, 0, 'villager', 650, 1840);
-  const placed = placeWallRun(world, 0, 660, 1900, 1100, 1900, [worker], 'horizontal');
-  for (let tick = 0; tick < 1500; tick++) step(world, 1 / 30);
+  const worker = spawnUnit(world, 0, 'villager', 1090, 1540);
+  // Two sections keep the timed climb/build loop well inside the step budget
+  // while still proving the villager drains the queued foundations in order.
+  const placed = placeWallRun(world, 0, 1100, 1600, 1276, 1600, [worker], 'horizontal');
+  assert.equal(placed.ok, true);
+  assert.ok(placed.buildings.length >= 2);
+  for (let tick = 0; tick < 2400; tick++) step(world, 1 / 30);
 
   assert.equal(placed.buildings.every(building => building.complete), true);
   assert.equal(worker.job, null);

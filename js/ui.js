@@ -676,7 +676,7 @@ function buildingIcon(type) {
     farm: '≋', mill: '✣', lumber_camp: '♣', mine: '◆', marketplace: '⚖',
     barracks: '⚔', stable: '♞', foundry: '◉', tower: '♜', castle: '♛',
     school: '⌘', pool: '≈', beach: '≋', park: '♧', playground: '☆',
-    wall: '▥', gate: '∩', wall_stairs: '▰',
+    wall: '▥', wall_short: '▤', gate: '∩', wall_stairs: '▰',
   }[type] || '▦';
 }
 
@@ -732,7 +732,9 @@ export function setPlacement(active, label = '', type = '', orientation = '', ro
       : BUILDING_TYPES[type]?.fortification
       ? type === 'wall'
         ? `${label}: drag from open ground or an existing wall end · bend while dragging to curve · HUD or Esc cancels`
-        : `${label}: click terrain · R turns ${orientation === 'diagonal' ? 'diagonal' : 'straight'} · HUD or Esc cancels`
+        : type === 'wall_short'
+          ? `${label}: click near a wall end to snap a 2 m filler · R turns · HUD or Esc cancels`
+          : `${label}: click terrain · R turns ${orientation === 'diagonal' ? 'diagonal' : 'straight'} · HUD or Esc cancels`
       : `${label}: click terrain to build · slider or Q/E turns · HUD or Esc cancels`;
   }
   for (const button of $('command-grid').querySelectorAll('button[data-action="build"]')) {

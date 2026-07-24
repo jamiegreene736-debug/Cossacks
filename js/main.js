@@ -952,13 +952,14 @@ function setupLocalCurvedWallPreview(activeWorld) {
 
   if (debugName === 'fortification-gallery') {
     activeWorld.buildings = activeWorld.buildings.filter(building => (
-      !['wall', 'gate', 'wall_stairs'].includes(building.type)
+      !['wall', 'wall_short', 'gate', 'wall_stairs'].includes(building.type)
     ));
     for (const row of [{ side: 0, y: 1280 }, { side: 1, y: 1700 }]) {
       const straight = createBuilding(row.side, 'wall', 900, row.y, true, { orientation: 0 });
-      const bendA = createBuilding(row.side, 'wall', 1088, row.y, true, { orientation: 0 });
-      const bendB = createBuilding(row.side, 'wall', 1176, row.y + 24, true, { orientation: 0.54 });
-      const gate = createBuilding(row.side, 'gate', 1350, row.y + 76, true, {
+      const shortFill = createBuilding(row.side, 'wall_short', 966, row.y, true, { orientation: 0 });
+      const bendA = createBuilding(row.side, 'wall', 1032, row.y, true, { orientation: 0 });
+      const bendB = createBuilding(row.side, 'wall', 1120, row.y + 24, true, { orientation: 0.54 });
+      const gate = createBuilding(row.side, 'gate', 1294, row.y + 76, true, {
         orientation: 0.20, gateOpen: row.side === 1,
       });
       const stairSide = 1;
@@ -978,7 +979,7 @@ function setupLocalCurvedWallPreview(activeWorld) {
         orientation: -0.34,
       });
       damaged.hp = damaged.maxHp * 0.24;
-      activeWorld.buildings.push(straight, bendA, bendB, gate, stairs, damaged);
+      activeWorld.buildings.push(straight, shortFill, bendA, bendB, gate, stairs, damaged);
       for (let index = 0; index < 3; index++) {
         const defender = spawnUnit(activeWorld, row.side, 'musk', stairs.x, stairs.y);
         assignMusketeersToWall(activeWorld, [defender], straight);

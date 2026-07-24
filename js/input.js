@@ -410,7 +410,8 @@ function issueOrder(screenX, screenY) {
       callbacks.onOrder?.('move');
       return;
     }
-    if (ownEntity.type === 'wall' || ownEntity.type === 'gate' || ownEntity.type === 'wall_stairs') {
+    if (ownEntity.type === 'wall' || ownEntity.type === 'wall_short'
+      || ownEntity.type === 'gate' || ownEntity.type === 'wall_stairs') {
       callbacks.onToast?.(result.message, 'danger');
       return;
     }

@@ -944,7 +944,7 @@ export function step(world, dt) {
   blockingFortifications.length = 0;
   blockingStructures.length = 0;
   for (const building of world.buildings) {
-    const blockingWall = building.type === 'wall'
+    const blockingWall = (building.type === 'wall' || building.type === 'wall_short')
       && (building.complete || building.progress >= 0.24);
     const blockingGate = building.type === 'gate' && building.complete
       && !isGatePassable(building, world.time);
