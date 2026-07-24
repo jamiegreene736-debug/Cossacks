@@ -5213,6 +5213,13 @@ const BD_STARWARS_BUILDING_ART = Object.freeze({
 });
 
 const BD_BUILDING_SOURCE_RECT_BY_NATION = Object.freeze({
+  hogwarts: Object.freeze({
+    // The castle source is intentionally high-detail but carries a large empty
+    // transparent sky above the masonry. Trim only transparent canvas so the
+    // renderer scales and anchors the actual building instead of pushing it
+    // down into the lower HUD.
+    castle: [28, 482, 712, 514],
+  }),
   starwars: Object.freeze({
     town_center: [48, 52, 624, 500],
     house: [112, 96, 496, 432],
