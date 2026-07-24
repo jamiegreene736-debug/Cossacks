@@ -267,12 +267,18 @@ test('connected wall frames expose only the two ends of the complete run', () =>
   assert.deepEqual(getFortificationRenderProfile(left, world), {
     joinedEnds: [false, true],
     useProductionFrame: false,
+    interiorSide: 1,
   });
   assert.deepEqual(getFortificationRenderProfile(right, world), {
     joinedEnds: [true, false],
     useProductionFrame: false,
+    interiorSide: 1,
   });
-  assert.equal(getFortificationRenderProfile(left, { buildings: [left] }).useProductionFrame, true);
+  assert.equal(getFortificationRenderProfile(left, { buildings: [left] }).useProductionFrame, false);
+  assert.equal(getFortificationRenderProfile(left, {
+    buildings: [left],
+    sides: [{ nation: 'ottoman' }],
+  }).useProductionFrame, true);
 });
 
 test('detailed wall masonry keeps curved, gate and stair attachment contracts explicit', () => {
