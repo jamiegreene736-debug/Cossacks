@@ -5310,6 +5310,10 @@ const BD_BUILDING_SOURCE_RECT_BY_NATION = Object.freeze({
     // renderer scales and anchors the actual building instead of pushing it
     // down into the lower HUD.
     castle: [28, 482, 712, 514],
+    // The authored mine canvas includes two detached slivers from neighbouring
+    // buildings. Keep the full entrance, carts and rock base, but exclude those
+    // severed fragments so the village no longer shows cut-off architecture.
+    mine: [14, 20, 310, 402],
   }),
   starwars: Object.freeze({
     town_center: [48, 52, 624, 500],

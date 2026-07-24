@@ -211,6 +211,17 @@ test('Hogwarts castle source trimming preserves the full masonry without empty h
   assert.ok(castle.height > castle.minimumDisplayHeight, 'trimmed castle still reads as monumental');
 });
 
+test('Hogwarts mine source trimming removes detached cut-off fragments', () => {
+  const mine = getProductionBuildingVisibleSize('mine', 'hogwarts', 379, 487);
+
+  assert.deepEqual(mine.sourceRect, { x: 14, y: 20, width: 310, height: 402 });
+  assert.ok(mine.sourceRect.width < 326, 'right-side severed architecture should be cropped out');
+  assert.ok(mine.sourceRect.y + mine.sourceRect.height < 435, 'bottom severed fragment should be cropped out');
+  assert.ok(mine.width > 120, 'trimmed mine should keep a substantial village-scale footprint');
+  assert.ok(mine.height > mine.minimumDisplayHeight, 'trimmed mine should still read as a building');
+  assert.ok(mine.humanHeightRatio > 3, 'trimmed mine should still stand several people high');
+});
+
 test('production construction art advances continuously through four authored stages', () => {
   assert.deepEqual(bdConstructionArtFrame(-1), { from: 0, to: 1, mix: 0 });
   assert.deepEqual(bdConstructionArtFrame(1), { from: 3, to: 3, mix: 0 });
