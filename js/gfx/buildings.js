@@ -4283,10 +4283,14 @@ function bdFortTexturedStoneFace(
       dLeft.x,
       dLeft.y,
     );
-    // One multiply pass keeps authored pores without Safari soft-light cost.
-    g.globalCompositeOperation = 'multiply';
-    g.globalAlpha = 0.55;
     try {
+      // Soft-light keeps rubble pores without flattening the procedural stones
+      // into a muddy multiply card. Fall back to a light overlay if needed.
+      g.globalCompositeOperation = 'soft-light';
+      g.globalAlpha = 0.78;
+      g.drawImage(image, srcX, sourceY, safeW, sourceHeight, 0, 0, safeW, sourceHeight);
+      g.globalCompositeOperation = 'overlay';
+      g.globalAlpha = 0.22;
       g.drawImage(image, srcX, sourceY, safeW, sourceHeight, 0, 0, safeW, sourceHeight);
     } catch (_) {
       // Ignore a single failed strip rather than aborting the whole wall bake.
@@ -4386,28 +4390,29 @@ function bdFortFacePatina(
   const mossCount = Math.round(16 * bdClamp(mossBias, 0.55, 1.7));
 
   g.save();
-  // Dense broken moss clumps at the plinth — never a painted green stripe.
-  for (let index = 0; index < mossCount; index++) {
+  // Sparse damp weathering only — bright lime ellipses read as neon patches on
+  // the finished curtain, so stay in muted olive at low alpha.
+  for (let index = 0; index < Math.max(4, Math.round(mossCount * 0.55)); index++) {
     const along = rr(-halfLength * 0.94, halfLength * 0.94);
-    const elevation = rr(0.4, Math.min(9.2, height * (0.22 + mossBias * 0.08)));
+    const elevation = rr(0.4, Math.min(7.5, height * (0.18 + mossBias * 0.06)));
     const point = bdFortPoint(axis, normal, along, across + 0.34, elevation);
     g.fillStyle = index % 3 === 0
-      ? bdRgba('#6F7448', rr(0.22, 0.40) * Math.min(1.2, mossBias))
-      : bdRgba('#4A5140', rr(0.14, 0.28) * Math.min(1.15, mossBias));
+      ? bdRgba('#5A5E48', rr(0.10, 0.20) * Math.min(1.1, mossBias))
+      : bdRgba('#3E4338', rr(0.08, 0.16) * Math.min(1.05, mossBias));
     g.beginPath();
-    g.ellipse(point.x, point.y, rr(1.2, 4.0), rr(0.4, 1.3),
+    g.ellipse(point.x, point.y, rr(1.0, 3.2), rr(0.35, 1.05),
       Math.atan2(axis.y, axis.x) + rr(-0.4, 0.4), 0, BD_TAU);
     g.fill();
   }
 
-  const lichen = Math.round(14 * mossBias);
+  const lichen = Math.round(8 * mossBias);
   for (let index = 0; index < lichen; index++) {
     const along = rr(-halfLength * 0.9, halfLength * 0.9);
     const elevation = rr(height * 0.22, height * 0.94);
     const point = bdFortPoint(axis, normal, along, across + 0.40, elevation);
-    g.fillStyle = bdRgba(index & 1 ? '#9AA07A' : '#6E7358', rr(0.14, 0.30));
+    g.fillStyle = bdRgba(index & 1 ? '#7A7E68' : '#555A4C', rr(0.08, 0.16));
     g.beginPath();
-    g.ellipse(point.x, point.y, rr(0.5, 1.8), rr(0.3, 0.9), rr(0, BD_TAU), 0, BD_TAU);
+    g.ellipse(point.x, point.y, rr(0.45, 1.4), rr(0.25, 0.7), rr(0, BD_TAU), 0, BD_TAU);
     g.fill();
   }
 
@@ -5139,9 +5144,12 @@ function bdPaintFortification(
   const nominalHalfLength = BUILDING_TYPES[type].w * 0.5;
   const connectedWall = !isGate && joinedEnds.some(Boolean);
   const detail = getFortificationMasonryDetailProfile(type, joinedEnds, topology);
-  // Adjacent sections overlap by the kit seam so walks mitre cleanly through a
-  // bend instead of exposing a triangular grass gap or light leak.
-  const halfLength = nominalHalfLength + (connectedWall ? WALL_KIT_SEAM_OVERLAP : 0);
+  // Keep the solid curtain at the true module length. Extending the whole body
+  // by WALL_KIT_SEAM_OVERLAP painted two opaque curtains into every joint and
+  // read as cascading card-deck segments. Faces get a thin splice; crowns mitre.
+  const halfLength = nominalHalfLength;
+  const faceSeam = (!isGate && connectedWall) ? Math.min(2.8, WALL_KIT_SEAM_OVERLAP) : 0;
+  const crownSeam = (!isGate && connectedWall && !construction) ? WALL_KIT_SEAM_OVERLAP : 0;
   const halfThickness = BUILDING_TYPES[type].h * 0.5;
   const p = bdClamp(progress == null ? 1 : progress, 0, 1);
   const ottoman = nation === 'ottoman';
@@ -5199,8 +5207,9 @@ function bdPaintFortification(
       // bakes, otherwise every unfinished wall stalls the frame.
       const faceSeed = Math.round(worldUvAlong * 13) ^ 0x35a9;
       const lite = Boolean(construction);
+      const faceHalfLength = Math.max(0.8, masonryHalfLength - 0.4 + faceSeam);
       bdFortStoneFace(g, axis, normal, 0, halfThickness - 1.8,
-        Math.max(0.8, masonryHalfLength - 0.4), 0, builtHeight,
+        faceHalfLength, 0, builtHeight,
         faceSeed, false, {
           lite,
           dressedQuoins: !lite && (detail.exposedEnds.some(Boolean)
@@ -5209,31 +5218,29 @@ function bdPaintFortification(
         });
       if (!lite) {
         bdFortTexturedStoneFace(g, axis, normal, 0, halfThickness - 1.65,
-          Math.max(0.8, masonryHalfLength - 0.4), halfLength,
+          faceHalfLength, halfLength,
           0, builtHeight, faceSeed ^ 0x2947, worldUvAlong);
         // Settlement-facing side so free rotation never reveals a flat back.
         bdFortStoneFace(g, axis, normal, 0, -(halfThickness - 1.9),
-          Math.max(0.8, masonryHalfLength - 0.4), 0, builtHeight,
+          faceHalfLength, 0, builtHeight,
           faceSeed ^ 0x44c1, false, { dressedQuoins: false, exposedEnds: [false, false] });
         bdFortFacePatina(g, axis, normal,
-          Math.max(0.8, masonryHalfLength - 0.4), halfThickness - 1.52,
+          faceHalfLength, halfThickness - 1.52,
           0, builtHeight, faceSeed ^ 0x19f3, faceMossBias);
         bdFortFacePatina(g, axis, normal,
-          Math.max(0.8, masonryHalfLength - 0.4), -(halfThickness - 1.6),
+          faceHalfLength, -(halfThickness - 1.6),
           0, builtHeight, faceSeed ^ 0x62a1, faceMossBias * 1.2);
         if (detail.hasBatteredPlinth) {
           bdFortBatteredPlinth(g, axis, normal,
-            Math.max(0.8, masonryHalfLength - 0.5), halfThickness, builtHeight,
-            faceSeed ^ 0x684f);
+            Math.max(0.8, masonryHalfLength - 0.5 + faceSeam * 0.5),
+            halfThickness, builtHeight, faceSeed ^ 0x684f);
         }
         bdFortMasonryRelief(g, axis, normal,
-          Math.max(0.8, masonryHalfLength - 0.5), halfThickness, builtHeight,
-          faceSeed ^ 0x13579, detail);
-      } else {
-        bdFortFacePatina(g, axis, normal,
-          Math.max(0.8, masonryHalfLength - 0.4), halfThickness - 1.52,
-          0, builtHeight, faceSeed ^ 0x19f3, faceMossBias * 0.7);
+          Math.max(0.8, masonryHalfLength - 0.5 + faceSeam * 0.5),
+          halfThickness, builtHeight, faceSeed ^ 0x13579, detail);
       }
+      // Lite construction frames skip patina — the bright moss ellipses read as
+      // neon patches when the rubble face is still sparse.
       if (detail.exposedEnds[0]) {
         bdFortDressedEndCap(g, axis, normal, -masonryHalfLength + 0.4,
           halfThickness, builtHeight, seed ^ 0x5129);
@@ -5303,7 +5310,7 @@ function bdPaintFortification(
           });
       }
     }
-    bdFortWallCrown(g, axis, normal, masonryHalfLength, halfThickness,
+    bdFortWallCrown(g, axis, normal, masonryHalfLength + crownSeam, halfThickness,
       builtHeight, stage.crown, side, seed, interiorSide, worldUvAlong, {
         lite: Boolean(construction),
       });
@@ -5441,6 +5448,14 @@ const BD_TOP_EXTRA = {
 function bdBoxFor(type, def) {
   const topExtra = BD_TOP_EXTRA[type] == null ? 60 : BD_TOP_EXTRA[type];
   const presentation = getBuildingPresentation(type, def);
+  // Free-rotated fortifications need a near-circular stamp. An axis-aligned
+  // footprint box clipped diagonal curtains into staggered "card deck" ends.
+  if (isFortificationType(type) || type === 'wall_stairs') {
+    const reach = Math.hypot(def.w * 0.5, def.h * 0.5) + WALL_KIT_SEAM_OVERLAP + 40;
+    const top = Math.max(topExtra, type === 'gate' ? 110 : 96);
+    const bot = Math.max(64, def.h * 0.5 + 52);
+    return [-reach, -top, reach * 2, top + bot];
+  }
   // The side and bottom margins are sized off def.w rather than being a flat 26
   // because the trodden apron and its soft ground bed scale with the footprint:
   // at a flat margin the bed's outer falloff ran past the stamp edge on the four
@@ -6055,7 +6070,10 @@ export function getFortificationRenderProfile(building, world) {
 export function quantizeFortificationVisualOrientation(orientation) {
   const normalized = normalizeFortificationOrientation(orientation);
   if (!Number.isFinite(normalized)) return normalized;
-  const step = Math.PI * 2 / BD_FORTIFICATION_ANGLE_BINS;
+  // Fine bins keep freehand runs visually collinear with their gameplay axis.
+  // Coarse 64-step snapping made neighbouring modules paint at different angles
+  // and stack into the cascading-card look along diagonal curtains.
+  const step = Math.PI * 2 / (BD_FORTIFICATION_ANGLE_BINS * 4);
   return Math.round(normalized / step) * step;
 }
 
@@ -6713,7 +6731,7 @@ function bdFortificationSprite(
   // Quantize world UV so the cache stays bounded while neighbouring modules
   // that share an endpoint still sample continuous rubble texture.
   const uvBin = Math.round(worldUvAlong / 4);
-  const key = `fort-v5|${nation}|${type}|${pieceId}|${building.side}|${orientation}|${variant}|${damageStage}|${joinMask}|${interiorSide}|${gateFrame}|${uvBin}`;
+  const key = `fort-v6|${nation}|${type}|${pieceId}|${building.side}|${orientation}|${variant}|${damageStage}|${joinMask}|${interiorSide}|${gateFrame}|${uvBin}`;
   let sprite = bdBuildingCache.get(key);
   if (sprite) return sprite;
   const box = bdBoxFor(type, def);
@@ -7563,7 +7581,7 @@ function bdDrawFortificationFoundation(g, building, world) {
   const joinMask = joinedEnds.map(joined => Number(Boolean(joined))).join('');
   const pieceId = constructionTopology?.pieceId || 'straight';
   const uvBin = Math.round(constructionUv.along / 4);
-  const cacheKey = `ff-v2|${nation}|${building.type}|${pieceId}|${building.side}|${orientation}|${progressBin}|${joinMask}|${uvBin}`;
+  const cacheKey = `ff-v3|${nation}|${building.type}|${pieceId}|${building.side}|${orientation}|${progressBin}|${joinMask}|${uvBin}`;
   let sprite = bdFortFoundationCache.get(cacheKey);
   if (!sprite) {
     const box = bdBoxFor(building.type, def);
@@ -7945,25 +7963,24 @@ function drawCompleteBuilding(building, nation, worldTime, world = null) {
       ctx.drawImage(fortification.c, fortification.x, fortification.y,
         fortification.w, fortification.h);
     } else {
-      // Keep a visible curtain if the full bake is still warming up / failed.
+      // Keep a solid curtain if the full bake is still warming up / failed.
+      // Never use the construction/lite path here — that sparse face + moss
+      // read as neon green paper cards and made the regression look worse.
       try {
-        bdPaintFortification(
-          ctx,
-          building.type,
-          building.side,
-          quantizeFortificationVisualOrientation(
-            normalizeFortificationOrientation(building.orientation),
-          ),
-          1,
-          ((building.id % 3) + 3) % 3 * 7919,
-          true,
-          renderProfile.joinedEnds,
-          renderProfile.interiorSide,
-          gateOpenProgress,
-          renderProfile.nation,
-          renderProfile.topology,
-          renderProfile.worldUvAlong,
+        const orientation = quantizeFortificationVisualOrientation(
+          normalizeFortificationOrientation(building.orientation),
         );
+        const axis = fortificationAxis(orientation);
+        const normal = { x: -axis.y, y: axis.x };
+        const halfLength = (BUILDING_TYPES[building.type]?.w || building.w) * 0.5;
+        const halfThickness = (BUILDING_TYPES[building.type]?.h || building.h) * 0.5;
+        const stone = bdRamp('#343A35');
+        bdFortBlock(ctx, axis, normal, 0, 0, halfLength, halfThickness, 18, 0, stone, {
+          endPlane: !renderProfile.joinedEnds[1],
+          topMaterial: bdRamp('#5A5E58'),
+        });
+        bdFortBlock(ctx, axis, normal, 0, 0, halfLength, halfThickness - 3.2, 1.2, 17.5,
+          bdRamp('#2C302C'), { endPlane: false, topMaterial: bdRamp('#3A3E3A') });
       } catch (_) { /* never freeze the frame on a missing stamp */ }
     }
     return;

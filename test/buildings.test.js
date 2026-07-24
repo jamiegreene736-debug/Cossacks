@@ -315,9 +315,23 @@ test('fortification cache orientations stay bounded without flattening curved ru
   for (let angle = -Math.PI; angle <= Math.PI; angle += 0.001) {
     bins.add(quantizeFortificationVisualOrientation(angle));
   }
-  assert.ok(bins.size <= 65);
+  // Fine bins (256 around the circle) keep freehand curtains collinear while
+  // still bounding the sprite cache.
+  assert.ok(bins.size <= 260);
+  assert.ok(bins.size >= 200);
   const angle = 0.413;
-  assert.ok(Math.abs(quantizeFortificationVisualOrientation(angle) - angle) < 0.05);
+  assert.ok(Math.abs(quantizeFortificationVisualOrientation(angle) - angle) < 0.02);
+});
+
+test('connected wall bodies keep nominal length so joints do not double-paint', async () => {
+  const source = await readFile(new URL('../js/gfx/buildings.js', import.meta.url), 'utf8');
+  const paintStart = source.indexOf('function bdPaintFortification(');
+  const paintEnd = source.indexOf('/* ---------------------------------------------------------------------------\n   9. BAKE AND CACHE');
+  assert.ok(paintStart >= 0 && paintEnd > paintStart);
+  const paint = source.slice(paintStart, paintEnd);
+  assert.match(paint, /const halfLength = nominalHalfLength;/);
+  assert.match(paint, /crownSeam/);
+  assert.match(paint, /masonryHalfLength \+ crownSeam/);
 });
 
 test('detailed wall masonry keeps curved, gate and stair attachment contracts explicit', () => {
