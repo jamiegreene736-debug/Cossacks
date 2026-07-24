@@ -197,6 +197,23 @@ test('open-ground move targets exclude units, buildings, and resources', () => {
   assert.equal(isOpenGroundMoveTarget(world, resource.x, resource.y), false);
 });
 
+test('open-ground move targets reject the rendered Town Center body', () => {
+  const world = makeWorld();
+  world.buildings = [];
+  world.resources = [];
+  const townCenter = createBuilding(0, 'town_center', 1500, 1600, true);
+  world.buildings.push(townCenter);
+  const visibleBodyX = townCenter.x + 115;
+
+  assert.equal(isOpenGroundMoveTarget(world, visibleBodyX, townCenter.y), false);
+  assert.equal(issueVillagerGroundMove(
+    world,
+    [spawnUnit(world, 0, 'villager', townCenter.x + 230, townCenter.y)],
+    visibleBodyX,
+    townCenter.y,
+  ), false);
+});
+
 test('Mac secondary clicks accept both trackpad button 2 and Control-click', () => {
   assert.equal(isSecondaryPointerEvent(mouseEvent('mousedown', 2)), true);
   assert.equal(isSecondaryPointerEvent(mouseEvent('mousedown', 0, { ctrlKey: true })), true);

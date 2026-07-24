@@ -15,7 +15,7 @@ import {
   isFortificationType, rotateFortificationOrientation,
 } from './fortifications.js';
 import { formatPeaceTime, isPeaceTime } from './truce.js';
-import { assignUnitPath, clearUnitPath } from './navigation.js';
+import { assignUnitPath, clearUnitPath, pointBlocksGround } from './navigation.js';
 import {
   beginThreeFingerViewGesture, createViewGestureState, endThreeFingerViewGesture,
   readThreeFingerViewGesture, readTrackpadViewGesture,
@@ -583,6 +583,7 @@ function attackUnits(world, units, target) {
 export function isOpenGroundMoveTarget(world, x, y) {
   return Boolean(world)
     && x >= 0 && x <= WORLD.w && y >= 0 && y <= WORLD.h
+    && !pointBlocksGround(world, x, y, 7)
     && !findEntityAt(world, x, y)
     && !findResourceAt(world, x, y);
 }

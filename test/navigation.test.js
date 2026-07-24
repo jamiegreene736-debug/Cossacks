@@ -80,6 +80,53 @@ test('settlement buildings and resource deposits are navigation obstacles', () =
   assert.ok(path.some(waypoint => Math.abs(waypoint.y - 1600) > 70));
 });
 
+test('rendered Town Center frontage is a hard villager obstacle', () => {
+  const world = navigationWorld();
+  world.buildings = [];
+  world.resources = [];
+  const townCenter = createBuilding(0, 'town_center', 1500, 1600, true);
+  world.buildings.push(townCenter);
+
+  const visibleFrontage = { x: townCenter.x + 115, y: townCenter.y };
+  assert.ok(
+    visibleFrontage.x - townCenter.x > BUILDING_TYPES.town_center.w
+      * BUILDING_TYPES.town_center.visualScale * 0.5,
+    'this point sits outside the old raw config footprint',
+  );
+  assert.equal(pointInsideStructure(townCenter, visibleFrontage.x, visibleFrontage.y, 7), true);
+
+  const route = findVillagerPath(
+    world, townCenter.x + 230, townCenter.y, visibleFrontage.x, visibleFrontage.y, 7,
+  );
+  assert.ok(route.length >= 1);
+  const final = route.at(-1);
+  assert.equal(pointInsideStructure(townCenter, final.x, final.y, 7), false);
+});
+
+test('villagers route past rendered Town Center mass without crossing it', () => {
+  const world = navigationWorld();
+  world.buildings = [];
+  world.resources = [];
+  const townCenter = createBuilding(0, 'town_center', 1500, 1600, true);
+  world.buildings.push(townCenter);
+  world.checkT = Number.POSITIVE_INFINITY;
+  const villager = spawnUnit(world, 0, 'villager', townCenter.x - 230, townCenter.y);
+  villager.orderX = townCenter.x + 230;
+  villager.orderY = townCenter.y;
+  villager.state = 'move';
+  assert.equal(assignVillagerPath(world, villager, villager.orderX, villager.orderY), true);
+
+  for (let tick = 0; tick < 700 && villager.state === 'move'; tick++) {
+    step(world, 1 / 30);
+    assert.equal(
+      pointInsideStructure(townCenter, villager.x, villager.y, villager.radius),
+      false,
+    );
+  }
+  assert.equal(villager.state, 'idle');
+  assert.ok(Math.hypot(villager.x - (townCenter.x + 230), villager.y - townCenter.y) < 7);
+});
+
 test('scaled and rotated architectural footprints reject visible building overlap', () => {
   const world = navigationWorld();
   world.buildings = [];
@@ -103,7 +150,7 @@ test('scaled and rotated architectural footprints reject visible building overla
   assert.equal(blocked.ok, false);
   assert.match(blocked.message, /another building/i);
 
-  const clear = validatePlacement(world, 0, candidate.type, 1690, 1600);
+  const clear = validatePlacement(world, 0, candidate.type, 1810, 1600);
   assert.equal(clear.ok, true);
 });
 

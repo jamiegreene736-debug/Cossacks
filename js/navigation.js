@@ -235,7 +235,7 @@ export function findUnitPath(world, startX, startY, goalX, goalY, clearance = 7)
 
 export function assignUnitPath(world, unit, goalX, goalY) {
   if (!unit?.alive || unit.wallMount) return false;
-  const path = findUnitPath(world, unit.x, unit.y, goalX, goalY, unit.radius + 2);
+  const path = findUnitPath(world, unit.x, unit.y, goalX, goalY, unit.radius + 10);
   unit.navigationPath = path;
   unit.navigationIndex = 0;
   unit.navigationGoalX = goalX;
