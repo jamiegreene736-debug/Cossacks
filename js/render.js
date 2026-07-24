@@ -1387,10 +1387,13 @@ export function draw(
   for (const u of sortBuf) {
     const unitType = u.unitType || u.type;
     const sp = sprites[u.side][unitType];
-    const ix = u.px + (u.x - u.px) * alpha;
+    const wallElevation = u.wallElevation || 0;
+    // Elevation is screen-vertical, not map-north. Counter-rotate the lift into
+    // world space so troops remain on the firing walk in every camera view.
+    const ix = u.px + (u.x - u.px) * alpha - Math.sin(rotation) * wallElevation;
     const witchVisual = isBroomWitch(u) ? getWitchFlightVisual(u, alpha) : null;
     const iy = u.py + (u.y - u.py) * alpha
-      - (u.wallElevation || 0) - (witchVisual?.height || 0);
+      - Math.cos(rotation) * wallElevation - (witchVisual?.height || 0);
     let frame;
     if (witchVisual && sp.flightFrameStart !== null) {
       frame = sp.flightFrameStart + getWitchFlightFrame(u);
