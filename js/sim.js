@@ -305,6 +305,7 @@ export function damage(world, victim, amount, attacker) {
   if (victim.entityKind === 'building' && BUILDING_TYPES[victim.type]?.peacefulCivic) return false;
   if (isPeaceTime(world) && isHostilePair(attacker, victim)) return false;
   victim.hp -= amount;
+  if (victim.entityKind !== 'building') victim.healthBarT = 5;
   if (victim.entityKind === 'building' && attacker?.alive && attacker.entityKind !== 'building'
     && attacker.type !== 'villager' && areHostileEntities(world, attacker, victim)) {
     victim.lastHostileUnitDamageAt = world.time;
@@ -657,6 +658,7 @@ function updateUnit(world, u, dt) {
   u.meleeCd -= dt;
   u.fireT -= dt;
   u.torchT = Math.max(0, (u.torchT || 0) - dt);
+  u.healthBarT = Math.max(0, (u.healthBarT || 0) - dt);
   u.moving = false;
 
   if (u.state === 'flee') {

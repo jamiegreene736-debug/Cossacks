@@ -2,6 +2,7 @@
 // pixel budget and excluding world objects that cannot affect this frame.
 
 import { rotatedViewHalfExtents } from './camera.js';
+import { UNIT_TYPES } from './config.js';
 
 export const MAX_RENDER_DPR = 1.5;
 
@@ -32,6 +33,17 @@ export function circleIntersectsBounds(entity, bounds, extraRadius = 0) {
 }
 
 export function shouldRenderUnitHealthBar(unit) {
-  return Boolean(unit?.alive && unit.type !== 'villager'
-    && Number.isFinite(unit.hp) && Number.isFinite(unit.maxHp) && unit.maxHp > 0);
+  if (!unit?.alive || !Number.isFinite(unit.hp) || !Number.isFinite(unit.maxHp)
+      || unit.maxHp <= 0) {
+    return false;
+  }
+  const unitType = unit.unitType || unit.type;
+  if (unit.type === 'villager' || UNIT_TYPES[unitType]?.worker) return false;
+  return Boolean(
+    unit.selected
+    || unit.hp < unit.maxHp - 0.01
+    || unit.state === 'flee'
+    || unit.fireT > 0
+    || unit.healthBarT > 0,
+  );
 }
