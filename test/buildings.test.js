@@ -169,6 +169,15 @@ test('StarWars source trimming removes authored transparent-canvas scale drift',
   assert.ok(tower.height > 220);
 });
 
+test('Hogwarts castle source trimming preserves the full masonry without empty headroom', () => {
+  const castle = getProductionBuildingVisibleSize('castle', 'hogwarts', 768, 1024);
+
+  assert.deepEqual(castle.sourceRect, { x: 28, y: 482, width: 712, height: 514 });
+  assert.ok(castle.width > 360, 'trimmed castle should keep the same detailed broad silhouette');
+  assert.ok(castle.height < 275, 'transparent source headroom should not push the castle into the HUD');
+  assert.ok(castle.height > castle.minimumDisplayHeight, 'trimmed castle still reads as monumental');
+});
+
 test('production construction art advances continuously through four authored stages', () => {
   assert.deepEqual(bdConstructionArtFrame(-1), { from: 0, to: 1, mix: 0 });
   assert.deepEqual(bdConstructionArtFrame(1), { from: 3, to: 3, mix: 0 });
