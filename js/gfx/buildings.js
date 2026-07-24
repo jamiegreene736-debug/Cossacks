@@ -6772,29 +6772,6 @@ const BD_RESOURCE_ART = Object.freeze({
 
 const BD_VEGETATION_CELL = 512;
 
-function bdVegetationFramePath(g, left, top, width, height) {
-  const cx = left + width * 0.5;
-  const crownTop = top + height * 0.025;
-  const shoulderY = top + height * 0.30;
-  const waistY = top + height * 0.67;
-  const baseY = top + height;
-  g.beginPath();
-  g.moveTo(cx, crownTop);
-  g.bezierCurveTo(
-    left + width * 0.20, top + height * 0.05,
-    left + width * 0.065, shoulderY,
-    left + width * 0.15, waistY,
-  );
-  g.quadraticCurveTo(left + width * 0.24, top + height * 0.93, cx, baseY);
-  g.quadraticCurveTo(left + width * 0.76, top + height * 0.93, left + width * 0.85, waistY);
-  g.bezierCurveTo(
-    left + width * 0.935, shoulderY,
-    left + width * 0.80, top + height * 0.05,
-    cx, crownTop,
-  );
-  g.closePath();
-}
-
 function bdDrawSoftSourceRect(g, image, sx, sy, sw, sh, dx, dy, dw, dh, insetK = 0.055, fadeK = 0.10) {
   // Resource stamps are painted inside bdBake()'s scaled CTM. Size the soft
   // edge scratch to that bake density (capped at the source texels) so a 4x
@@ -6833,23 +6810,30 @@ function bdDrawSoftSourceRect(g, image, sx, sy, sw, sh, dx, dy, dw, dh, insetK =
 
 function bdDrawVegetationFrame(g, image, frame, x, baseY, width, flip, alpha = 1) {
   if (!image) return false;
+  // Country-tree cells already carry transparent padding. A teardrop clip plus
+  // soft side-fade was cropping broad canopies; at 4x bake that read as a hard
+  // cut-off. Blit the authored alpha silhouette at bake density instead.
   const height = width;
   const left = x - width / 2;
   const top = baseY - height;
   g.save();
   g.globalAlpha *= alpha;
-  bdVegetationFramePath(g, left, top, width, height);
-  g.clip();
+  g.imageSmoothingEnabled = true;
+  if ('imageSmoothingQuality' in g) g.imageSmoothingQuality = 'high';
   if (flip) {
     g.translate(x, 0);
     g.scale(-1, 1);
-    bdDrawSoftSourceRect(g, image, frame * BD_VEGETATION_CELL, 0,
-      BD_VEGETATION_CELL, BD_VEGETATION_CELL, -width / 2, baseY - width,
-      width, width, 0.045, 0.09);
+    g.drawImage(
+      image,
+      frame * BD_VEGETATION_CELL, 0, BD_VEGETATION_CELL, BD_VEGETATION_CELL,
+      -width / 2, top, width, height,
+    );
   } else {
-    bdDrawSoftSourceRect(g, image, frame * BD_VEGETATION_CELL, 0,
-      BD_VEGETATION_CELL, BD_VEGETATION_CELL, x - width / 2, baseY - width,
-      width, width, 0.045, 0.09);
+    g.drawImage(
+      image,
+      frame * BD_VEGETATION_CELL, 0, BD_VEGETATION_CELL, BD_VEGETATION_CELL,
+      left, top, width, height,
+    );
   }
   g.restore();
   return true;
@@ -7031,11 +7015,13 @@ function bdDetailedOrganicResourceSprite(res, step) {
   if (!profile) return null;
   const frac = step / (BD_RES_STEPS - 1);
   const radius = res.radius;
+  // Full tree frames are wider than the old teardrop clip. Keep extra bake
+  // margin so outer oaks/pines are not cropped by the stamp canvas.
   const box = [
-    -(radius * 1.95 + 54),
-    -(radius * 1.75 + 80),
-    (radius * 1.95 + 54) * 2,
-    radius * 3 + 140,
+    -(radius * 2.15 + 64),
+    -(radius * 1.95 + 96),
+    (radius * 2.15 + 64) * 2,
+    radius * 3.35 + 170,
   ];
   const rr = bdRnd((res.seed * 1000) | 0);
   return bdBake(box, BD_RES_SCALE, function (g) {
