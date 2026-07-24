@@ -4042,13 +4042,13 @@ function bdFortStoneFace(g, axis, normal, along, across, halfLength,
   const courseHeight = coarse ? 6.2 : 5.1;
   const courses = Math.max(1, Math.floor(height / courseHeight));
   const left = along - halfLength, right = along + halfLength;
-  const mortar = bdRgba('#E2D7C0', 0.46);
-  const darkMortar = bdRgba('#343331', 0.86);
+  const mortar = bdRgba('#A7A69C', 0.34);
+  const darkMortar = bdRgba('#242623', 0.90);
   const stones = [
-    bdRamp(bdMix(BMAT.STONE, '#D4CCB8', 0.18)),
-    bdRamp(bdMix(BMAT.STONE, '#948D80', 0.16)),
-    bdRamp(bdMix(BMAT.STONE_ROUGH, '#726B60', 0.12)),
-    bdRamp(bdMix(BMAT.STONE, '#B9AE99', 0.26)),
+    bdRamp('#666862'),
+    bdRamp('#555851'),
+    bdRamp('#74746C'),
+    bdRamp('#484B47'),
   ];
 
   for (let row = 0; row < courses; row++) {
@@ -4183,8 +4183,8 @@ function bdFortTexturedStoneFace(
 function bdFortDressedEndCap(g, axis, normal, along, halfThickness, height, seed) {
   if (height <= 8) return;
   const rr = bdRnd(seed || 1);
-  const limestone = bdRamp('#BDAF94');
-  const darkJoint = bdRgba('#3F3B34', 0.62);
+  const limestone = bdRamp('#777970');
+  const darkJoint = bdRgba('#262824', 0.78);
   const courses = Math.max(3, Math.floor(height / 7.2));
   for (let row = 0; row < courses; row++) {
     const e0 = row * height / courses;
@@ -4216,7 +4216,7 @@ function bdFortMasonryRelief(g, axis, normal, halfLength, halfThickness, height,
     const shadeA = bdFortPoint(axis, normal, along - width * 0.5, faceAcross + 0.12, elevation);
     const shadeB = bdFortPoint(axis, normal, along + width * 0.5, faceAcross + 0.12, elevation);
 
-    g.strokeStyle = bdRgba(index % 4 ? '#F2E3C8' : '#CAB99C', rr(0.18, 0.34));
+    g.strokeStyle = bdRgba(index % 4 ? '#B9BAB1' : '#8E9087', rr(0.16, 0.30));
     g.lineWidth = rr(0.32, 0.58);
     g.beginPath(); g.moveTo(litA.x, litA.y); g.lineTo(litB.x, litB.y); g.stroke();
     g.strokeStyle = bdRgba('#2E2D2A', rr(0.16, 0.32));
@@ -4233,8 +4233,8 @@ function bdFortMasonryRelief(g, axis, normal, halfLength, halfThickness, height,
     const a = bdFortPoint(axis, normal, along, faceAcross + 0.2, top);
     const b = bdFortPoint(axis, normal, along + rr(-1.2, 1.2), faceAcross + 0.2, bottom);
     g.strokeStyle = index % 2
-      ? bdRgba('#F0E5CF', rr(0.14, 0.24))
-      : bdRgba('#2F332B', rr(0.18, 0.30));
+      ? bdRgba('#AFB1AA', rr(0.10, 0.20))
+      : bdRgba('#252925', rr(0.22, 0.34));
     g.lineWidth = rr(0.42, 0.78);
     g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke();
   }
@@ -4242,17 +4242,17 @@ function bdFortMasonryRelief(g, axis, normal, halfLength, halfThickness, height,
 
 function bdFortBatteredPlinth(g, axis, normal, halfLength, halfThickness, height, seed) {
   if (height <= 5 || halfLength <= 3) return;
-  const plinth = bdRamp('#69645A');
-  const lip = bdRamp('#9D927C');
+  const plinth = bdRamp('#3D403C');
+  const lip = bdRamp('#696B64');
   const plinthHeight = Math.min(6.6, height * 0.30);
   bdFortBlock(g, axis, normal, 0, halfThickness + 0.95,
     Math.max(0.8, halfLength - 0.7), 2.25, plinthHeight, 0, plinth,
-    { lineW: 0.5, litW: 0.34, endPlane: false, topMaterial: bdRamp('#817767') });
+    { lineW: 0.5, litW: 0.34, endPlane: false, topMaterial: bdRamp('#50534E') });
   bdFortStoneFace(g, axis, normal, 0, halfThickness + 3.12,
     Math.max(0.8, halfLength - 1.2), 0, plinthHeight, seed ^ 0x4219, true);
   bdFortBlock(g, axis, normal, 0, halfThickness + 1.1,
     Math.max(0.8, halfLength - 0.2), 0.72, 0.9, plinthHeight - 0.1, lip,
-    { lineW: 0.35, litW: 0.36, endPlane: false, topMaterial: bdRamp('#B9A98A') });
+    { lineW: 0.35, litW: 0.36, endPlane: false, topMaterial: bdRamp('#85877E') });
 }
 
 function bdFortFacePatina(
@@ -4305,7 +4305,7 @@ function bdFortFacePatina(
   g.beginPath(); g.moveTo(footA.x, footA.y); g.lineTo(footB.x, footB.y); g.stroke();
   const lipA = bdFortPoint(axis, normal, -halfLength, across + 0.43, baseElevation + height - 0.45);
   const lipB = bdFortPoint(axis, normal, halfLength, across + 0.43, baseElevation + height - 0.45);
-  g.strokeStyle = bdRgba('#F3DFC0', 0.42);
+  g.strokeStyle = bdRgba('#C2C3B9', 0.32);
   g.lineWidth = 0.62;
   g.beginPath(); g.moveTo(lipA.x, lipA.y); g.lineTo(lipB.x, lipB.y); g.stroke();
   g.restore();
@@ -4422,9 +4422,9 @@ function bdFortWallCrown(
   const built = bdClamp(completion, 0, 1);
   if (built <= 0) return;
   const crownHalfLength = Math.max(3, halfLength * built);
-  const dressed = bdRamp(bdMix(BMAT.STONE, '#77736B', 0.22));
-  const capStone = bdRamp('#A29B8C');
-  const walkway = bdRamp('#595852');
+  const dressed = bdRamp('#555853');
+  const capStone = bdRamp('#85877F');
+  const walkway = bdRamp('#353936');
 
   // A dark recessed wall walk separates the two parapets. The old renderer
   // filled the entire depth with pale merlons, producing the repeated row of
@@ -4442,7 +4442,7 @@ function bdFortWallCrown(
   for (const edge of [-1, 1]) {
     const across = edge * (halfThickness - 2.15);
     const isInterior = edge === interiorSide;
-    const parapetHeight = isInterior ? 2.35 : 8.4;
+    const parapetHeight = isInterior ? 2.25 : 10.2;
     const parapetHalfThickness = isInterior ? 1.35 : 2.15;
     bdFortBlock(g, axis, normal, 0, across, crownHalfLength, 1.75,
       parapetHeight, elevation, dressed, {
@@ -4479,7 +4479,7 @@ function bdFortWallCrown(
         elevation + parapetHeight + 0.78);
       const front = bdFortPoint(axis, normal, joint, across + parapetHalfThickness,
         elevation + parapetHeight + 0.78);
-      g.strokeStyle = bdRgba('#4A463D', 0.62);
+      g.strokeStyle = bdRgba('#292C29', 0.76);
       g.lineWidth = 0.52;
       g.beginPath(); g.moveTo(back.x, back.y); g.lineTo(front.x, front.y); g.stroke();
     }
@@ -4489,8 +4489,8 @@ function bdFortWallCrown(
   // wall walk, translating the Town Center's deep cornice work into military
   // masonry without turning the crown into oversized cartoon battlements.
   if (built > 0.88) {
-    const corbel = bdRamp('#9B8E78');
-    const corbelSpacing = 9.2;
+    const corbel = bdRamp('#61635D');
+    const corbelSpacing = 12.5;
     for (let center = -crownHalfLength + corbelSpacing * 0.5;
       center < crownHalfLength; center += corbelSpacing) {
       const segmentHalfLength = Math.min(2.35,
@@ -4499,7 +4499,7 @@ function bdFortWallCrown(
       bdFortBlock(g, axis, normal, center, halfThickness - 0.7,
         segmentHalfLength, 2.0, 1.8, elevation - 2.1, corbel, {
           lineW: 0.42, litW: 0.38, endPlane: false,
-          topMaterial: bdRamp('#C4B293'),
+          topMaterial: bdRamp('#898B82'),
         });
     }
   }
@@ -4738,9 +4738,9 @@ function bdPaintWallStairs(g, building, progress, construction) {
   const steps = 9;
   const tread = run / steps;
   const rise = WALL_WALK_ELEVATION / steps;
-  const stone = bdRamp(bdMix(BMAT.STONE, '#C6B58D', 0.32));
-  const rough = bdRamp(bdMix(BMAT.STONE_ROUGH, '#9E8F70', 0.24));
-  const limestone = bdRamp(bdMix(BMAT.LIMESTONE, '#D8C59A', 0.30));
+  const stone = bdRamp('#5B5E58');
+  const rough = bdRamp('#424541');
+  const limestone = bdRamp('#7A7C73');
   const timber = bdRamp(BMAT.TIMBER);
   const rr = bdRnd((building.id * 2654435761) | 0);
 
@@ -4781,6 +4781,9 @@ function bdPaintWallStairs(g, building, progress, construction) {
     const material = index % 4 === 0 ? limestone : index % 3 === 0 ? rough : stone;
     bdFortBlock(g, axis, normal, 0, across, halfWidth, tread * 0.54,
       Math.max(0.8, height), 0, material, { lineW: 0.7, litW: 0.56 });
+    bdFortTexturedTopSurface(g, axis, normal, 0, across,
+      halfWidth - 0.7, tread * 0.48, height + 0.24,
+      (index % 4) * 0.18, 0.18);
     bdFortStoneFace(g, axis, normal, 0, across + tread * 0.55,
       halfWidth - 0.7, 0, Math.max(0.8, height),
       (building.id * 193 + index * 977) | 0, false);
@@ -4794,7 +4797,7 @@ function bdPaintWallStairs(g, building, progress, construction) {
     g.beginPath(); g.moveTo(left.x, left.y); g.lineTo(right.x, right.y); g.stroke();
     const wearLeft = bdFortPoint(axis, normal, -halfWidth * 0.38, across, height + 0.22);
     const wearRight = bdFortPoint(axis, normal, halfWidth * 0.34, across, height + 0.22);
-    g.strokeStyle = bdRgba('#F0E7D2', 0.25 + (index % 3) * 0.05);
+    g.strokeStyle = bdRgba('#B8BAB0', 0.20 + (index % 3) * 0.04);
     g.lineWidth = 1.05;
     g.beginPath(); g.moveTo(wearLeft.x, wearLeft.y); g.lineTo(wearRight.x, wearRight.y); g.stroke();
 
@@ -4918,9 +4921,9 @@ function bdPaintFortification(
   const halfLength = nominalHalfLength + (connectedWall ? 3 : 0);
   const halfThickness = BUILDING_TYPES[type].h * 0.5;
   const p = bdClamp(progress == null ? 1 : progress, 0, 1);
-  const stone = bdRamp(bdMix(BMAT.LIMESTONE, '#8B806F', 0.17));
-  const rough = bdRamp(bdMix(BMAT.STONE_ROUGH, '#4F4D47', 0.16));
-  const unfinishedCrown = bdRamp('#4B4942');
+  const stone = bdRamp('#595C56');
+  const rough = bdRamp('#383B37');
+  const unfinishedCrown = bdRamp('#30332F');
 
   // A fitted cobble lane and shallow trench visually weld adjacent stamps into
   // one defensive work while remaining beneath the modelled masonry.
@@ -4980,13 +4983,13 @@ function bdPaintFortification(
       // and firing walk. Their separate top/front planes survive zoom-out and
       // give the wall the same architectural hierarchy as the Town Center.
       if (builtHeight > 11) {
-        const dressedBand = bdRamp('#B8A98E');
+        const dressedBand = bdRamp('#777A72');
         for (const elevation of [5.2, Math.max(8, builtHeight - 5.8)]) {
           bdFortBlock(g, axis, normal, 0, halfThickness - 1.0,
             Math.max(0.8, masonryHalfLength - 0.4), 1.15,
             1.25, elevation, dressedBand, {
               lineW: 0.38, litW: 0.46, endPlane: false,
-              topMaterial: bdRamp('#D7C5A4'),
+              topMaterial: bdRamp('#96988E'),
             });
         }
       }
@@ -5033,8 +5036,8 @@ function bdPaintFortification(
         bdFortTexturedStoneFace(g, axis, normal, along, halfThickness + 4.45,
           2.8, 2.8, 0, builtHeight - 1.8, seed ^ Math.round(along * 193));
         bdFortBlock(g, axis, normal, along, 2.1, 3.75, halfThickness + 2.75,
-          1.15, builtHeight - 1.4, bdRamp('#C9B895'), {
-            lineW: 0.42, litW: 0.42, topMaterial: bdRamp('#E2D0AE'),
+          1.15, builtHeight - 1.4, bdRamp('#73766E'), {
+            lineW: 0.42, litW: 0.42, topMaterial: bdRamp('#95978D'),
           });
       }
     }
@@ -5064,6 +5067,9 @@ function bdPaintFortification(
         towerHeight - 4.5, 4.5, stone);
       bdFortStoneFace(g, axis, normal, along, halfThickness - 1.5, 13.8,
         4.5, towerHeight - 4.5, seed ^ (along < 0 ? 0x9421 : 0x4291), true);
+      bdFortTexturedStoneFace(g, axis, normal, along, halfThickness - 1.35,
+        13.4, 13.4, 4.5, towerHeight - 4.5,
+        seed ^ (along < 0 ? 0x18d3 : 0x6a91));
       bdFortMasonryRelief(g, axis, normal, 13.0, halfThickness,
         towerHeight - 4.5, seed ^ (along < 0 ? 0x64af : 0x48d2), detail);
       bdFortFacePatina(g, axis, normal, 13.0, halfThickness - 1.2,
@@ -5082,9 +5088,28 @@ function bdPaintFortification(
       bridgeHeight, 37, stone, { lineW: 0.72, litW: 0.58 });
     bdFortStoneFace(g, axis, normal, 0, halfThickness - 1.4, 21,
       37, bridgeHeight, seed ^ 0x2017, true);
+    bdFortTexturedStoneFace(g, axis, normal, 0, halfThickness - 1.25,
+      20.5, 20.5, 37, bridgeHeight, seed ^ 0x4b17);
     bdFortMasonryRelief(g, axis, normal, 20.4, halfThickness,
       bridgeHeight, seed ^ 0x3105, detail);
     bdFortArch(g, axis, normal, halfThickness + 0.2, seed);
+
+    // A restrained classical pediment and projecting cornice distinguish the
+    // gatehouse from an enlarged wall opening without turning it into fantasy
+    // castle architecture.
+    const gateFront = halfThickness + 0.72;
+    const pediment = [
+      bdFortPoint(axis, normal, -24, gateFront, 50),
+      bdFortPoint(axis, normal, 0, gateFront, 63),
+      bdFortPoint(axis, normal, 24, gateFront, 50),
+    ];
+    bdPoly(g, bdFortFlat(pediment), bdRamp('#70736C'), {
+      litW: 0.48, edge: true, edgeW: 0.36, lineW: 0.72,
+    });
+    bdFortBlock(g, axis, normal, 0, halfThickness - 0.2,
+      26, 2.2, 2.2, 48.4, bdRamp('#85877F'), {
+        lineW: 0.52, litW: 0.46, topMaterial: bdRamp('#A0A198'),
+      });
   }
   if (!construction || p > 0.90) {
     bdFortWallCrown(g, axis, normal, halfLength - 2, halfThickness,
@@ -7264,7 +7289,10 @@ function drawFoundation(building, nation, worldTime, world) {
     const constructionArt = artSpec ? getProductionArt(artSpec.fortificationConstruction) : null;
     const completedArt = artSpec ? getProductionArt(artSpec.fortifications) : null;
     const closedGateArt = artSpec ? getProductionArt(artSpec.gateClosed) : null;
-    if (constructionArt && usesFixedFortificationFrameArt(building)) {
+    // England's rebuilt fieldstone system must be visible from the first
+    // course onward, including legacy saves whose wall orientation is stored
+    // as a fixed frame name. Ottoman construction retains its authored sheet.
+    if (nation !== 'england' && constructionArt && usesFixedFortificationFrameArt(building)) {
       bdDrawProductionFortificationConstruction(
         g, building, constructionArt, completedArt, closedGateArt,
       );
@@ -7536,7 +7564,9 @@ function drawCompleteBuilding(building, nation, worldTime, world = null) {
     const productionArt = artSpec ? getProductionArt(artSpec.fortifications) : null;
     const closedGateArt = artSpec ? getProductionArt(artSpec.gateClosed) : null;
     const renderProfile = getFortificationRenderProfile(building, world);
-    if (productionArt && renderProfile.useProductionFrame) {
+    // Never fall back to the old pale English sheet: existing saved straight
+    // walls should receive the same deep masonry as newly placed curved walls.
+    if (nation !== 'england' && productionArt && renderProfile.useProductionFrame) {
       bdDrawProductionFortification(ctx, building, productionArt, closedGateArt, 1);
       return;
     }
@@ -7597,7 +7627,7 @@ function bdDrawFortificationJunctions(building, world) {
   if (building.type === 'wall' && bdJoinedFortificationEnds(building, world).some(Boolean)) return;
   const nation = world?.sides?.[building.side]?.nation;
   const artSpec = getArchitectureProductionArtSpec(nation);
-  if (artSpec && getProductionArt(artSpec.fortifications)
+  if (nation !== 'england' && artSpec && getProductionArt(artSpec.fortifications)
       && usesFixedFortificationFrameArt(building)) return;
   const neighbors = world.buildings.filter(candidate => candidate !== building
     && candidate.alive && candidate.complete && candidate.side === building.side
