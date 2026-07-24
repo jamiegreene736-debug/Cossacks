@@ -28,7 +28,7 @@ export const WALL_MODULE_LENGTH_4M = WALL_KIT_UNITS_PER_METRE * 4; // 88
 export const WALL_KIT_THICKNESS = WALL_KIT_UNITS_PER_METRE * 1.0; // 22
 
 /** Shared edge inset used when neighbouring modules overlap to hide the joint. */
-export const WALL_KIT_SEAM_OVERLAP = 3;
+export const WALL_KIT_SEAM_OVERLAP = 7;
 
 /** Endpoint snap tolerance that keeps sockets coincident. */
 export const WALL_KIT_SOCKET_TOLERANCE = 3.5;
