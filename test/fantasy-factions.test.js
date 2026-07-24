@@ -423,7 +423,9 @@ test('fantasy architecture is backed by substantial high-detail production asset
     ['hogwarts', 'barracks', 'hogwartsBarracks', 'hogwarts-barracks.webp', 160_000],
     ['hogwarts', 'stable', 'hogwartsStable', 'hogwarts-stable.webp', 160_000],
     ['hogwarts', 'foundry', 'hogwartsFoundry', 'hogwarts-foundry.webp', 160_000],
-    ['hogwarts', 'tower', 'hogwartsTower', 'hogwarts-tower.webp', 160_000],
+    // The standalone tower no longer carries the detached, severed castle
+    // fragment that previously occupied the right side of its source canvas.
+    ['hogwarts', 'tower', 'hogwartsTower', 'hogwarts-tower.webp', 125_000],
     ['hogwarts', 'castle', 'hogwartsCastle', 'hogwarts-castle.webp', 300_000],
     ['hogwarts', 'school', 'hogwartsGreatHall', 'hogwarts-great-hall.webp', 160_000],
     ['hogwarts', 'pool', 'hogwartsPool', 'hogwarts-pool.webp', 160_000],
@@ -468,6 +470,16 @@ test('the Great Hall keeps its opacity-corrected production artwork', async () =
     digest,
     '6bfd78d85ca5b43e0da834c534123a15cb164ef888d98b626c3a5afac810d97c',
     'the alpha-corrected masonry must not regress to the translucent source sprite',
+  );
+});
+
+test('the Hogwarts tower stays a complete standalone structure', async () => {
+  const assetUrl = new URL('../assets/buildings/hogwarts-tower.webp', import.meta.url);
+  const digest = createHash('sha256').update(await readFile(assetUrl)).digest('hex');
+  assert.equal(
+    digest,
+    '6a9ebb19f5a8e8290a83dd3bf7cace6bcce296a08382bbeb0ee3a0da4bb8c6cd',
+    'the tower must not regain the cut-off neighboring building fragment',
   );
 });
 
