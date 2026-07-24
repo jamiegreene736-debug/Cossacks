@@ -66,6 +66,8 @@ function setBuildingRefs(refs) {
 const BD_SCALE     = 4;
 const BD_RES_SCALE = 3;
 const BD_MILL_FRAMES = 8;
+const BD_FORTIFICATION_ANGLE_BINS = 64;
+let bdFortificationMaterialKey = 'englishFortificationMasonry';
 
 const bdSUN = {
   x: -0.64, y: -0.77,             // unit vector TOWARD the light (up-left)
@@ -4042,14 +4044,13 @@ function bdFortStoneFace(g, axis, normal, along, across, halfLength,
   const courseHeight = coarse ? 6.2 : 5.1;
   const courses = Math.max(1, Math.floor(height / courseHeight));
   const left = along - halfLength, right = along + halfLength;
-  const mortar = bdRgba('#A7A69C', 0.34);
-  const darkMortar = bdRgba('#242623', 0.90);
-  const stones = [
-    bdRamp('#666862'),
-    bdRamp('#555851'),
-    bdRamp('#74746C'),
-    bdRamp('#484B47'),
-  ];
+  const ottoman = bdFortificationMaterialKey === 'ottomanFortificationMasonry';
+  const mortar = bdRgba(ottoman ? '#B9B3A3' : '#777C73', ottoman ? 0.30 : 0.24);
+  const darkMortar = bdRgba(ottoman ? '#37362F' : '#171B18', 0.92);
+  const stones = (ottoman
+    ? ['#777267', '#666359', '#898277', '#57564F']
+    : ['#3C443E', '#303832', '#4A5049', '#252D28'])
+    .map(colour => bdRamp(colour));
 
   for (let row = 0; row < courses; row++) {
     const e0 = baseElevation + row * height / courses;
@@ -4073,7 +4074,7 @@ function bdFortStoneFace(g, axis, normal, along, across, halfLength,
         const pit = bdFortPoint(axis, normal,
           (lo + hi) * 0.5 + rr(-1.4, 1.4), across + 0.22,
           (e0 + e1) * 0.5 + rr(-0.8, 0.8));
-        g.strokeStyle = bdRgba('#484641', 0.38);
+        g.strokeStyle = bdRgba(ottoman ? '#4B4941' : '#171B18', 0.44);
         g.lineWidth = 0.46;
         g.beginPath();
         g.moveTo(pit.x - axis.x * 1.0, pit.y - axis.y * 1.0);
@@ -4129,7 +4130,8 @@ function bdFortTexturedStoneFace(
   height,
   seed,
 ) {
-  const image = getProductionArt('fortificationMasonry');
+  const image = getProductionArt(bdFortificationMaterialKey)
+    || getProductionArt('fortificationMasonry');
   if (!image || height <= 0.5 || halfLength <= 0.5) return;
 
   const left = along - halfLength;
@@ -4314,7 +4316,8 @@ function bdFortFacePatina(
 function bdFortTexturedStoneTop(
   g, axis, normal, halfLength, halfThickness, elevation, seed,
 ) {
-  const image = getProductionArt('fortificationMasonry');
+  const image = getProductionArt(bdFortificationMaterialKey)
+    || getProductionArt('fortificationMasonry');
   if (!image || halfLength <= 0.5 || halfThickness <= 0.5) return;
   const left = -halfLength;
   const right = halfLength;
@@ -4908,8 +4911,11 @@ function bdPaintWallStairs(g, building, progress, construction) {
 
 function bdPaintFortification(
   g, type, side, orientation, progress, seed, construction, joinedEnds = [false, false],
-  interiorSide = 1, gateOpenProgress = 1,
+  interiorSide = 1, gateOpenProgress = 1, nation = 'england',
 ) {
+  bdFortificationMaterialKey = nation === 'ottoman'
+    ? 'ottomanFortificationMasonry'
+    : 'englishFortificationMasonry';
   const axis = fortificationAxis(orientation);
   const normal = { x: -axis.y, y: axis.x };
   const isGate = type === 'gate';
@@ -4921,9 +4927,10 @@ function bdPaintFortification(
   const halfLength = nominalHalfLength + (connectedWall ? 3 : 0);
   const halfThickness = BUILDING_TYPES[type].h * 0.5;
   const p = bdClamp(progress == null ? 1 : progress, 0, 1);
-  const stone = bdRamp('#595C56');
-  const rough = bdRamp('#383B37');
-  const unfinishedCrown = bdRamp('#30332F');
+  const ottoman = nation === 'ottoman';
+  const stone = bdRamp(ottoman ? '#6A675D' : '#343A35');
+  const rough = bdRamp(ottoman ? '#48473F' : '#242A26');
+  const unfinishedCrown = bdRamp(ottoman ? '#3A3933' : '#1D221F');
 
   // A fitted cobble lane and shallow trench visually weld adjacent stamps into
   // one defensive work while remaining beneath the modelled masonry.
@@ -5028,14 +5035,14 @@ function bdPaintFortification(
           ...(!joinedEnds[0] ? [-nominalHalfLength + 5] : []),
           ...(!joinedEnds[1] ? [nominalHalfLength - 5] : []),
         ]
-        : [-halfLength + 7, -halfLength * 0.28, halfLength * 0.28, halfLength - 7];
+        : [-halfLength + 6, halfLength - 6];
     for (const along of supports) {
-      bdFortBlock(g, axis, normal, along, 2.1, 3.4, halfThickness + 2.5,
+      bdFortBlock(g, axis, normal, along, 1.5, 2.4, halfThickness + 1.6,
         Math.max(4, builtHeight - 1.5), 0, rough, { lineW: 0.68, litW: 0.5 });
       if (builtHeight > 8) {
-        bdFortTexturedStoneFace(g, axis, normal, along, halfThickness + 4.45,
-          2.8, 2.8, 0, builtHeight - 1.8, seed ^ Math.round(along * 193));
-        bdFortBlock(g, axis, normal, along, 2.1, 3.75, halfThickness + 2.75,
+        bdFortTexturedStoneFace(g, axis, normal, along, halfThickness + 2.72,
+          2.0, 2.0, 0, builtHeight - 1.8, seed ^ Math.round(along * 193));
+        bdFortBlock(g, axis, normal, along, 1.5, 2.7, halfThickness + 1.85,
           1.15, builtHeight - 1.4, bdRamp('#73766E'), {
             lineW: 0.42, litW: 0.42, topMaterial: bdRamp('#95978D'),
           });
@@ -5765,15 +5772,22 @@ export function getFortificationRenderProfile(building, world) {
   const connectedWall = building?.type === 'wall' && joinedEnds.some(Boolean);
   return {
     joinedEnds,
-    // English authored frames cannot represent a physical near/far side:
-    // mirroring keeps the tall parapet on the rear face. Its detailed
-    // procedural masonry is now the shared contract for straight, curved and
-    // gated runs. Keep the Ottoman faction's distinct fixed-angle production
-    // art when it does not need to flow through a connected curve.
-    useProductionFrame: nation === 'ottoman'
-      && usesFixedFortificationFrameArt(building) && !connectedWall,
+    // Every faction and every orientation now uses the connected renderer.
+    // A fixed sheet cannot preserve physical inside/outside faces through a
+    // bend, gate or camera turn, and was the reason old saved Ottoman walls
+    // could visibly fall back to the previous pale/cartoonish art.
+    useProductionFrame: false,
     interiorSide: fortificationInteriorSide(world, building),
+    nation: nation === 'ottoman' ? 'ottoman' : 'england',
+    connectedWall,
   };
+}
+
+export function quantizeFortificationVisualOrientation(orientation) {
+  const normalized = normalizeFortificationOrientation(orientation);
+  if (!Number.isFinite(normalized)) return normalized;
+  const step = Math.PI * 2 / BD_FORTIFICATION_ANGLE_BINS;
+  return Math.round(normalized / step) * step;
 }
 
 /**
@@ -6417,16 +6431,16 @@ function bdFortificationDamage(g, structure, stage, seed) {
 
 function bdFortificationSprite(
   building, damageStage, joinedEnds = [false, false], interiorSide = 1,
-  gateOpenProgress = 1,
+  gateOpenProgress = 1, nation = 'england',
 ) {
   const type = building.type;
   const def = BUILDING_TYPES[type];
   const normalized = normalizeFortificationOrientation(building.orientation);
-  const orientation = Number.isFinite(normalized) ? Math.round(normalized * 1000) / 1000 : normalized;
+  const orientation = quantizeFortificationVisualOrientation(normalized);
   const variant = ((building.id % 3) + 3) % 3;
   const joinMask = joinedEnds.map(joined => Number(Boolean(joined))).join('');
   const gateFrame = type === 'gate' ? Math.round(bdClamp(gateOpenProgress, 0, 1) * 10) : 10;
-  const key = `fort|${type}|${building.side}|${orientation}|${variant}|${damageStage}|${joinMask}|${interiorSide}|${gateFrame}`;
+  const key = `fort-v2|${nation}|${type}|${building.side}|${orientation}|${variant}|${damageStage}|${joinMask}|${interiorSide}|${gateFrame}`;
   let sprite = bdBuildingCache.get(key);
   if (sprite) return sprite;
   const box = bdBoxFor(type, def);
@@ -6434,7 +6448,7 @@ function bdFortificationSprite(
   sprite = bdBake(box, BD_SCALE, function (g, scale) {
     const structure = bdPaintFortification(
       g, type, building.side, orientation, 1, seed, false, joinedEnds,
-      interiorSide, gateFrame / 10,
+      interiorSide, gateFrame / 10, nation,
     );
     bdFortificationDamage(g, structure, damageStage, seed);
     bdPassSurfacePatina(g, box, seed + damageStage * 101);
@@ -6466,18 +6480,21 @@ function bdFortificationSprite(
   return sprite;
 }
 
-function bdWallStairSprite(building, damageStage) {
+function bdWallStairSprite(building, damageStage, nation = 'england') {
   const variant = ((building.id % 3) + 3) % 3;
   const normalized = normalizeFortificationOrientation(building.orientation);
   const orientation = Number.isFinite(normalized) ? Math.round(normalized * 1000) / 1000 : normalized;
   const sideSign = building.stairSide === -1 ? -1 : 1;
-  const key = `stairs|${building.side}|${orientation}|${sideSign}|${variant}|${damageStage}`;
+  const key = `stairs-v2|${nation}|${building.side}|${orientation}|${sideSign}|${variant}|${damageStage}`;
   let sprite = bdBuildingCache.get(key);
   if (sprite) return sprite;
   const def = BUILDING_TYPES.wall_stairs;
   const box = bdBoxFor('wall_stairs', def);
   const model = { ...building, id: variant + 1, orientation, stairSide: sideSign };
   sprite = bdBake(box, BD_SCALE, function (g, scale) {
+    bdFortificationMaterialKey = nation === 'ottoman'
+      ? 'ottomanFortificationMasonry'
+      : 'englishFortificationMasonry';
     bdPaintWallStairs(g, model, 1, false);
     if (damageStage) {
       const rr = bdRnd(variant * 7919 + damageStage * 131);
@@ -7263,6 +7280,9 @@ function bdDrawFortificationFoundation(g, building, world) {
     (building.id * 2654435761) | 0,
     true,
     bdJoinedFortificationEnds(building, world, true),
+    1,
+    1,
+    world?.sides?.[building.side]?.nation || 'england',
   );
 }
 
@@ -7559,7 +7579,7 @@ function drawCompleteBuilding(building, nation, worldTime, world = null) {
   const hpFraction = building.hp / Math.max(1, building.maxHp);
   const damageStage = hpFraction < 0.30 ? 2 : hpFraction < 0.66 ? 1 : 0;
   if (building.type === 'wall_stairs') {
-    const stairs = bdWallStairSprite(building, damageStage);
+    const stairs = bdWallStairSprite(building, damageStage, nation);
     if (stairs) ctx.drawImage(stairs.c, stairs.x, stairs.y, stairs.w, stairs.h);
     return;
   }
@@ -7583,6 +7603,7 @@ function drawCompleteBuilding(building, nation, worldTime, world = null) {
       renderProfile.joinedEnds,
       renderProfile.interiorSide,
       gateOpenProgress,
+      renderProfile.nation,
     );
     if (fortification) {
       ctx.drawImage(fortification.c, fortification.x, fortification.y,

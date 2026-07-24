@@ -8,6 +8,7 @@ import {
 import {
   assignMusketeersToWall, dismountWallUnit, fortificationAxis,
   fortificationEndpoints, fortificationInteriorSide, getGateOpenProgress,
+  GATE_PASSABLE_PROGRESS, isGatePassable,
   lineIntersectsFortification, pointInsideFortification,
   resolveUnitFortificationCollision, toggleGate, updateWallAssignment,
 } from '../js/fortifications.js';
@@ -314,6 +315,38 @@ test('musketeers use a completed staircase, hold wall slots, and keep moderate r
   assert.equal(musketeer.wallMount, null);
   assert.equal(musketeer.wallElevation, 0);
   assert.ok(Math.hypot(musketeer.x - stairs.x, musketeer.y - stairs.y) <= 9);
+});
+
+test('musketeers visibly climb a staircase instead of teleporting to the wall walk', () => {
+  const world = makeWorld();
+  world.buildings = [];
+  const wall = createBuilding(0, 'wall', 900, 1600, true, { orientation: 'horizontal' });
+  const stairs = createBuilding(0, 'wall_stairs', 900, 1633, true, {
+    orientation: 'horizontal', wallId: wall.id, stairSide: 1, stairAlong: 0,
+  });
+  world.buildings.push(wall, stairs);
+  const defender = spawnUnit(world, 0, 'musk', stairs.x, stairs.y);
+  assignMusketeersToWall(world, [defender], wall);
+  assert.equal(updateWallAssignment(world, defender, 1 / 30), 'ascending');
+  assert.ok(defender.wallElevation > 0 && defender.wallElevation < 40);
+  assert.equal(defender.wallMount, null);
+  for (let tick = 0; tick < 40 && !defender.wallMount; tick++) {
+    updateWallAssignment(world, defender, 1 / 30);
+  }
+  assert.equal(defender.wallMount.wallId, wall.id);
+  assert.equal(defender.wallElevation, 40);
+});
+
+test('a lifting gate remains blocked until the portcullis clears troop height', () => {
+  const gate = createBuilding(0, 'gate', 900, 1600, true, {
+    orientation: 'horizontal', gateOpen: true,
+  });
+  gate.gateTransitionFrom = 0;
+  gate.gateTransitionStartedAt = 10;
+  assert.equal(isGatePassable(gate, 10), false);
+  assert.equal(isGatePassable(gate, 10.45), false);
+  assert.ok(getGateOpenProgress(gate, 10.75) >= GATE_PASSABLE_PROGRESS);
+  assert.equal(isGatePassable(gate, 10.75), true);
 });
 
 test('a wall-top musketeer can fire over its host masonry at nearby enemies', () => {

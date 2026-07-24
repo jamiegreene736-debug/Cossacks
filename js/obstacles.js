@@ -4,7 +4,7 @@
 
 import { BUILDING_TYPES } from './config.js';
 import {
-  fortificationFrame, isFortificationType, isGateOpen,
+  fortificationFrame, isFortificationType, isGatePassable,
 } from './fortifications.js';
 import { getBuildingPresentation } from './gfx/buildings.js';
 
@@ -39,14 +39,14 @@ export function structureObstacleFrame(building, padding = 0) {
   return ordinaryStructureFrame(building, padding);
 }
 
-export function structureBlocksGround(building) {
+export function structureBlocksGround(building, worldTime) {
   if (!building?.alive) return false;
   const def = BUILDING_TYPES[building.type];
   // Farmers work inside crop rows, so a field is a managed work surface rather
   // than a solid structure. Its placement footprint still blocks other builds.
   if (!def || def.wallAttachment || building.type === 'farm') return false;
   if (building.type === 'wall') return building.complete || building.progress >= 0.24;
-  if (def.gate) return building.complete && !isGateOpen(building);
+  if (def.gate) return building.complete && !isGatePassable(building, worldTime);
   return true;
 }
 
