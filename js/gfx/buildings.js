@@ -64,10 +64,10 @@ function setBuildingRefs(refs) {
 // bounded: only placed building types are baked, while damage and mill frames
 // appear on demand. A town-centre surface is about 3 MB and a normal settlement
 // remains comfortably below a modern browser's graphics-memory budget.
-// Resource nodes use 3x because their organic silhouettes contain many fine
-// twigs, ore veins, berry highlights and cut-stump rings.
+// Resource nodes share that 4x density: oak/birch/pine frames and berry stamps
+// must survive the same close inspection zoom as the town beside them.
 const BD_SCALE     = 4;
-const BD_RES_SCALE = 3;
+const BD_RES_SCALE = 4;
 const BD_MILL_FRAMES = 8;
 const BD_FORTIFICATION_ANGLE_BINS = 64;
 let bdFortificationMaterialKey = 'englishFortificationMasonry';
@@ -6729,12 +6729,21 @@ function bdVegetationFramePath(g, left, top, width, height) {
 }
 
 function bdDrawSoftSourceRect(g, image, sx, sy, sw, sh, dx, dy, dw, dh, insetK = 0.055, fadeK = 0.10) {
-  const canvasWidth = Math.max(1, Math.ceil(dw));
-  const canvasHeight = Math.max(1, Math.ceil(dh));
+  // Resource stamps are painted inside bdBake()'s scaled CTM. Size the soft
+  // edge scratch to that bake density (capped at the source texels) so a 4x
+  // wood/food bake does not upsample a 1:1 intermediate into blocky foliage.
+  const transform = typeof g.getTransform === 'function' ? g.getTransform() : null;
+  const scaleX = transform ? Math.hypot(transform.a, transform.b) : 1;
+  const scaleY = transform ? Math.hypot(transform.c, transform.d) : 1;
+  const bakeScale = Math.max(1, scaleX, scaleY);
+  const canvasWidth = Math.max(1, Math.ceil(Math.min(dw * bakeScale, sw)));
+  const canvasHeight = Math.max(1, Math.ceil(Math.min(dh * bakeScale, sh)));
   const c = document.createElement('canvas');
   c.width = canvasWidth;
   c.height = canvasHeight;
   const s = c.getContext('2d');
+  s.imageSmoothingEnabled = true;
+  if ('imageSmoothingQuality' in s) s.imageSmoothingQuality = 'high';
   const insetX = Math.round(sw * insetK);
   const sourceWidth = Math.max(1, sw - insetX * 2);
   s.drawImage(

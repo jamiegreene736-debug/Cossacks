@@ -83,7 +83,9 @@ A battle can put thousands of units on the field, so:
 - Work done **once** — sprite atlas painting, terrain baking, decal stamping,
   texture pre-baking — is effectively free. Be lavish there. That is where all
   the quality comes from.
-- Procedural buildings bake at 4x and procedural resources at 3x. Production
+- Procedural buildings bake at 4x and resource nodes (including wood/food tree
+  stamps) at 4x. Soft organic stamps size their scratch canvases to the active
+  bake CTM so foliage is not upsampled from a 1:1 intermediate. Production
   sprites load once, then use lazy scale/damage/depletion variants. Civilian
   and military production frames bake into the same left/right unit atlas at battle start.
   The English Town Center's waving flag is the only live architectural overlay.
