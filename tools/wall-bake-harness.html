@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Wall bake harness</title>
+  <style>
+    body { margin: 0; background: #1a1c16; color: #ddd; font: 14px/1.4 sans-serif; }
+    canvas { display: block; margin: 12px; background: #6e7a4a; }
+    #status { margin: 12px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <canvas id="c" width="1280" height="720"></canvas>
+  <div id="status">loading…</div>
+  <script type="module">
+    import { preloadProductionArt, getProductionArt } from '../js/gfx/art-assets.js';
+    import {
+      setBuildingRefs, drawCompleteBuilding, drawFoundation, bdResetCaches,
+      getFortificationRenderProfile,
+    } from '../js/gfx/buildings.js';
+    import { BUILDING_TYPES } from '../js/config.js';
+
+    const status = document.getElementById('status');
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const errors = [];
+    window.addEventListener('error', e => errors.push(String(e.error || e.message)));
+
+    const preload = await preloadProductionArt();
+    bdResetCaches();
+    setBuildingRefs({ ctx, camera: { zoom: 1 } });
+
+    ctx.fillStyle = '#6e7a4a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    function makeWall(id, type, x, y, orientation, complete = true, progress = 1) {
+      const def = BUILDING_TYPES[type];
+      return {
+        id, type, side: 0, x, y, w: def.w, h: def.h,
+        orientation, alive: true, complete, progress,
+        hp: def.hp, maxHp: def.hp, queue: [],
+      };
+    }
+
+    // Diagonal connected run — the case that looked like cascading cards.
+    const axisAngle = 0.48;
+    const axis = { x: Math.cos(axisAngle), y: Math.sin(axisAngle) };
+    const walls = [];
+    let cursor = 0;
+    for (const type of ['wall', 'wall', 'wall', 'wall_short']) {
+      const half = BUILDING_TYPES[type].w * 0.5;
+      cursor += half;
+      walls.push(makeWall(walls.length + 1, type, axis.x * cursor, axis.y * cursor, axisAngle));
+      cursor += half;
+    }
+    const world = {
+      buildings: walls,
+      sides: [{ nation: 'england' }],
+      time: 12,
+    };
+
+    let painted = 0;
+    const originX = 160;
+    const originY = 280;
+    for (const building of walls) {
+      const profile = getFortificationRenderProfile(building, world);
+      ctx.save();
+      ctx.translate(originX + building.x, originY + building.y);
+      try {
+        drawCompleteBuilding(building, 'england', world.time, world);
+        painted++;
+      } catch (error) {
+        errors.push(`draw ${building.id}: ${error && error.stack || error}`);
+      }
+      ctx.restore();
+    }
+
+    // Rising crown-stage wall (the freeze stage).
+    const rising = makeWall(9, 'wall', 0, 0, 0.15, false, 0.93);
+    ctx.save();
+    ctx.translate(980, 520);
+    try {
+      drawFoundation(rising, 'england', world.time, { buildings: [rising], sides: [{ nation: 'england' }] });
+      painted++;
+    } catch (error) {
+      errors.push(`foundation: ${error && error.stack || error}`);
+    }
+    ctx.restore();
+
+    // Horizontal reference.
+    const flat = makeWall(20, 'wall', 0, 0, 0);
+    ctx.save();
+    ctx.translate(980, 220);
+    try {
+      drawCompleteBuilding(flat, 'england', world.time, {
+        buildings: [flat], sides: [{ nation: 'england' }], time: 12,
+      });
+      painted++;
+    } catch (error) {
+      errors.push(`flat: ${error && error.stack || error}`);
+    }
+    ctx.restore();
+
+    const masonry = getProductionArt('englishFortificationMasonry');
+    status.textContent = JSON.stringify({
+      preload,
+      painted,
+      errors,
+      masonry: masonry ? { w: masonry.naturalWidth, h: masonry.naturalHeight } : null,
+      profiles: walls.map(b => getFortificationRenderProfile(b, world)),
+    }, null, 2);
+    window.__wallHarness = { painted, errors };
+  </script>
+</body>
+</html>
