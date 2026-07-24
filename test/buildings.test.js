@@ -338,6 +338,22 @@ test('detailed wall masonry keeps curved, gate and stair attachment contracts ex
   assert.ok(gate.faceCourses > openRun.faceCourses);
 });
 
+test('wall crown coping joints declare a finite spacing before use', async () => {
+  // Regression: an undefined `capWidth` threw once the parapet stage began,
+  // making the completed wall vanish and freezing the frame loop.
+  const source = await readFile(new URL('../js/gfx/buildings.js', import.meta.url), 'utf8');
+  const crownStart = source.indexOf('function bdFortWallCrown(');
+  const crownEnd = source.indexOf('export function getFortificationConstructionStage');
+  assert.ok(crownStart >= 0 && crownEnd > crownStart);
+  const crown = source.slice(crownStart, crownEnd);
+  assert.match(crown, /const capWidth\s*=\s*[0-9]+(?:\.[0-9]+)?\s*;/);
+  assert.match(crown, /joint\s*\+=\s*capWidth/);
+  assert.ok(
+    crown.indexOf('const capWidth') < crown.indexOf('joint += capWidth'),
+    'capWidth must be defined before the parapet joint loop',
+  );
+});
+
 test('the closed gate uses a substantial transparent production render', async () => {
   const url = new URL('../assets/buildings/english-gate-closed.png', import.meta.url);
   const [metadata, header] = await Promise.all([stat(url), readFile(url)]);
