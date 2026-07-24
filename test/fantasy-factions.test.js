@@ -23,6 +23,7 @@ import {
 } from '../js/render.js';
 import { createGameSnapshot, restoreGameSnapshot } from '../js/savegame.js';
 import { createWorld, damage, spawnUnit, step } from '../js/sim.js';
+import { structuresOverlap } from '../js/obstacles.js';
 import { OPENING_PEACE_SECONDS } from '../js/truce.js';
 
 function factionWorld(worldCountry = 'GB') {
@@ -308,6 +309,24 @@ test('StarWars trains detailed villagers and galactic defenders from faction bui
     'starwars_pulse_cannon',
   ]);
   assert.equal(queueUnit(world, townCenter, 'moaning_myrtle', 1, { free: true }).ok, false);
+});
+
+test('StarWars starting village keeps broad production buildings separated', () => {
+  const world = factionWorld();
+  const starwarsSide = world.sides.findIndex(side => side.nation === 'starwars');
+  const buildings = world.buildings.filter(building => building.side === starwarsSide);
+
+  assert.ok(buildings.length > 1);
+  assert.ok(buildings.every(building => building.nation === 'starwars'));
+  for (let left = 0; left < buildings.length; left++) {
+    for (let right = left + 1; right < buildings.length; right++) {
+      assert.equal(
+        structuresOverlap(buildings[left], buildings[right], 14),
+        false,
+        `${buildings[left].type} should not overlap ${buildings[right].type}`,
+      );
+    }
+  }
 });
 
 test('StarWars attacks retain distinct authored weapon and effect contracts', () => {
