@@ -116,8 +116,13 @@
           <div id="difficulty-options" class="difficulty-options" role="radiogroup" aria-label="CPU difficulty"></div>
         </fieldset>
 
+        <fieldset class="start-mode-picker">
+          <legend><span>2</span> Choose your opening</legend>
+          <div id="start-mode-options" class="start-mode-options" role="radiogroup" aria-label="Starting resources"></div>
+        </fieldset>
+
         <section id="nation-step" class="nation-step locked" aria-labelledby="nation-step-title" aria-disabled="true">
-          <div id="nation-step-title" class="setup-step-title"><span>2</span> Choose your country</div>
+          <div id="nation-step-title" class="setup-step-title"><span>3</span> Choose your country</div>
           <label class="nation-picker">Command
             <select id="sel-player-nation" disabled></select>
           </label>
@@ -134,7 +139,8 @@
           </label>
 
           <p class="scenario-preview"><b>Alliance:</b> England + Hogwarts + StarWars &nbsp;·&nbsp;
-            <b>Enemies:</b> Ottoman Empire + Nightmare Circus</p>
+            <b>Enemies:</b> Ottoman Empire + Nightmare Circus<br>
+            <span id="start-mode-summary">Standard opening: every realm begins with the same resources.</span></p>
 
           <section class="multiplayer-card" aria-labelledby="multiplayer-title">
             <div class="multiplayer-heading">
@@ -176,7 +182,7 @@
         <div class="how-to">
           <h3>The road to empire</h3>
           <ol>
-            <li><b>Begin with only a Town Center.</b> Your first villager emerges automatically.</li>
+            <li><b>Choose a fair start or Unlimited Command.</b> Unlimited grants only your realm endless resources and ten ready villagers.</li>
             <li><b>Direct and employ villagers</b> by selecting them, then clicking open ground to move or a deposit or completed economic building to work.</li>
             <li><b>Build a mill and attach fields,</b> then raise barracks, stables, and an artillery foundry.</li>
             <li><b>Train in batches of 5 or 20.</b> The population ceiling is 1,200, built for enormous battles.</li>

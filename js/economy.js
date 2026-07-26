@@ -51,6 +51,7 @@ const INCOME_SMOOTHING_SECONDS = 18;
 const FULL_TURN = Math.PI * 2;
 export const MARKET_TRADE_INPUT = 100;
 export const MARKET_TRADE_OUTPUT = 70;
+export const UNLIMITED_RESOURCE_STOCKPILE = 999_999;
 
 export function normalizeBuildingRotation(rotation = 0) {
   if (!Number.isFinite(rotation)) return 0;
@@ -115,11 +116,13 @@ export function formatCost(cost = {}) {
 }
 
 export function hasResources(side, cost = {}) {
+  if (side?.unlimitedResources) return true;
   return RESOURCE_KEYS.every(key => (side.resources[key] || 0) + 1e-6 >= (cost[key] || 0));
 }
 
 function spendResources(side, cost = {}) {
   if (!hasResources(side, cost)) return false;
+  if (side?.unlimitedResources) return true;
   for (const key of RESOURCE_KEYS) side.resources[key] -= cost[key] || 0;
   return true;
 }
@@ -233,6 +236,10 @@ export function initializeEconomy(world) {
   for (let sideIndex = 0; sideIndex < world.sides.length; sideIndex++) {
     const side = world.sides[sideIndex];
     side.resources = freshResources();
+    side.unlimitedResources = Boolean(world.startMode === 'unlimited' && sideIndex === 0);
+    if (side.unlimitedResources) {
+      for (const resourceType of RESOURCE_KEYS) side.resources[resourceType] = UNLIMITED_RESOURCE_STOCKPILE;
+    }
     side.incomePerHour = freshRates();
     side.incomeSample = freshRates();
     side.incomeSampleTime = 0;
@@ -303,11 +310,15 @@ export function initializeEconomy(world) {
       }
     }
 
-    // This is intentionally free: the first frame contains only the Town
-    // Center, then its first resident emerges. The player can never be stuck.
-    const firstWorker = getTrainableUnitTypes(side.nation, 'town_center')
-      .find(unitType => UNIT_TYPES[unitType]?.worker) || 'villager';
-    queueUnit(world, tc, firstWorker, 1, { free: true, trainTime: 4 });
+    if (side.unlimitedResources) {
+      spawnOpeningWorkers(world, sideIndex, tc, 10);
+    } else {
+      // This is intentionally free: the first frame contains only the Town
+      // Center, then its first resident emerges. The player can never be stuck.
+      const firstWorker = getTrainableUnitTypes(side.nation, 'town_center')
+        .find(unitType => UNIT_TYPES[unitType]?.worker) || 'villager';
+      queueUnit(world, tc, firstWorker, 1, { free: true, trainTime: 4 });
+    }
   }
 }
 
@@ -515,12 +526,38 @@ export function validatePlacement(world, side, type, x, y, options = {}) {
 }
 
 function affordableCount(side, cost) {
+  if (side?.unlimitedResources) return 256;
   let count = Infinity;
   for (const resourceType of RESOURCE_KEYS) {
     const price = cost[resourceType] || 0;
     if (price > 0) count = Math.min(count, Math.floor((side.resources[resourceType] || 0) / price));
   }
   return Number.isFinite(count) ? Math.max(0, count) : 0;
+}
+
+function openingWorkerPositions(townCenter, count) {
+  const radiusX = Math.max(170, townCenter.w * 0.78);
+  const radiusY = Math.max(118, townCenter.h * 0.62);
+  const positions = [];
+  for (let index = 0; index < count; index++) {
+    const angle = -Math.PI * 0.82 + index * Math.PI * 1.64 / Math.max(1, count - 1);
+    positions.push({
+      x: Math.max(40, Math.min(WORLD.w - 40, townCenter.x + Math.cos(angle) * radiusX)),
+      y: Math.max(40, Math.min(WORLD.h - 40, townCenter.y + Math.sin(angle) * radiusY)),
+    });
+  }
+  return positions;
+}
+
+function spawnOpeningWorkers(world, sideIndex, townCenter, count) {
+  const side = world.sides[sideIndex];
+  const workerType = getTrainableUnitTypes(side.nation, 'town_center')
+    .find(unitType => UNIT_TYPES[unitType]?.worker) || 'villager';
+  for (const point of openingWorkerPositions(townCenter, count)) {
+    const unit = world.spawnUnit(sideIndex, workerType, point.x, point.y);
+    unit.facing = sideFrontDirection(world, sideIndex);
+    unit.visualFacing = unit.facing;
+  }
 }
 
 function wallPath(points, startX, startY, endX, endY) {
@@ -825,10 +862,10 @@ export function executeMarketTrade(
     return { ok: false, message: 'Choose two different resources.' };
   }
   normalizeEconomyLedgers(side);
-  if ((side.resources[fromResource] || 0) + 1e-6 < input) {
+  if (!side.unlimitedResources && (side.resources[fromResource] || 0) + 1e-6 < input) {
     return { ok: false, message: `Need ${input} ${fromResource} to trade.` };
   }
-  side.resources[fromResource] -= input;
+  if (!side.unlimitedResources) side.resources[fromResource] -= input;
   side.resources[toResource] += output;
   return {
     ok: true,

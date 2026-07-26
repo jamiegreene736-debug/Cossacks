@@ -19,11 +19,27 @@ const $ = id => document.getElementById(id);
 let callbacks = {};
 let selectedNation = 'england';
 let selectedDifficulty = null;
+let selectedStartMode = 'standard';
 let selectedWorldCountry = 'GB';
 let lastSelectionKey = '';
 let toastTimer = 0;
 let activePlacementType = null;
 let localSide = 0;
+
+const START_MODES = Object.freeze({
+  standard: Object.freeze({
+    name: 'Standard',
+    summary: 'Balanced start for every realm.',
+    detail: 'Standard opening: every realm begins with the same resources.',
+    startLabel: 'Found Your Empire',
+  }),
+  unlimited: Object.freeze({
+    name: 'Unlimited Command',
+    summary: 'Only your realm gets endless resources and ten villagers.',
+    detail: 'Unlimited Command: your realm starts with endless resources and ten ready villagers. CPU realms stay standard.',
+    startLabel: 'Found Unlimited Empire',
+  }),
+});
 
 export function setLocalSide(sideIndex = 0) {
   localSide = Number.isInteger(sideIndex) && sideIndex >= 0 ? sideIndex : 0;
@@ -45,6 +61,21 @@ export function initMenu(menuCallbacks) {
     button.addEventListener('click', () => selectDifficulty(key));
     difficultyOptions.appendChild(button);
   }
+  const startModeOptions = $('start-mode-options');
+  for (const [key, mode] of Object.entries(START_MODES)) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.startMode = key;
+    button.setAttribute('aria-pressed', 'false');
+    const name = document.createElement('b');
+    name.textContent = mode.name;
+    const summary = document.createElement('span');
+    summary.textContent = mode.summary;
+    button.append(name, summary);
+    button.addEventListener('click', () => selectStartMode(key));
+    startModeOptions.appendChild(button);
+  }
+  selectStartMode(selectedStartMode);
 
   const select = $('sel-player-nation');
   for (const [key, nation] of Object.entries(NATIONS)) {
@@ -82,6 +113,7 @@ export function initMenu(menuCallbacks) {
       enemyAllyNation: 'nightmare_circus',
       worldCountry: selectedWorldCountry,
       difficulty: selectedDifficulty,
+      startMode: selectedStartMode,
     });
   });
   $('btn-host-multiplayer').addEventListener('click', () => {
@@ -128,6 +160,18 @@ function selectDifficulty(difficulty) {
   $('sel-world-country').disabled = false;
   $('btn-start').disabled = false;
   $('preview-difficulty').textContent = CPU_DIFFICULTIES[difficulty].name.toLowerCase();
+}
+
+function selectStartMode(startMode) {
+  if (!START_MODES[startMode]) return;
+  selectedStartMode = startMode;
+  for (const button of $('start-mode-options').querySelectorAll('button[data-start-mode]')) {
+    const active = button.dataset.startMode === startMode;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  }
+  $('start-mode-summary').textContent = START_MODES[startMode].detail;
+  $('btn-start').textContent = START_MODES[startMode].startLabel;
 }
 
 function updateNationPreview() {
@@ -355,9 +399,11 @@ export function updateHud(world, selection) {
   $('hud-player-count').textContent = countTeamMilitary(world, true).toLocaleString();
   $('hud-enemy-count').textContent = countTeamMilitary(world, false).toLocaleString();
   for (const key of RESOURCE_KEYS) {
-    $(`res-${key}`).textContent = Math.floor(player.resources[key]).toLocaleString();
+    $(`res-${key}`).textContent = player.unlimitedResources
+      ? '∞'
+      : Math.floor(player.resources[key]).toLocaleString();
     const rate = $(`rate-${key}`);
-    rate.textContent = formatHourly(player.incomePerHour[key]);
+    rate.textContent = player.unlimitedResources ? 'Player only' : formatHourly(player.incomePerHour[key]);
     rate.classList.toggle('active', player.incomePerHour[key] > 0.5);
   }
   $('res-pop').textContent = `${player.population + player.queuedPopulation} / ${player.popCap}`;

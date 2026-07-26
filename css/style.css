@@ -382,29 +382,44 @@ button, select { font: inherit; }
   display: block; margin-top: 8px; color: #b7a56d; font-size: 15px; letter-spacing: 9px;
 }
 .tagline { margin: 13px 0 22px; color: #c0b598; font-size: 15px; font-style: italic; }
-.difficulty-picker {
+.difficulty-picker, .start-mode-picker {
   margin: 0; padding: 0; border: 0; text-align: left;
 }
-.difficulty-picker legend, .setup-step-title {
+.start-mode-picker { margin-top: 15px; }
+.difficulty-picker legend, .start-mode-picker legend, .setup-step-title {
   width: 100%; margin-bottom: 9px; color: #c5b98e;
   font: 700 11px Arial, sans-serif; letter-spacing: 1.3px; text-transform: uppercase;
 }
-.difficulty-picker legend span, .setup-step-title span {
+.difficulty-picker legend span, .start-mode-picker legend span, .setup-step-title span {
   display: inline-grid; place-items: center; width: 20px; height: 20px; margin-right: 7px;
   color: #171b12; background: #b7a56d; border-radius: 50%; font-size: 10px;
 }
 .difficulty-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.difficulty-options button {
+.start-mode-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.difficulty-options button, .start-mode-options button {
   min-height: 78px; padding: 11px 12px; text-align: left; color: #d9cfb1;
   background: rgba(18,22,15,.72); border: 1px solid #514d37; border-radius: 3px; cursor: pointer;
 }
-.difficulty-options button:hover { border-color: #91855a; background: rgba(48,50,33,.84); }
-.difficulty-options button.active {
+.start-mode-options button { min-height: 72px; }
+.difficulty-options button:hover, .start-mode-options button:hover {
+  border-color: #91855a; background: rgba(48,50,33,.84);
+}
+.difficulty-options button.active, .start-mode-options button.active {
   border-color: #c3aa5e; background: linear-gradient(145deg, rgba(86,80,48,.9), rgba(39,43,27,.92));
   box-shadow: inset 0 0 0 1px rgba(220,196,117,.2);
 }
-.difficulty-options b { display: block; margin-bottom: 5px; color: #f0e2bb; font-size: 15px; }
-.difficulty-options span { display: block; color: #9f987f; font: 10.5px/1.35 Arial, sans-serif; }
+.start-mode-options button[data-start-mode="unlimited"].active {
+  border-color: #d8bd63;
+  background:
+    linear-gradient(145deg, rgba(92,72,36,.94), rgba(37,43,27,.95)),
+    radial-gradient(circle at 12% 16%, rgba(255,216,101,.20), transparent 32%);
+}
+.difficulty-options b, .start-mode-options b {
+  display: block; margin-bottom: 5px; color: #f0e2bb; font-size: 15px;
+}
+.difficulty-options span, .start-mode-options span {
+  display: block; color: #9f987f; font: 10.5px/1.35 Arial, sans-serif;
+}
 .nation-step {
   margin-top: 17px; padding-top: 15px; border-top: 1px solid #4e4b35;
   transition: opacity .18s ease;
