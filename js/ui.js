@@ -1,7 +1,7 @@
 // DOM HUD and contextual command cards.
 
 import {
-  NATIONS, UNIT_TYPES, BUILDING_TYPES, RESOURCE_KEYS,
+  NATIONS, UNIT_TYPES, BUILDING_TYPES, PRINTABLE_MODELS, RESOURCE_KEYS,
   CPU_DIFFICULTIES, DEFAULT_CPU_DIFFICULTY, getTrainableUnitTypes,
   canNationBuildBuilding,
 } from './config.js';
@@ -553,6 +553,18 @@ function renderSelection(world, selection) {
         }
       }
     }
+    if (def.printable) {
+      context.textContent = 'Choose a model to fabricate';
+      for (const [modelType, model] of Object.entries(PRINTABLE_MODELS)) {
+        addCommand(grid, {
+          action: 'print',
+          type: modelType,
+          icon: model.icon,
+          label: `Print ${model.label}`,
+          meta: `${formatCost(model.cost)} · ${model.printTime.toFixed(1)}s`,
+        });
+      }
+    }
     for (const unitType of trainable) {
       const counts = UNIT_TYPES[unitType].worker ? [1, 5] : [1, 5, 20];
       for (const count of counts) addCommand(grid, {
@@ -568,6 +580,14 @@ function renderSelection(world, selection) {
       const queue = document.createElement('div');
       queue.className = 'queue-summary';
       queue.textContent = `${UNIT_TYPES[first.type].short} ${percent}% · ${building.queue.length} queued`;
+      grid.appendChild(queue);
+    }
+    if (building.printQueue?.length) {
+      const first = building.printQueue[0];
+      const percent = Math.floor((1 - first.remaining / first.total) * 100);
+      const queue = document.createElement('div');
+      queue.className = 'queue-summary';
+      queue.textContent = `${PRINTABLE_MODELS[first.type]?.label || 'Model'} ${percent}% · ${building.printQueue.length} queued`;
       grid.appendChild(queue);
     }
     return;
@@ -720,7 +740,7 @@ function buildingIcon(type) {
     house: '⌂', english_cottage: '⌂', english_townhouse: '▤',
     english_mansion: '▣', spooky_house: '☾',
     farm: '≋', mill: '✣', lumber_camp: '♣', mine: '◆', marketplace: '⚖',
-    barracks: '⚔', stable: '♞', foundry: '◉', tower: '♜', castle: '♛',
+    barracks: '⚔', stable: '♞', foundry: '◉', printer_shop: '⬡', tower: '♜', castle: '♛',
     school: '⌘', pool: '≈', beach: '≋', park: '♧', playground: '☆',
     wall: '▥', wall_short: '▤', gate: '∩', wall_stairs: '▰',
   }[type] || '▦';

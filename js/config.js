@@ -7,6 +7,25 @@ export const MAX_POPULATION = 1200;
 export const RESOURCE_KEYS = ['food', 'wood', 'gold', 'stone'];
 export const STARTING_RESOURCES = { food: 240, wood: 320, gold: 120, stone: 120 };
 
+export const PRINTABLE_MODELS = Object.freeze({
+  trex: Object.freeze({
+    label: 'T-Rex', icon: '🦖', cost: Object.freeze({ wood: 20, gold: 10 }),
+    printTime: 5, color: '#df6845',
+  }),
+  stegosaurus: Object.freeze({
+    label: 'Stegosaurus', icon: '◆', cost: Object.freeze({ wood: 16, gold: 8 }),
+    printTime: 4.2, color: '#73ad5b',
+  }),
+  robot: Object.freeze({
+    label: 'Friendly Robot', icon: '◉', cost: Object.freeze({ wood: 14, gold: 12 }),
+    printTime: 3.8, color: '#54a6cd',
+  }),
+  rocket: Object.freeze({
+    label: 'Retro Rocket', icon: '▲', cost: Object.freeze({ wood: 12, gold: 16 }),
+    printTime: 4.5, color: '#d8dde2',
+  }),
+});
+
 const PLAYER_TEAM_ID = 0;
 const RIVAL_TEAM_ID = 1;
 
@@ -446,6 +465,13 @@ export const BUILDING_TYPES = {
     label: 'Artillery Foundry', description: 'Builds long-range cannon.',
     w: 116, h: 84, radius: 62, visualScale: 1.26, hp: 1900, buildTime: 20,
     cost: { wood: 320, gold: 150, stone: 90 }, trains: ['gun'], hotkey: 'A',
+  },
+  printer_shop: {
+    label: '3D Printing Shop',
+    description: 'A universal maker workshop that prints collectible dinosaurs, robots, and rockets.',
+    w: 124, h: 92, radius: 68, visualScale: 1.30, hp: 1650, buildTime: 18,
+    cost: { wood: 260, gold: 140, stone: 60 },
+    printable: true, peacefulCivic: true, hotkey: 'I',
   },
   tower: {
     label: 'Watch Tower', description: 'A garrisoned defensive gun position.',

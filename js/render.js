@@ -30,6 +30,7 @@ import { fortificationCorners, isFortificationType } from './fortifications.js';
 import { getWomanVillagerFrame, getWorkerFrame } from './worker-animation.js';
 import { getMilitaryFrame } from './military-animation.js';
 import { getCharacterMotion } from './character-animation.js';
+import { drawPrintedModel } from './gfx/printed-models.js';
 import {
   getWitchFlightFrame, getWitchFlightVisual, isBroomWitch,
 } from './witch-flight.js';
@@ -1248,6 +1249,9 @@ export function draw(
   }
   for (const building of buildingSortBuf) {
     if (building.type === 'wall_stairs') drawBuilding(building, world);
+  }
+  for (const model of world.printedModels || []) {
+    if (circleIntersectsBounds(model, visibleWorld, 34)) drawPrintedModel(ctx, model, world.time);
   }
   for (const destruction of world.destructions || []) {
     if (circleIntersectsBounds(destruction, visibleWorld, 190)) {

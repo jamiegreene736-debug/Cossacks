@@ -2,7 +2,7 @@
 // owns movement/combat; this module owns settlement state and resource rules.
 
 import {
-  WORLD, NATIONS, UNIT_TYPES, BUILDING_TYPES, RESOURCE_KEYS, getTrainableUnitTypes,
+  WORLD, NATIONS, UNIT_TYPES, BUILDING_TYPES, PRINTABLE_MODELS, RESOURCE_KEYS, getTrainableUnitTypes,
   STARTING_RESOURCES, GATHER_RATES, MAX_POPULATION, canNationBuildBuilding,
   defaultStartPositionForSide,
 } from './config.js';
@@ -146,7 +146,8 @@ export function createBuilding(side, type, x, y, complete = false, options = {})
     progress: complete ? 1 : 0.02,
     repairing: false, repairProgress: 0, repairStartHp: null,
     fireT: 0, aimAngle: 0,
-    queue: [], rallyX: NaN, rallyY: NaN, rallyTargetId: null,
+    queue: [], printQueue: [], printSequence: 0,
+    rallyX: NaN, rallyY: NaN, rallyTargetId: null,
     reload: Math.random() * (def.reload || 0),
     resourceType: def.resource || null,
     amount: def.amount || 0,
@@ -1002,6 +1003,82 @@ export function queueUnit(world, building, unitType, count = 1, options = {}) {
   return { ok: true, queued, message: `${queued} ${unitLabel.toLowerCase()} queued.` };
 }
 
+const PRINT_QUEUE_LIMIT = 8;
+const PRINTED_MODELS_PER_SHOP = 12;
+const PRINT_SHOWCASE_SLOTS = Object.freeze([
+  Object.freeze({ x: -58, y: 64 }),
+  Object.freeze({ x: 0, y: 76 }),
+  Object.freeze({ x: 58, y: 64 }),
+  Object.freeze({ x: -82, y: 34 }),
+  Object.freeze({ x: 82, y: 34 }),
+  Object.freeze({ x: -34, y: 102 }),
+  Object.freeze({ x: 34, y: 102 }),
+  Object.freeze({ x: -98, y: 70 }),
+  Object.freeze({ x: 98, y: 70 }),
+  Object.freeze({ x: -68, y: 112 }),
+  Object.freeze({ x: 68, y: 112 }),
+  Object.freeze({ x: 0, y: 126 }),
+]);
+
+export function queuePrintedModel(world, building, modelType) {
+  const model = PRINTABLE_MODELS[modelType];
+  const definition = BUILDING_TYPES[building?.type];
+  if (!building?.alive || !building.complete || !definition?.printable || !model) {
+    return { ok: false, message: 'That model cannot be printed here.' };
+  }
+  const side = world.sides[building.side];
+  building.printQueue ||= [];
+  if (building.printQueue.length >= PRINT_QUEUE_LIMIT) {
+    return { ok: false, message: 'The print queue is full.' };
+  }
+  if (!spendResources(side, model.cost)) {
+    return { ok: false, message: `Need ${formatCost(model.cost)}.` };
+  }
+  building.printQueue.push({
+    type: modelType,
+    remaining: model.printTime,
+    total: model.printTime,
+  });
+  return { ok: true, message: `${model.label} sent to the print bed.` };
+}
+
+function completePrintedModel(world, building, modelType) {
+  const definition = PRINTABLE_MODELS[modelType];
+  if (!definition) return;
+  world.printedModels ||= [];
+  building.printSequence = Math.max(0, building.printSequence || 0);
+  const sequence = building.printSequence++;
+  const slot = PRINT_SHOWCASE_SLOTS[sequence % PRINT_SHOWCASE_SLOTS.length];
+  const rotation = normalizeBuildingRotation(building.rotation);
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+  const sameShop = world.printedModels
+    .filter(model => model.shopId === building.id)
+    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  if (sameShop.length >= PRINTED_MODELS_PER_SHOP) {
+    const oldestId = sameShop[0].id;
+    world.printedModels = world.printedModels.filter(model => model.id !== oldestId);
+  }
+  world.printedModels.push({
+    id: nextEntityId++,
+    entityKind: 'printed_model',
+    type: modelType,
+    side: building.side,
+    shopId: building.id,
+    x: building.x + slot.x * cos - slot.y * sin,
+    y: building.y + slot.x * sin + slot.y * cos,
+    rotation,
+    color: definition.color,
+    createdAt: world.time,
+    radius: 18,
+  });
+  world.events.push({
+    side: building.side,
+    text: `${definition.label} finished printing.`,
+    tone: 'good',
+  });
+}
+
 function validRallyTarget(building, target) {
   if (!target?.alive) return false;
   if (target.entityKind === 'resource') return target.amount > 0;
@@ -1662,6 +1739,18 @@ function updateQueues(world, dt) {
   }
 }
 
+function updatePrintQueues(world, dt) {
+  for (const building of world.buildings) {
+    building.printQueue ||= [];
+    if (!building.alive || !building.complete || building.printQueue.length === 0) continue;
+    const item = building.printQueue[0];
+    item.remaining -= dt;
+    if (item.remaining > 0) continue;
+    building.printQueue.shift();
+    completePrintedModel(world, building, item.type);
+  }
+}
+
 function updateTowers(world, dt) {
   if (isPeaceTime(world)) return;
   for (const tower of world.buildings) {
@@ -1771,6 +1860,7 @@ export function stepEconomy(world, dt) {
   updateWorkers(world, dt);
   updateIncomeTelemetry(world, dt);
   updateQueues(world, dt);
+  updatePrintQueues(world, dt);
   updateTowers(world, dt);
   updateCastles(world, dt);
 }
@@ -1793,6 +1883,11 @@ export function onBuildingDestroyed(world, building) {
     refundResources(side, unit.cost, 0.5);
   }
   building.queue.length = 0;
+  for (const item of building.printQueue || []) {
+    const model = PRINTABLE_MODELS[item.type];
+    if (model) refundResources(side, model.cost, 0.5);
+  }
+  if (building.printQueue) building.printQueue.length = 0;
   const removedFieldIds = new Set();
   if (building.type === 'mill') {
     for (const field of world.buildings) {

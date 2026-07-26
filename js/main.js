@@ -13,7 +13,7 @@ import { initInput, updateInput, getSelection, getDragRect,
          setControlledSide } from './input.js';
 import {
   assignBuilders, assignGatherers, assignRepairers, createBuilding, executeMarketTrade, findEntityAt,
-  findResourceAt, placeBuilding, placeWallRun, planWallRun, queueUnit, setRallyPoint,
+  findResourceAt, placeBuilding, placeWallRun, planWallRun, queuePrintedModel, queueUnit, setRallyPoint,
   validatePlacement,
 } from './economy.js';
 import * as ui from './ui.js';
@@ -249,6 +249,7 @@ async function startBattle(opts) {
     .map(sideIndex => new Commander(world, sideIndex, world.difficulty));
   resetForBattle();
   startBattleRender(world);
+  setupLocalPrintingShopPreview(world);
   setupLocalBuildingFirePreview(world);
   setupLocalAutoEngagePreview(world);
   setupLocalCurvedWallPreview(world);
@@ -279,6 +280,55 @@ async function startBattle(opts) {
   acc = 0;
   resetFrameMetrics();
   sendMultiplayerSnapshot(true);
+}
+
+function setupLocalPrintingShopPreview(activeWorld) {
+  const debugName = new URLSearchParams(window.location.search).get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'printing-shop') return;
+
+  const previewBounds = { left: 720, right: 1660, top: 1120, bottom: 1980 };
+  activeWorld.buildings = activeWorld.buildings.filter(building => (
+    building.x < previewBounds.left || building.x > previewBounds.right
+    || building.y < previewBounds.top || building.y > previewBounds.bottom
+  ));
+  activeWorld.resources = activeWorld.resources.filter(resource => (
+    resource.x < previewBounds.left || resource.x > previewBounds.right
+    || resource.y < previewBounds.top || resource.y > previewBounds.bottom
+  ));
+  activeWorld.units = activeWorld.units.filter(unit => (
+    unit.x < previewBounds.left || unit.x > previewBounds.right
+    || unit.y < previewBounds.top || unit.y > previewBounds.bottom
+  ));
+
+  const shop = createBuilding(0, 'printer_shop', 1160, 1500, true);
+  activeWorld.buildings.push(shop);
+  activeWorld.sides[0].resources.wood = 1000;
+  activeWorld.sides[0].resources.gold = 1000;
+  activeWorld.sides[0].resources.stone = 1000;
+  const models = ['trex', 'stegosaurus', 'robot', 'rocket'];
+  const positions = [
+    { x: 1000, y: 1670 }, { x: 1105, y: 1715 },
+    { x: 1215, y: 1715 }, { x: 1320, y: 1670 },
+  ];
+  activeWorld.printedModels = models.map((type, index) => ({
+    id: 990000 + index,
+    entityKind: 'printed_model',
+    type,
+    side: 0,
+    shopId: shop.id,
+    x: positions[index].x,
+    y: positions[index].y,
+    rotation: 0,
+    createdAt: -10,
+    radius: 18,
+  }));
+  selectEntitiesById([shop.id]);
+  camera.x = 1160;
+  camera.y = 1510;
+  camera.zoom = 1.9;
+  clampCamera();
 }
 
 function setupLocalFantasyFactionPreview(activeWorld) {
@@ -549,6 +599,10 @@ function applyRemoteCommand(command) {
     if (command.kind === 'train') {
       const building = buildingsById([command.buildingId], command.side)[0];
       return queueUnit(world, building, command.type, command.count).ok;
+    }
+    if (command.kind === 'print') {
+      const building = buildingsById([command.buildingId], command.side)[0];
+      return queuePrintedModel(world, building, command.modelType).ok;
     }
     if (command.kind === 'gate') {
       const gate = buildingsById([command.buildingId], command.side)[0];
@@ -1459,6 +1513,21 @@ function handleCommand(command) {
       buildingId: building.id,
       type: command.type,
       count: command.count,
+    });
+    return;
+  }
+  if (command.action === 'print') {
+    const building = getSelection().find(entity => entity.entityKind === 'building'
+      && entity.side === localSide && BUILDING_TYPES[entity.type]?.printable);
+    const result = queuePrintedModel(world, building, command.type);
+    ui.toast(result.message, result.ok ? 'good' : 'danger');
+    if (result.ok) sfx.command('build');
+    ui.updateHud(world, getSelection());
+    if (result.ok) sendPlayerCommand({
+      kind: 'print',
+      side: localSide,
+      buildingId: building.id,
+      modelType: command.type,
     });
     return;
   }
