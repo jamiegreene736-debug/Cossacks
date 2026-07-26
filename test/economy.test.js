@@ -11,7 +11,7 @@ import {
   getBuildingEconomyStats, getEconomyBreakdown, getFieldAttachmentStatus,
   getFieldWorkPoint, getGatherAssignmentStats, getMillFieldSlots,
   getRallyTarget, queueUnit, setRallyPoint, stepEconomy, validatePlacement,
-  VILLAGER_CARRY_CAPACITY,
+  UNLIMITED_RESOURCE_STOCKPILE, VILLAGER_CARRY_CAPACITY,
 } from '../js/economy.js';
 
 function makeWorld() {
@@ -55,6 +55,63 @@ test('an allied England start has Hogwarts and StarWars beside the player', () =
   assert.ok(world.buildings.some(building => building.side === 2 && building.type === 'castle'));
   assert.ok(world.buildings.some(building => building.side === 4 && building.type === 'castle'));
   assert.ok(world.sides.every(side => side.population === 0));
+});
+
+test('unlimited command gives only the player endless resources and ten villagers', () => {
+  const world = createWorld({
+    playerNation: 'england',
+    enemyNation: 'ottoman',
+    startMode: 'unlimited',
+  });
+  const player = world.sides[0];
+  const cpu = world.sides[1];
+  const townCenter = world.buildings.find(building => building.side === 0 && building.type === 'town_center');
+  const villagers = world.units.filter(unit => unit.side === 0 && unit.type === 'villager');
+  assert.equal(world.startMode, 'unlimited');
+  assert.equal(player.unlimitedResources, true);
+  assert.equal(cpu.unlimitedResources, false);
+  assert.equal(villagers.length, 10);
+  assert.equal(player.population, 10);
+  assert.equal(player.queuedPopulation, 0);
+  assert.equal(townCenter.queue.length, 0);
+  assert.deepEqual(Object.values(player.resources), Array(4).fill(UNLIMITED_RESOURCE_STOCKPILE));
+  assert.deepEqual(cpu.resources, { food: 240, wood: 320, gold: 120, stone: 120 });
+  assert.equal(world.units.filter(unit => unit.side !== 0).length, 0);
+  assert.ok(world.buildings.find(building => building.side === 1 && building.type === 'town_center').queue.length > 0);
+  for (const villager of villagers) {
+    assert.ok(
+      Math.hypot(villager.x - townCenter.x, villager.y - townCenter.y) > 115,
+      'unlimited villagers should start spread around the Town Center',
+    );
+  }
+});
+
+test('unlimited command player does not spend resources when training, building, or trading', () => {
+  const world = createWorld({
+    playerNation: 'england',
+    enemyNation: 'ottoman',
+    startMode: 'unlimited',
+  });
+  const player = world.sides[0];
+  const townCenter = world.buildings.find(building => building.side === 0 && building.type === 'town_center');
+  const villagers = world.units.filter(unit => unit.side === 0 && unit.type === 'villager');
+  const beforeFood = player.resources.food;
+  assert.equal(queueUnit(world, townCenter, 'villager', 5).queued, 5);
+  assert.equal(player.resources.food, beforeFood);
+
+  const beforeWood = player.resources.wood;
+  const housePoint = findBuildablePoint(world, 'house');
+  const house = placeBuilding(world, 0, 'house', housePoint.x, housePoint.y, [villagers[0]]);
+  assert.equal(house.ok, true);
+  assert.equal(player.resources.wood, beforeWood);
+
+  const market = createBuilding(0, 'marketplace', housePoint.x + 230, housePoint.y, true, { team: player.team });
+  world.buildings.push(market);
+  player.resources.wood = 0;
+  const traded = executeMarketTrade(world, 0, market, 'wood', 'gold');
+  assert.equal(traded.ok, true);
+  assert.equal(player.resources.wood, 0);
+  assert.equal(player.resources.gold, UNLIMITED_RESOURCE_STOCKPILE + traded.output);
 });
 
 test('the free first villager emerges and regular training spends resources', () => {

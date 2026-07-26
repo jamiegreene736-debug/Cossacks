@@ -230,6 +230,7 @@ export function createWorld(opts) {
     time: 0, state: 'running', winner: -1, checkT: 1,
     speed: 1, killLog: {},
     difficulty: normalizeCpuDifficulty(opts?.difficulty),
+    startMode: opts?.startMode === 'unlimited' ? 'unlimited' : 'standard',
     navigationVersion: 0,
     sepGrid: new FlatGrid(20, WORLD.w, WORLD.h),
     tgtGrid: new FlatGrid(64, WORLD.w, WORLD.h),

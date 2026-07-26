@@ -24,7 +24,7 @@ const WORLD_ARRAYS = [
 ];
 const WORLD_VALUES = [
   'time', 'winner', 'checkT', 'speed', 'killLog', 'sides', 'difficulty', 'navigationVersion',
-  'worldCountry',
+  'worldCountry', 'startMode',
 ];
 
 function encodeNumber(value) {
