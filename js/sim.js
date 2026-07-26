@@ -226,7 +226,7 @@ export function createWorld(opts) {
   const world = {
     units: [], active: [],
     projectiles: [], particles: [], flags: [], destructions: [],
-    pendingDecals: [], decals: [],
+    pendingDecals: [], decals: [], printedModels: [],
     time: 0, state: 'running', winner: -1, checkT: 1,
     speed: 1, killLog: {},
     difficulty: normalizeCpuDifficulty(opts?.difficulty),

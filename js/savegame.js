@@ -20,7 +20,7 @@ export const SAVE_VERSION = 1;
 const NUMBER_TAG = '__empires1700_number__';
 const WORLD_ARRAYS = [
   'buildings', 'resources', 'particles', 'flags', 'destructions',
-  'pendingDecals', 'decals', 'events',
+  'pendingDecals', 'decals', 'printedModels', 'events',
 ];
 const WORLD_VALUES = [
   'time', 'winner', 'checkT', 'speed', 'killLog', 'sides', 'difficulty', 'navigationVersion',
@@ -238,7 +238,12 @@ export function restoreGameSnapshot(snapshot) {
   }
 
   reserveUnitIds(Math.max(0, ...world.units.map(unit => unit.id)));
-  reserveEntityIds(Math.max(99999, ...world.buildings.map(building => building.id), ...world.resources.map(resource => resource.id)));
+  reserveEntityIds(Math.max(
+    99999,
+    ...world.buildings.map(building => building.id),
+    ...world.resources.map(resource => resource.id),
+    ...(world.printedModels || []).map(model => model.id),
+  ));
 
   const commanderSnapshots = Array.isArray(snapshot.commanders) && snapshot.commanders.length
     ? snapshot.commanders : snapshot.commander ? [snapshot.commander] : [];
