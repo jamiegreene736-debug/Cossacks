@@ -2,6 +2,15 @@
 // They are deliberately drawn in world space so they inherit camera rotation
 // and remain grounded beside their parent workshop.
 
+import { getProductionArt } from './art-assets.js';
+
+export const PRINTED_MODEL_SPRITES = Object.freeze({
+  trex: Object.freeze({ frame: 0, width: 58, height: 54 }),
+  stegosaurus: Object.freeze({ frame: 1, width: 58, height: 54 }),
+  robot: Object.freeze({ frame: 2, width: 46, height: 58 }),
+  rocket: Object.freeze({ frame: 3, width: 44, height: 60 }),
+});
+
 function ellipse(ctx, x, y, rx, ry, fill, stroke = null, lineWidth = 1) {
   ctx.beginPath();
   ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
@@ -154,6 +163,29 @@ const MODEL_PAINTERS = Object.freeze({
   rocket: drawRocket,
 });
 
+function drawProductionModel(ctx, type, image) {
+  const presentation = PRINTED_MODEL_SPRITES[type];
+  if (!presentation || !image?.naturalWidth || !image?.naturalHeight) return false;
+  const sourceWidth = image.naturalWidth / 4;
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ellipse(ctx, 0, 4, presentation.width * 0.42, presentation.height * 0.11, 'rgba(18,15,12,.34)');
+  ctx.drawImage(
+    image,
+    sourceWidth * presentation.frame,
+    0,
+    sourceWidth,
+    image.naturalHeight,
+    -presentation.width * 0.5,
+    -presentation.height + 6,
+    presentation.width,
+    presentation.height,
+  );
+  ctx.restore();
+  return true;
+}
+
 export function drawPrintedModel(ctx, model, worldTime = 0) {
   const paint = MODEL_PAINTERS[model.type];
   if (!paint) return;
@@ -163,8 +195,11 @@ export function drawPrintedModel(ctx, model, worldTime = 0) {
   const bounce = Math.sin(entrance * Math.PI) * 5;
   ctx.translate(0, -bounce);
   ctx.scale(0.72 + entrance * 0.28, 0.72 + entrance * 0.28);
-  drawPedestal(ctx, model.color || '#d8dde2');
-  paint(ctx, model.color || '#d8dde2');
+  const productionArt = getProductionArt('printedCollectibles');
+  if (!drawProductionModel(ctx, model.type, productionArt)) {
+    drawPedestal(ctx, model.color || '#d8dde2');
+    paint(ctx, model.color || '#d8dde2');
+  }
   if (entrance < 1) {
     ctx.globalCompositeOperation = 'screen';
     ellipse(ctx, 0, -14, 22 + entrance * 7, 15 + entrance * 5, `rgba(95,220,255,${(1 - entrance) * 0.34})`);
