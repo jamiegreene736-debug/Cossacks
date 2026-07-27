@@ -12,6 +12,7 @@ import {
 import {
   getBuildingPresentation, getBuildingProductionArtSpec,
 } from '../js/gfx/buildings.js';
+import { PRINTED_MODEL_SPRITES } from '../js/gfx/printed-models.js';
 import { createGameSnapshot, restoreGameSnapshot } from '../js/savegame.js';
 import { createWorld } from '../js/sim.js';
 
@@ -43,6 +44,25 @@ test('the 3D Printing Shop is universal, substantial, and uses one production ar
   assert.ok(png.readUInt32BE(16) >= 1000);
   assert.ok(png.readUInt32BE(20) >= 600);
   assert.equal(png[25], 6, 'production PNG should contain true RGBA transparency');
+});
+
+test('printed collectibles use a substantial transparent four-frame production atlas', async () => {
+  const assetUrl = new URL('../assets/items/printed-collectibles.png', import.meta.url);
+  const [metadata, png] = await Promise.all([stat(assetUrl), readFile(assetUrl)]);
+
+  assert.ok(metadata.size > 500_000, 'collectibles should retain detailed production pixels');
+  assert.equal(png.toString('ascii', 1, 4), 'PNG');
+  assert.ok(png.readUInt32BE(16) >= 1900);
+  assert.ok(png.readUInt32BE(20) >= 750);
+  assert.equal(png[25], 6, 'collectible atlas should contain RGBA transparency');
+  assert.deepEqual(
+    Object.values(PRINTED_MODEL_SPRITES).map(sprite => sprite.frame),
+    [0, 1, 2, 3],
+  );
+  for (const sprite of Object.values(PRINTED_MODEL_SPRITES)) {
+    assert.ok(sprite.width >= 44);
+    assert.ok(sprite.height >= 54);
+  }
 });
 
 test('print jobs charge resources, progress in order, and make persistent collectibles', () => {

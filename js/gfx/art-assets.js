@@ -155,6 +155,7 @@ function getProductionFrameSlice(sourceW, sourceFrame, frameXBounds, destW) {
 
 const ART_URLS = Object.freeze({
   universalPrinterShop: new URL('../../assets/buildings/universal-3d-printing-shop.png', import.meta.url).href,
+  printedCollectibles: new URL('../../assets/items/printed-collectibles.png', import.meta.url).href,
   englishTownCenter: new URL('../../assets/buildings/english-town-center.png', import.meta.url).href,
   englishHouse: new URL('../../assets/buildings/english-house.webp', import.meta.url).href,
   englishCottage: new URL('../../assets/buildings/english-cottage.webp', import.meta.url).href,

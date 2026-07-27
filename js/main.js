@@ -309,8 +309,8 @@ function setupLocalPrintingShopPreview(activeWorld) {
   activeWorld.sides[0].resources.stone = 1000;
   const models = ['trex', 'stegosaurus', 'robot', 'rocket'];
   const positions = [
-    { x: 1000, y: 1670 }, { x: 1105, y: 1715 },
-    { x: 1215, y: 1715 }, { x: 1320, y: 1670 },
+    { x: 960, y: 1570 }, { x: 1085, y: 1570 },
+    { x: 1235, y: 1570 }, { x: 1360, y: 1570 },
   ];
   activeWorld.printedModels = models.map((type, index) => ({
     id: 990000 + index,

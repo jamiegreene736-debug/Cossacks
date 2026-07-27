@@ -1416,7 +1416,7 @@ export function draw(
     if (building.type === 'wall_stairs') drawBuilding(building, world);
   }
   for (const model of world.printedModels || []) {
-    if (circleIntersectsBounds(model, visibleWorld, 34)) drawPrintedModel(ctx, model, world.time);
+    if (circleIntersectsBounds(model, visibleWorld, 48)) drawPrintedModel(ctx, model, world.time);
   }
   for (const destruction of world.destructions || []) {
     if (circleIntersectsBounds(destruction, visibleWorld, 190)) {
