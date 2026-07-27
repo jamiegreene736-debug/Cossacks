@@ -11,9 +11,9 @@ export const WITCH_FLIGHT_FRAME = Object.freeze({
   land: 7,
 });
 
-export const WITCH_FLIGHT_HEIGHT = 16;
-export const WITCH_HOVER_HEIGHT = 13;
-export const WITCH_BANK_LIMIT = 0.14;
+export const WITCH_FLIGHT_HEIGHT = 20;
+export const WITCH_HOVER_HEIGHT = 16;
+export const WITCH_BANK_LIMIT = 0.22;
 
 export function isBroomWitch(unit) {
   return unit?.unitType === 'witch_worker' || unit?.unitType === 'witch_duelist'
@@ -220,18 +220,29 @@ export function getWitchFlightVisual(unit, alpha = 1) {
   const height = unit.pFlightHeight + (unit.flightHeight - unit.pFlightHeight) * alpha;
   const bank = unit.pFlightBank + (unit.flightBank - unit.pFlightBank) * alpha;
   const airborne = clamp(height / WITCH_FLIGHT_HEIGHT, 0, 1);
-  const hover = Math.sin(unit.flightTime * 2.2 + unit.id * 0.73) * 0.42 * airborne;
+  const hover = Math.sin(unit.flightTime * 2.35 + unit.id * 0.73) * 0.72 * airborne;
+  const cloakSway = Math.sin(unit.flightTime * 3.8 + unit.id * 0.41) * 0.32 * airborne;
   const speed = Math.hypot(unit.flightVx, unit.flightVy);
   const cruiseStretch = clamp(speed / Math.max(1, unit.speed), 0, 1);
+  const casting = unit.fireT > 0;
+  const trailAlpha = airborne * (0.28 + cruiseStretch * 0.42 + (casting ? 0.2 : 0));
+  const trailLength = airborne * (8 + cruiseStretch * 24 + (casting ? 10 : 0));
+  const silhouetteAlpha = airborne * (0.82 + cruiseStretch * 0.12 + (casting ? 0.06 : 0));
   return {
     height,
+    airborne,
+    speedRatio: cruiseStretch,
+    castGlow: casting ? Math.min(1, unit.fireT * 5) : 0,
+    trailAlpha,
+    trailLength,
+    silhouetteAlpha,
     motion: {
       phase: 0,
-      shiftX: 0,
+      shiftX: cloakSway,
       shiftY: hover,
-      rotation: bank,
-      scaleX: 1 + cruiseStretch * 0.008,
-      scaleY: 1 - cruiseStretch * 0.006,
+      rotation: bank * 1.18,
+      scaleX: 1 + cruiseStretch * 0.025,
+      scaleY: 1 - cruiseStretch * 0.018,
       headShiftX: 0,
       headShiftY: -hover * 0.32,
       headRotation: -bank * 0.38,

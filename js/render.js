@@ -665,8 +665,8 @@ function buildFactionCharacterDefs(nationKey, side, nat) {
         sourceW: WITCH_BROOM_ART_SPEC.sourceW,
         sourceH: WITCH_BROOM_ART_SPEC.sourceH,
         sourceRow: 0,
-        destW: 72,
-        destH: 54,
+        destW: 96,
+        destH: 72,
       } : null,
       frames,
       painter: worker
@@ -690,10 +690,10 @@ export function getFactionCharacterPresentation(unitType) {
   } : equipment ? MILITARY_ART_SPECS.gun
     : mounted ? MILITARY_ART_SPECS.cav
       : MILITARY_ART_SPECS.musk;
-  const w = broomWitch ? 72 : frame.w;
-  const h = broomWitch ? 54 : frame.h;
-  const ax = broomWitch ? 36 : frame.ax;
-  const ay = broomWitch ? 49 : frame.ay;
+  const w = broomWitch ? 96 : frame.w;
+  const h = broomWitch ? 72 : frame.h;
+  const ax = broomWitch ? 48 : frame.ax;
+  const ay = broomWitch ? 65 : frame.ay;
 
   return {
     worker,
@@ -1003,19 +1003,184 @@ function drawWitchFlightShadow(context, unit, alpha, viewRotation) {
   if (visual.height <= 0.12) return;
   const x = unit.px + (unit.x - unit.px) * alpha;
   const y = unit.py + (unit.y - unit.py) * alpha;
-  const heightRatio = Math.max(0, Math.min(1, visual.height / 22));
+  const heightRatio = Math.max(0, Math.min(1, visual.height / 26));
   context.save();
-  context.translate(x + 3.5 + heightRatio * 2.5, y + 2.2 + heightRatio * 1.8);
+  context.translate(x + 4.5 + heightRatio * 3.2, y + 2.8 + heightRatio * 2.4);
   context.rotate(-viewRotation);
-  context.scale(1 - heightRatio * 0.16, 1 - heightRatio * 0.08);
-  const shadow = context.createRadialGradient(0, 0, 1, 0, 0, 24);
-  shadow.addColorStop(0, `rgba(24,28,40,${0.34 - heightRatio * 0.11})`);
-  shadow.addColorStop(0.52, `rgba(24,28,40,${0.18 - heightRatio * 0.07})`);
+  context.scale(1 - heightRatio * 0.18, 1 - heightRatio * 0.10);
+  const shadow = context.createRadialGradient(0, 0, 1, 0, 0, 32);
+  shadow.addColorStop(0, `rgba(16,18,28,${0.36 - heightRatio * 0.12})`);
+  shadow.addColorStop(0.45, `rgba(24,28,40,${0.20 - heightRatio * 0.07})`);
   shadow.addColorStop(1, 'rgba(24,28,40,0)');
   context.fillStyle = shadow;
   context.beginPath();
-  context.ellipse(0, 0, 25, 5.2, 0.08, 0, Math.PI * 2);
+  context.ellipse(0, 0, 31, 6.4, 0.08, 0, Math.PI * 2);
   context.fill();
+  context.globalAlpha = 0.36 + visual.speedRatio * 0.16;
+  context.strokeStyle = 'rgba(83, 68, 115, 0.42)';
+  context.lineWidth = 0.8;
+  context.beginPath();
+  context.ellipse(0, 0.2, 23, 4.4, 0.08, 0, Math.PI * 2);
+  context.stroke();
+  context.restore();
+}
+
+function drawWitchFlightAtmospherics(context, sprite, visual, visualFacing) {
+  if (!visual || visual.airborne <= 0.05) return;
+  const facing = visualFacing >= 0 ? 1 : -1;
+  const wakeAlpha = Math.max(0, Math.min(0.72, visual.trailAlpha || 0));
+  const wakeLength = Math.max(0, visual.trailLength || 0);
+  const broomY = -sprite.ay + sprite.h * 0.66;
+  const trailX = -facing * (sprite.w * 0.28);
+  const glowX = facing * (sprite.w * 0.12);
+  context.save();
+  context.globalCompositeOperation = 'lighter';
+
+  if (wakeLength > 2 && wakeAlpha > 0.02) {
+    for (let band = 0; band < 3; band++) {
+      const t = band / 2;
+      const bandY = broomY + (band - 1) * 2.2;
+      const grad = context.createLinearGradient(
+        trailX - facing * wakeLength,
+        bandY,
+        trailX + facing * 12,
+        bandY,
+      );
+      grad.addColorStop(0, `rgba(67, 255, 214, 0)`);
+      grad.addColorStop(0.35, `rgba(80, 236, 223, ${wakeAlpha * (0.24 - t * 0.045)})`);
+      grad.addColorStop(0.72, `rgba(180, 90, 238, ${wakeAlpha * (0.18 - t * 0.03)})`);
+      grad.addColorStop(1, 'rgba(255, 248, 190, 0)');
+      context.strokeStyle = grad;
+      context.lineWidth = 1.15 - band * 0.18;
+      context.beginPath();
+      context.moveTo(trailX - facing * wakeLength, bandY + Math.sin(band) * 1.3);
+      context.bezierCurveTo(
+        trailX - facing * wakeLength * 0.56,
+        bandY - 4 + band * 1.8,
+        trailX - facing * wakeLength * 0.18,
+        bandY + 3 - band,
+        trailX + facing * 9,
+        bandY,
+      );
+      context.stroke();
+    }
+  }
+
+  const glowRadius = 18 + visual.airborne * 7 + visual.castGlow * 10;
+  const glow = context.createRadialGradient(glowX, broomY - 1, 1, glowX, broomY - 1, glowRadius);
+  glow.addColorStop(0, `rgba(255, 246, 177, ${0.16 + visual.castGlow * 0.2})`);
+  glow.addColorStop(0.38, `rgba(92, 234, 205, ${0.09 + visual.speedRatio * 0.08})`);
+  glow.addColorStop(0.72, `rgba(132, 78, 188, ${0.06 + visual.castGlow * 0.08})`);
+  glow.addColorStop(1, 'rgba(132, 78, 188, 0)');
+  context.fillStyle = glow;
+  context.beginPath();
+  context.ellipse(glowX, broomY - 1, glowRadius * 1.2, glowRadius * 0.42, -facing * 0.12, 0, Math.PI * 2);
+  context.fill();
+
+  context.fillStyle = `rgba(240, 246, 176, ${0.18 + visual.castGlow * 0.24})`;
+  const moteCount = 4 + Math.round(visual.speedRatio * 3);
+  for (let index = 0; index < moteCount; index++) {
+    const seed = (index * 1.618 + visual.airborne * 3.1) % 1;
+    const mx = trailX - facing * (5 + seed * Math.max(8, wakeLength));
+    const my = broomY - 7 + Math.sin(seed * Math.PI * 2) * 8;
+    const radius = 0.45 + (index % 3) * 0.16;
+    context.beginPath();
+    context.arc(mx, my, radius, 0, Math.PI * 2);
+    context.fill();
+  }
+  context.restore();
+}
+
+function drawWitchFlightDetailOverlay(context, sprite, visual, visualFacing) {
+  if (!visual || visual.airborne <= 0.08) return;
+  const facing = visualFacing >= 0 ? 1 : -1;
+  const alpha = Math.max(0, Math.min(0.98, visual.silhouetteAlpha || 0));
+  if (alpha <= 0.03) return;
+  const broomY = -sprite.ay + sprite.h * 0.66;
+  const motion = visual.motion;
+
+  context.save();
+  context.translate(motion.shiftX, motion.shiftY);
+  context.rotate(motion.rotation);
+  context.scale(motion.scaleX, motion.scaleY);
+  context.lineCap = 'round';
+  context.lineJoin = 'round';
+  context.scale(1.22, 1.22);
+
+  context.globalAlpha = alpha * 0.96;
+  context.strokeStyle = 'rgba(12, 10, 16, 0.92)';
+  context.lineWidth = 7.8;
+  context.beginPath();
+  context.moveTo(-facing * 35, broomY + 2);
+  context.bezierCurveTo(-facing * 13, broomY - 3, facing * 11, broomY - 4, facing * 35, broomY - 8);
+  context.stroke();
+
+  const broomGlow = context.createLinearGradient(-facing * 34, broomY, facing * 36, broomY - 9);
+  broomGlow.addColorStop(0, `rgba(88, 54, 31, ${0.42 * alpha})`);
+  broomGlow.addColorStop(0.55, `rgba(188, 138, 65, ${0.78 * alpha})`);
+  broomGlow.addColorStop(1, `rgba(248, 213, 119, ${0.68 * alpha})`);
+  context.globalAlpha = 1;
+  context.strokeStyle = broomGlow;
+  context.lineWidth = 2.65;
+  context.beginPath();
+  context.moveTo(-facing * 35, broomY + 2);
+  context.bezierCurveTo(-facing * 13, broomY - 3, facing * 11, broomY - 4, facing * 35, broomY - 8);
+  context.stroke();
+
+  context.globalAlpha = alpha;
+  context.strokeStyle = 'rgba(116, 78, 42, 0.75)';
+  context.lineWidth = 1.15;
+  for (let strand = -2; strand <= 2; strand++) {
+    context.beginPath();
+    context.moveTo(-facing * (35 + Math.abs(strand) * 1.4), broomY + strand * 1.7);
+    context.lineTo(-facing * (47 + Math.abs(strand) * 1.8), broomY + 2 + strand * 2.9);
+    context.stroke();
+  }
+
+  const cloak = context.createLinearGradient(-facing * 18, broomY - 32, facing * 23, broomY - 5);
+  cloak.addColorStop(0, `rgba(10, 10, 16, ${alpha})`);
+  cloak.addColorStop(0.55, `rgba(26, 22, 42, ${alpha})`);
+  cloak.addColorStop(1, `rgba(76, 35, 91, ${0.9 * alpha})`);
+  context.fillStyle = cloak;
+  context.strokeStyle = `rgba(219, 198, 139, ${0.28 * alpha})`;
+  context.lineWidth = 1;
+  context.beginPath();
+  context.moveTo(facing * 14, broomY - 34);
+  context.bezierCurveTo(facing * 5, broomY - 37, -facing * 11, broomY - 31, -facing * 25, broomY - 17);
+  context.bezierCurveTo(-facing * 13, broomY - 9, facing * 7, broomY - 8, facing * 22, broomY - 15);
+  context.bezierCurveTo(facing * 25, broomY - 24, facing * 21, broomY - 31, facing * 14, broomY - 34);
+  context.fill();
+  context.stroke();
+
+  context.fillStyle = `rgba(20, 18, 25, ${alpha})`;
+  context.strokeStyle = `rgba(202, 176, 116, ${0.36 * alpha})`;
+  context.beginPath();
+  context.ellipse(facing * 12, broomY - 31, 7.2, 8.6, -facing * 0.14, 0, Math.PI * 2);
+  context.fill();
+  context.stroke();
+
+  context.fillStyle = `rgba(22, 19, 31, ${alpha})`;
+  context.strokeStyle = `rgba(187, 156, 94, ${0.34 * alpha})`;
+  context.beginPath();
+  context.moveTo(facing * 4, broomY - 38);
+  context.lineTo(facing * 13, broomY - 56);
+  context.lineTo(facing * 22, broomY - 38);
+  context.quadraticCurveTo(facing * 13, broomY - 34, facing * 4, broomY - 38);
+  context.fill();
+  context.stroke();
+
+  context.fillStyle = `rgba(245, 220, 138, ${0.58 * alpha})`;
+  context.beginPath();
+  context.ellipse(facing * 17.5, broomY - 33.5, 1.55, 1.1, -facing * 0.2, 0, Math.PI * 2);
+  context.fill();
+
+  context.strokeStyle = `rgba(101, 234, 210, ${0.22 * alpha + visual.castGlow * 0.24})`;
+  context.lineWidth = 0.9;
+  context.beginPath();
+  context.moveTo(-facing * 15, broomY - 14);
+  context.bezierCurveTo(-facing * 7, broomY - 19, facing * 10, broomY - 19, facing * 25, broomY - 26);
+  context.stroke();
+
   context.restore();
 }
 
@@ -1415,12 +1580,21 @@ export function draw(
     ctx.save();
     ctx.translate(ix, iy);
     ctx.rotate(-rotation);
-    drawAnimatedCharacterFrame(
-      ctx,
-      sp.frames[dir][frame],
-      sp,
-      witchVisual?.motion || getCharacterMotion(u, visualFacing),
-    );
+    if (witchVisual) drawWitchFlightAtmospherics(ctx, sp, witchVisual, visualFacing);
+    if (witchVisual && witchVisual.airborne > 0.12) {
+      ctx.save();
+      ctx.globalAlpha = 0.16 + witchVisual.speedRatio * 0.05;
+      drawAnimatedCharacterFrame(ctx, sp.frames[dir][frame], sp, witchVisual.motion);
+      ctx.restore();
+      drawWitchFlightDetailOverlay(ctx, sp, witchVisual, visualFacing);
+    } else {
+      drawAnimatedCharacterFrame(
+        ctx,
+        sp.frames[dir][frame],
+        sp,
+        witchVisual?.motion || getCharacterMotion(u, visualFacing),
+      );
+    }
     drawThrowingTorch(u, 0, 0, visualFacing);
     drawStarWarsEnergyBlade(u, visualFacing);
     ctx.restore();

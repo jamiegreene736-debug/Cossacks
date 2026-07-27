@@ -8,8 +8,8 @@ import { createGameSnapshot, restoreGameSnapshot } from '../js/savegame.js';
 import { createWorld, spawnUnit, step } from '../js/sim.js';
 import {
   WITCH_BANK_LIMIT, WITCH_FLIGHT_FRAME, WITCH_FLIGHT_HEIGHT,
-  getWitchFlightFrame, isBroomWitch, isWitchGrounded, moveBroomWitch,
-  smoothDamp, stepWitchFlight,
+  getWitchFlightFrame, getWitchFlightVisual, isBroomWitch, isWitchGrounded,
+  moveBroomWitch, smoothDamp, stepWitchFlight,
 } from '../js/witch-flight.js';
 
 function factionWorld() {
@@ -45,7 +45,7 @@ test('the flight spring approaches altitude without overshooting', () => {
 
 test('witch travel accelerates into flight without advancing a foot gait', () => {
   const world = factionWorld();
-  const witch = spawnUnit(world, 2, 'witch_duelist', 2000, 1200);
+  const witch = spawnUnit(world, 2, 'witch_duelist', 2300, 900);
   witch.gaitDistance = 17;
   witch.orderX = witch.x + 700;
   witch.orderY = witch.y;
@@ -84,6 +84,37 @@ test('turning produces a bounded bank and braking returns it to level flight', (
   for (let tick = 0; tick < 45; tick++) stepWitchFlight(witch, 1 / 30);
   assert.ok(Math.abs(witch.flightBank) < 0.002);
   assert.equal(witch.flightState, 'hover');
+});
+
+test('airborne witches expose a readable wake, hover, and scale visual contract', () => {
+  const witch = {
+    id: 77,
+    unitType: 'witch_duelist',
+    type: 'witch_duelist',
+    speed: 50,
+    facing: 1,
+    x: 100,
+    y: 100,
+    moving: true,
+    fireT: 0,
+    state: 'move',
+    flightHeight: WITCH_FLIGHT_HEIGHT,
+    pFlightHeight: WITCH_FLIGHT_HEIGHT,
+    flightVx: 48,
+    flightVy: 0,
+    flightBank: WITCH_BANK_LIMIT * 0.7,
+    pFlightBank: WITCH_BANK_LIMIT * 0.6,
+    flightTime: 0.8,
+  };
+  const visual = getWitchFlightVisual(witch, 0.5);
+  assert.ok(visual.airborne > 0.95);
+  assert.ok(visual.speedRatio > 0.9);
+  assert.ok(visual.trailLength >= 28);
+  assert.ok(visual.trailAlpha >= 0.6);
+  assert.ok(visual.silhouetteAlpha > 0.65);
+  assert.ok(Math.abs(visual.motion.rotation) > WITCH_BANK_LIMIT * 0.65);
+  assert.ok(visual.motion.scaleX > 1.02);
+  assert.ok(visual.motion.scaleY < 0.99);
 });
 
 test('witch workers land before beginning an assigned economic action', () => {
