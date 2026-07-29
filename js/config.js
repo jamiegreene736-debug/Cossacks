@@ -476,20 +476,20 @@ export const BUILDING_TYPES = {
   hogwarts_station_constructor: {
     label: 'Hogwarts Station Blueprint',
     description: 'A villager-placed constructor that unfolds into a complete Hogwarts Express station.',
-    w: 64, h: 48, radius: 38, visualScale: 1.12, hp: 520, buildTime: 9,
+    w: 64, h: 48, radius: 38, visualScale: 1.25, hp: 520, buildTime: 9,
     cost: { wood: 120, gold: 80, stone: 50 },
     stationConstructor: true, peacefulCivic: true, buildNations: ['england', 'hogwarts'], hotkey: 'E',
   },
   hogwarts_station: {
     label: 'Hogwarts Express Station',
     description: 'Red-brick Victorian station with platform, canopy, lamps, signage, and a train ready to depart.',
-    w: 292, h: 150, radius: 152, visualScale: 1.08, hp: 3200, buildTime: 0,
+    w: 292, h: 150, radius: 152, visualScale: 1.25, hp: 3200, buildTime: 0,
     cost: {}, station: true, peacefulCivic: true, generatedOnly: true,
   },
   hogwarts_track: {
     label: 'Hogwarts Rail Segment',
     description: 'Modular rail bed that snaps to the station or another completed rail segment.',
-    w: 96, h: 22, radius: 50, visualScale: 1, hp: 430, buildTime: 5,
+    w: 96, h: 22, radius: 50, visualScale: 1.25, hp: 430, buildTime: 5,
     cost: { wood: 30, stone: 20 }, rail: true, peacefulCivic: true, hotkey: 'T',
   },
   tower: {
