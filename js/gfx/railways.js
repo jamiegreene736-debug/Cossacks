@@ -8,6 +8,14 @@ function clamp01(value) {
   return Math.max(0, Math.min(1, value));
 }
 
+function hashUnit(seed) {
+  return Math.abs(Math.sin(seed * 12.9898) * 43758.5453) % 1;
+}
+
+function nightAmount(worldTime = 0) {
+  return clamp01(0.48 + Math.sin((worldTime || 0) * 0.035 - 1.15) * 0.42);
+}
+
 function ellipse(ctx, x, y, rx, ry, fill, stroke = null, width = 1) {
   ctx.beginPath();
   ctx.ellipse(x, y, rx, ry, 0, 0, TAU);
@@ -41,6 +49,33 @@ function line(ctx, x0, y0, x1, y1, stroke, width = 1) {
   ctx.stroke();
 }
 
+function fillRadial(ctx, x, y, inner, outer, stops, scaleY = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(1, scaleY);
+  const grad = ctx.createRadialGradient(0, 0, inner, 0, 0, outer);
+  for (const [at, color] of stops) grad.addColorStop(at, color);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(0, 0, outer, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+}
+
+function lightCone(ctx, x, y, length, halfWidth, colorNear, colorFar) {
+  const grad = ctx.createLinearGradient(x, y, x + length, y);
+  grad.addColorStop(0, colorNear);
+  grad.addColorStop(1, colorFar);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(x, y - 5);
+  ctx.lineTo(x + length, y - halfWidth);
+  ctx.lineTo(x + length, y + halfWidth);
+  ctx.lineTo(x, y + 5);
+  ctx.closePath();
+  ctx.fill();
+}
+
 function metalGradient(ctx, x, y, w, h, dark = '#242323', mid = '#85827b', light = '#e3dac5') {
   const grad = ctx.createLinearGradient(x, y, x, y + h);
   grad.addColorStop(0, light);
@@ -70,6 +105,60 @@ function drawRivets(ctx, x0, x1, y, spacing = 8, radius = 1.1) {
     ctx.fill();
     ctx.stroke();
   }
+}
+
+function drawDustMotes(ctx, seed, worldTime, bounds, tint = '255,226,156', count = 34) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  for (let i = 0; i < count; i += 1) {
+    const px = bounds.x + hashUnit(seed + i * 9.7) * bounds.w;
+    const baseY = bounds.y + hashUnit(seed + i * 13.3) * bounds.h;
+    const drift = Math.sin(worldTime * (0.34 + hashUnit(seed + i) * 0.18) + i) * 6;
+    const pulse = 0.45 + Math.sin(worldTime * 1.2 + i * 2.4) * 0.35;
+    const alpha = (0.025 + hashUnit(seed + i * 3.1) * 0.055) * pulse;
+    ellipse(ctx, px + drift, baseY - (worldTime * (1.5 + hashUnit(seed + i * 4)) % 24), 1.2, 0.75,
+      `rgba(${tint},${alpha})`);
+  }
+  ctx.restore();
+}
+
+function drawGroundFog(ctx, seed, worldTime, x, y, w, h, intensity = 1) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  for (let i = 0; i < 9; i += 1) {
+    const u = hashUnit(seed + i * 4.7);
+    const drift = (worldTime * (7 + i * 0.8) + u * 80) % (w + 70);
+    const alpha = (0.035 + u * 0.025) * intensity;
+    ellipse(ctx, x - 35 + drift, y + hashUnit(seed + i * 8.2) * h, 38 + u * 28, 7 + u * 6,
+      `rgba(206,219,218,${alpha})`);
+  }
+  ctx.restore();
+}
+
+function drawLanternPool(ctx, x, y, strength = 1) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  fillRadial(ctx, x, y, 3, 64 * strength, [
+    [0, 'rgba(255,215,126,.28)'],
+    [0.42, 'rgba(255,185,82,.11)'],
+    [1, 'rgba(255,185,82,0)'],
+  ], 0.45);
+  ctx.restore();
+}
+
+function drawCanopyRay(ctx, x0, y0, x1, y1, width, phase, alpha) {
+  const grad = ctx.createLinearGradient(x0, y0, x1, y1);
+  grad.addColorStop(0, `rgba(255,229,163,${alpha})`);
+  grad.addColorStop(0.55, `rgba(255,206,113,${alpha * 0.35})`);
+  grad.addColorStop(1, 'rgba(255,206,113,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(x0 - width * 0.22, y0);
+  ctx.lineTo(x0 + width * 0.22, y0);
+  ctx.lineTo(x1 + Math.sin(phase) * 9 + width, y1);
+  ctx.lineTo(x1 + Math.sin(phase) * 9 - width, y1);
+  ctx.closePath();
+  ctx.fill();
 }
 
 function drawWeatheredPanel(ctx, x, y, w, h, color) {
@@ -163,7 +252,7 @@ function drawCanopy(ctx, x, y, w, depth) {
   }
 }
 
-export function drawRailSegment(ctx, track) {
+export function drawRailSegment(ctx, track, worldTime = 0) {
   if (!track?.alive) return;
   ctx.save();
   ctx.translate(track.x, track.y);
@@ -171,15 +260,24 @@ export function drawRailSegment(ctx, track) {
   const half = TRACK_LENGTH * 0.5;
   const complete = track.complete !== false;
   const progress = complete ? 1 : clamp01(track.progress || 0.08);
+  const night = nightAmount(worldTime);
 
-  ctx.fillStyle = 'rgba(20,15,12,.28)';
+  ctx.fillStyle = `rgba(8,6,6,${0.24 + night * 0.16})`;
   ctx.beginPath();
   ctx.moveTo(-half - 4, -18);
   ctx.lineTo(half + 4, -18);
-  ctx.lineTo(half + 12, 18);
-  ctx.lineTo(-half - 12, 18);
+  ctx.lineTo(half + 18, 21);
+  ctx.lineTo(-half - 18, 21);
   ctx.closePath();
   ctx.fill();
+
+  ctx.globalCompositeOperation = 'screen';
+  fillRadial(ctx, 0, 4, 3, 84, [
+    [0, `rgba(102,132,156,${0.06 * night})`],
+    [0.55, `rgba(74,99,128,${0.028 * night})`],
+    [1, 'rgba(74,99,128,0)'],
+  ], 0.24);
+  ctx.globalCompositeOperation = 'source-over';
 
   const ballast = ctx.createLinearGradient(0, -18, 0, 18);
   ballast.addColorStop(0, '#8c8170');
@@ -210,6 +308,8 @@ export function drawRailSegment(ctx, track) {
     ctx.lineTo(-half + TRACK_LENGTH * progress, y);
     ctx.stroke();
     line(ctx, -half, y - 2.3, -half + TRACK_LENGTH * progress, y - 2.3, 'rgba(255,244,211,.58)', 0.85);
+    line(ctx, -half, y - 4.3, -half + TRACK_LENGTH * progress, y - 4.3,
+      `rgba(178,214,255,${0.09 + night * 0.18})`, 0.65);
   }
 
   ctx.fillStyle = 'rgba(30,22,15,.5)';
@@ -219,6 +319,17 @@ export function drawRailSegment(ctx, track) {
       ellipse(ctx, x + 2.2, y, 1.2, 0.9, '#22201f');
     }
   }
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  for (let i = 0; i < 12; i += 1) {
+    const seed = (track.id || 0) * 17 + i * 11;
+    const x = -half + hashUnit(seed) * TRACK_LENGTH * progress;
+    const y = -13 + hashUnit(seed + 2.1) * 26;
+    const flicker = 0.55 + Math.sin(worldTime * 2.4 + i) * 0.35;
+    ellipse(ctx, x + Math.sin(worldTime + i) * 1.8, y, 0.9, 0.55,
+      `rgba(214,226,220,${(0.018 + night * 0.022) * flicker})`);
+  }
+  ctx.restore();
   ctx.restore();
 }
 
@@ -239,9 +350,11 @@ function drawLamp(ctx, x, y, worldTime) {
   line(ctx, x, y, x, y - 64, '#1d2224', 2.1);
   line(ctx, x - 8, y - 43, x + 8, y - 43, '#1d2224', 1.1);
   const glow = 0.68 + Math.sin(worldTime * 2.1 + x) * 0.08;
+  drawLanternPool(ctx, x, y - 28, 0.86 + nightAmount(worldTime) * 0.44);
   ellipse(ctx, x, y - 68, 7, 9, `rgba(255,224,138,${glow})`, '#5a421d', 1);
   ctx.globalCompositeOperation = 'screen';
-  ellipse(ctx, x, y - 68, 24, 19, 'rgba(255,212,104,.12)');
+  ellipse(ctx, x, y - 68, 29, 23, `rgba(255,212,104,${0.12 + nightAmount(worldTime) * 0.1})`);
+  ellipse(ctx, x, y - 58, 18, 40, `rgba(255,188,85,${0.045 + nightAmount(worldTime) * 0.045})`);
   ctx.globalCompositeOperation = 'source-over';
 }
 
@@ -257,7 +370,27 @@ export function drawHogwartsStation(ctx, station, worldTime = 0) {
   ctx.save();
   ctx.translate(station.x, station.y);
   ctx.rotate(station.rotation || 0);
-  ellipse(ctx, 8, 66, 182, 44, 'rgba(20,15,11,.27)');
+  const night = nightAmount(worldTime);
+  ellipse(ctx, 8, 68, 191, 49, `rgba(10,8,8,${0.28 + night * 0.15})`);
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  fillRadial(ctx, 15, -34, 12, 260, [
+    [0, `rgba(67,96,135,${0.12 * night})`],
+    [0.54, `rgba(62,87,122,${0.052 * night})`],
+    [1, 'rgba(62,87,122,0)'],
+  ], 0.36);
+  fillRadial(ctx, -112, 30, 2, 72, [
+    [0, `rgba(255,195,83,${0.12 + night * 0.18})`],
+    [0.52, `rgba(255,176,70,${0.045 + night * 0.07})`],
+    [1, 'rgba(255,176,70,0)'],
+  ], 0.35);
+  fillRadial(ctx, 111, 30, 2, 78, [
+    [0, `rgba(255,195,83,${0.11 + night * 0.17})`],
+    [0.52, `rgba(255,176,70,${0.04 + night * 0.07})`],
+    [1, 'rgba(255,176,70,0)'],
+  ], 0.35);
+  ctx.restore();
+  drawGroundFog(ctx, (station.id || 0) * 21, worldTime, -183, 51, 382, 31, 0.78 + night * 0.75);
   drawPlatformTiles(ctx, -170, 27, 354, 34);
   drawPlatformTiles(ctx, -164, 62, 344, 11);
 
@@ -274,6 +407,13 @@ export function drawHogwartsStation(ctx, station, worldTime = 0) {
   archedWindow(ctx, -74, -50, 20, 34);
   archedWindow(ctx, 48, -40, 16, 28);
   archedWindow(ctx, 78, -40, 16, 28);
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  for (const [i, x] of [-118, -64, -3, 56, 116].entries()) {
+    drawCanopyRay(ctx, x, -32, x + 28, 72, 17 + i * 2, worldTime * 0.7 + i,
+      (0.022 + night * 0.047) * (0.8 + Math.sin(worldTime + i) * 0.16));
+  }
+  ctx.restore();
   drawCanopy(ctx, -155, -20, 326, 52);
 
   roundedRect(ctx, -33, -80, 91, 20, 2, '#221f1b', '#d6b45c', 1.2);
@@ -281,6 +421,12 @@ export function drawHogwartsStation(ctx, station, worldTime = 0) {
   ctx.font = 'bold 10px Georgia, serif';
   ctx.textAlign = 'center';
   ctx.fillText('HOGWARTS EXPRESS', 12, -67);
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ellipse(ctx, 12, -69, 74, 16, `rgba(255,213,103,${0.045 + night * 0.055})`);
+  drawDustMotes(ctx, (station.id || 0) * 31 + 7, worldTime, { x: -35, y: -91, w: 96, h: 31 },
+    '255,213,112', 20);
+  ctx.restore();
   roundedRect(ctx, 92, -78, 40, 18, 2, '#3b1715', '#d6b45c', 1);
   ctx.fillStyle = '#f5e6b4';
   ctx.font = 'bold 8px Georgia, serif';
@@ -293,6 +439,8 @@ export function drawHogwartsStation(ctx, station, worldTime = 0) {
   ellipse(ctx, 9.5, -25, 9, 9, 'rgba(246,230,174,.22)', '#d0ba7a', 0.8);
 
   for (const x of [-137, -83, -28, 43, 103, 151]) drawLamp(ctx, x, 35, worldTime);
+  drawDustMotes(ctx, (station.id || 0) * 17, worldTime, { x: -162, y: -22, w: 333, h: 90 },
+    '255,224,164', 46);
   ctx.fillStyle = '#4b2e22';
   for (const x of [-116, -55, 62]) {
     roundedRect(ctx, x, 17, 38, 7, 2, '#533321', 'rgba(24,13,8,.7)', 0.8);
@@ -419,18 +567,90 @@ function drawCoach(ctx, offset, phase, index) {
 
 function drawSteam(ctx, train, worldTime, chimneyX) {
   const speed = Math.max(0, train.visualSpeed || 0);
-  const intensity = 0.35 + Math.min(1.2, speed / 48);
+  const intensity = 0.42 + Math.min(1.45, speed / 42);
   const baseX = Number.isFinite(chimneyX) ? chimneyX : 132;
   const baseY = -50;
   ctx.save();
   ctx.globalCompositeOperation = 'screen';
-  for (let i = 0; i < 7; i += 1) {
-    const drift = (worldTime * (18 + i * 4) + (train.id || 0) * 7 + i * 19) % 62;
-    const rise = drift * (0.72 + i * 0.03);
-    const x = baseX - drift * 0.36 - i * 3 + Math.sin(worldTime * 1.7 + i) * 4;
+  for (let i = 0; i < 14; i += 1) {
+    const layer = i < 6 ? 0 : 1;
+    const drift = (worldTime * (11 + i * 2.8) + (train.id || 0) * 7 + i * 19) % (72 + layer * 22);
+    const rise = drift * (0.7 + i * 0.018);
+    const wind = drift * (0.3 + speed * 0.004);
+    const x = baseX - wind - i * 1.65 + Math.sin(worldTime * 1.25 + i) * (3.2 + layer * 2.5);
     const y = baseY - rise;
-    const alpha = Math.max(0, (1 - drift / 68) * (0.16 + intensity * 0.10));
-    ellipse(ctx, x, y, (9 + i * 1.5 + drift * 0.18) * intensity, 5 + i + drift * 0.09, `rgba(232,232,218,${alpha})`);
+    const fade = Math.max(0, 1 - drift / (82 + layer * 22));
+    const alpha = fade * (layer ? 0.07 : 0.13) * intensity;
+    ellipse(ctx, x, y, (10 + i * 1.1 + drift * 0.23) * intensity, 5 + i * 0.7 + drift * 0.12,
+      `rgba(226,228,215,${alpha})`);
+    ellipse(ctx, x + 3, y + 2, (6 + drift * 0.14) * intensity, 3.4 + drift * 0.055,
+      `rgba(255,235,182,${alpha * 0.18})`);
+  }
+  ctx.restore();
+}
+
+function drawCylinderSteam(ctx, train, worldTime, locomotiveOffset) {
+  const speed = Math.max(0, train.visualSpeed || 0);
+  const intensity = 0.42 + Math.min(1, speed / 56);
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  for (let i = 0; i < 8; i += 1) {
+    const burst = (worldTime * (21 + i * 1.7) + i * 15 + (train.id || 0)) % 58;
+    const side = i % 2 ? 1 : -1;
+    const x = locomotiveOffset + 14 - burst * (0.52 + speed * 0.005);
+    const y = 7 + side * (7 + hashUnit(i + train.id) * 4) - burst * 0.04;
+    const alpha = Math.max(0, (1 - burst / 58) * 0.14 * intensity);
+    ellipse(ctx, x, y, 12 + burst * 0.18, 3.6 + burst * 0.035,
+      `rgba(225,228,218,${alpha})`);
+  }
+  ctx.restore();
+}
+
+function drawWheelAshAndSparks(ctx, train, worldTime, locomotiveOffset) {
+  const speed = Math.max(0, train.visualSpeed || 0);
+  const active = clamp01(speed / 46);
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  for (let i = 0; i < 18; i += 1) {
+    const seed = (train.id || 0) * 23 + i * 9;
+    const drift = (worldTime * (22 + hashUnit(seed) * 18) + i * 12) % 74;
+    const x = locomotiveOffset - 40 + hashUnit(seed + 3) * 100 - drift * 0.35;
+    const y = 14 + hashUnit(seed + 7) * 12 - drift * 0.025;
+    const alpha = (1 - drift / 80) * active * (0.025 + hashUnit(seed + 5) * 0.045);
+    ellipse(ctx, x, y, 9 + drift * 0.13, 2.2 + drift * 0.025,
+      `rgba(194,166,119,${alpha})`);
+  }
+  for (let i = 0; i < 10; i += 1) {
+    const seed = (train.id || 0) * 41 + i * 13;
+    const life = (worldTime * (7 + hashUnit(seed) * 7) + i * 8) % 36;
+    const flicker = Math.max(0, 1 - life / 36) * active;
+    const x = locomotiveOffset - 35 + hashUnit(seed + 2) * 95 - life * 0.45;
+    const y = -1 + hashUnit(seed + 4) * 18 + life * 0.16;
+    ellipse(ctx, x, y, 1.2 + flicker * 1.5, 0.8 + flicker,
+      `rgba(255,129,42,${flicker * 0.34})`);
+    ellipse(ctx, x, y, 0.55, 0.38, `rgba(255,225,125,${flicker * 0.44})`);
+  }
+  ctx.restore();
+}
+
+function drawHeadlampBeam(ctx, train, locomotiveOffset, worldTime) {
+  const night = nightAmount(worldTime);
+  const speed = Math.max(0, train.visualSpeed || 0);
+  const strength = 0.16 + night * 0.23 + Math.min(0.06, speed * 0.0011);
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  lightCone(ctx, locomotiveOffset + 55, -13, 190, 34,
+    `rgba(255,226,142,${strength})`, 'rgba(255,226,142,0)');
+  lightCone(ctx, locomotiveOffset + 60, -13, 120, 16,
+    `rgba(255,248,202,${strength * 0.7})`, 'rgba(255,248,202,0)');
+  for (let i = 0; i < 18; i += 1) {
+    const seed = (train.id || 0) * 59 + i * 5.6;
+    const x = locomotiveOffset + 72 + hashUnit(seed) * 152;
+    const spread = (x - locomotiveOffset - 72) / 152;
+    const y = -13 + (hashUnit(seed + 2) - 0.5) * (12 + spread * 52);
+    const shimmer = 0.55 + Math.sin(worldTime * 2 + i) * 0.32;
+    ellipse(ctx, x, y, 1.2 + spread * 1.7, 0.7 + spread,
+      `rgba(255,231,166,${strength * 0.18 * shimmer})`);
   }
   ctx.restore();
 }
@@ -441,10 +661,20 @@ export function drawHogwartsTrain(ctx, train, worldTime = 0) {
   ctx.translate(train.x, train.y);
   ctx.rotate(train.rotation || 0);
   const phase = (Number(train.distanceTravelled) || 0) / 9.4;
-  ellipse(ctx, 4, 17, 162, 21, 'rgba(18,12,9,.28)');
+  const night = nightAmount(worldTime);
+  ellipse(ctx, 4, 18, 169, 23, `rgba(5,4,4,${0.3 + night * 0.16})`);
   const carriages = train.carriages || [];
   const locomotive = carriages.find(carriage => carriage.role === 'locomotive');
-  drawSteam(ctx, train, worldTime, (locomotive?.offset ?? 94) + 39);
+  const locomotiveOffset = locomotive?.offset ?? 94;
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ellipse(ctx, -5, -14, 168, 33, `rgba(93,133,174,${0.028 + night * 0.04})`);
+  ellipse(ctx, 23, -35, 116, 22, `rgba(255,193,88,${0.022 + night * 0.028})`);
+  ctx.restore();
+  drawHeadlampBeam(ctx, train, locomotiveOffset, worldTime);
+  drawWheelAshAndSparks(ctx, train, worldTime, locomotiveOffset);
+  drawCylinderSteam(ctx, train, worldTime, locomotiveOffset);
+  drawSteam(ctx, train, worldTime, locomotiveOffset + 39);
   for (let i = carriages.length - 1; i >= 0; i -= 1) {
     const carriage = carriages[i];
     if (carriage.role === 'locomotive') drawLocomotive(ctx, carriage.offset, phase, train.visualSpeed || 0);
@@ -452,11 +682,16 @@ export function drawHogwartsTrain(ctx, train, worldTime = 0) {
     else drawCoach(ctx, carriage.offset, phase, i);
     if (i > 0) line(ctx, carriage.offset - 37, -2, carriages[i - 1].offset + 36, -2, '#1c1714', 2);
   }
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  line(ctx, -126, -39, locomotiveOffset + 56, -20, `rgba(178,215,255,${0.09 + night * 0.1})`, 1.3);
+  line(ctx, -124, -28, locomotiveOffset + 44, -4, `rgba(255,215,128,${0.045 + night * 0.055})`, 0.9);
+  ctx.restore();
   ctx.restore();
 }
 
 export function drawRailwayEntity(ctx, entity, worldTime = 0) {
-  if (entity.type === TRACK_TYPE) drawRailSegment(ctx, entity);
+  if (entity.type === TRACK_TYPE) drawRailSegment(ctx, entity, worldTime);
   else if (entity.type === STATION_TYPE) drawHogwartsStation(ctx, entity, worldTime);
   else if (entity.type === STATION_CONSTRUCTOR_TYPE) drawStationConstructor(ctx, entity, worldTime);
 }
