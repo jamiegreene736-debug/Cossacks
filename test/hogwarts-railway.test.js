@@ -12,6 +12,9 @@ import {
   STATION_CONSTRUCTOR_TYPE, STATION_TYPE, TRACK_LENGTH, TRACK_TYPE,
   trackEndpoints,
 } from '../js/railways.js';
+import {
+  RAILWAY_AI_CONFIG, RAILWAY_AI_STATES,
+} from '../js/railway-ai.js';
 import { createGameSnapshot, restoreGameSnapshot } from '../js/savegame.js';
 import { createWorld, spawnUnit, step } from '../js/sim.js';
 
@@ -31,6 +34,11 @@ function completeConstructor(world, constructor) {
 
 function stationSite(townCenter) {
   return { x: townCenter.x + 220, y: townCenter.y + 20 };
+}
+
+function forceCommanderThink(commander) {
+  commander.thinkTimer = 0;
+  commander.update(1);
 }
 
 test('villagers can place a station constructor that generates the full station, rails, and train', () => {
@@ -145,4 +153,169 @@ test('station, rails, and train survive campaign save and resume', () => {
   assert.equal(restored.trains.length, 1);
   assert.equal(restored.trains[0].entityKind, 'train');
   assert.ok(restored.buildings.some(building => building.id === restored.trains[0].trackId));
+});
+
+test('commander AI crafts, places, and builds a Hogwarts station constructor goal', () => {
+  const { world } = makeRailWorld();
+  const commander = new Commander(world, 0, 'low');
+
+  forceCommanderThink(commander);
+  assert.equal(commander.railway.state, RAILWAY_AI_STATES.CRAFT_STATION_CONSTRUCTOR);
+  assert.equal(commander.railway.stationConstructorReady, true);
+
+  forceCommanderThink(commander);
+  const constructor = world.buildings.find(building => building.type === STATION_CONSTRUCTOR_TYPE);
+  assert.ok(constructor);
+  assert.equal(constructor.complete, false);
+  assert.equal(commander.railway.state, RAILWAY_AI_STATES.PLACE_STATION);
+  assert.ok(world.units.some(unit => unit.job?.kind === 'build' && unit.job.targetId === constructor.id));
+});
+
+test('commander AI inspects the generated station and train before extending rails', () => {
+  const { world, townCenter, builder } = makeRailWorld();
+  const commander = new Commander(world, 0, 'low');
+  const placed = placeBuilding(
+    world,
+    0,
+    STATION_CONSTRUCTOR_TYPE,
+    stationSite(townCenter).x,
+    stationSite(townCenter).y,
+    [builder],
+    { rotation: 0 },
+  );
+  completeConstructor(world, placed.building);
+  const station = world.buildings.find(building => building.type === STATION_TYPE);
+  builder.job = null;
+  builder.state = 'idle';
+
+  forceCommanderThink(commander);
+
+  assert.equal(commander.railway.state, RAILWAY_AI_STATES.INSPECT_STATION);
+  assert.ok(commander.railway.inspectedStationIds.includes(station.id));
+  assert.equal(builder.job?.kind, 'railway_inspect');
+});
+
+test('commander AI repairs damaged rail before expanding the railway', () => {
+  const { world, townCenter, builder } = makeRailWorld();
+  const commander = new Commander(world, 0, 'low');
+  const placed = placeBuilding(world, 0, STATION_CONSTRUCTOR_TYPE, stationSite(townCenter).x, stationSite(townCenter).y, [builder]);
+  completeConstructor(world, placed.building);
+  const station = world.buildings.find(building => building.type === STATION_TYPE);
+  commander.railway.inspectedStationIds.push(station.id);
+  const damaged = world.buildings.find(building => building.type === TRACK_TYPE);
+  damaged.hp = damaged.maxHp * 0.45;
+  builder.job = null;
+  builder.state = 'idle';
+
+  forceCommanderThink(commander);
+
+  assert.equal(commander.railway.state, RAILWAY_AI_STATES.MAINTAIN_REPAIR_TRACK);
+  assert.equal(builder.job?.kind, 'repair');
+  assert.equal(builder.job?.targetId, damaged.id);
+});
+
+test('commander AI extends railway with capped connected track and then interacts with the train', () => {
+  const { world, townCenter, builder } = makeRailWorld();
+  const commander = new Commander(world, 0, 'low');
+  const placed = placeBuilding(world, 0, STATION_CONSTRUCTOR_TYPE, stationSite(townCenter).x, stationSite(townCenter).y, [builder]);
+  completeConstructor(world, placed.building);
+  const station = world.buildings.find(building => building.type === STATION_TYPE);
+  commander.railway.inspectedStationIds.push(station.id);
+  builder.job = null;
+  builder.state = 'idle';
+
+  forceCommanderThink(commander);
+  const newTrack = world.buildings.find(building => (
+    building.type === TRACK_TYPE && !building.complete
+  ));
+  assert.ok(newTrack);
+  assert.equal(commander.railway.state, RAILWAY_AI_STATES.BUILD_EXTEND_TRACK);
+  assert.equal(builder.job?.kind, 'build');
+  newTrack.complete = true;
+  newTrack.progress = 1;
+  newTrack.hp = newTrack.maxHp;
+
+  for (let index = world.buildings.filter(building => building.type === TRACK_TYPE).length;
+    index < RAILWAY_AI_CONFIG.minTracksBeforeTrainInteraction; index += 1) {
+    const current = world.buildings.filter(building => building.type === TRACK_TYPE)
+      .sort((a, b) => b.x - a.x)[0];
+    const [, end] = trackEndpoints(current);
+    const validation = validatePlacement(world, 0, TRACK_TYPE, end.x + TRACK_LENGTH * 0.5, end.y, {
+      rotation: 0,
+    });
+    const rail = placeBuilding(world, 0, TRACK_TYPE, validation.x, validation.y, [builder], {
+      rotation: validation.rotation,
+    });
+    rail.building.complete = true;
+    rail.building.progress = 1;
+    rail.building.hp = rail.building.maxHp;
+  }
+  commander.railway.nextTrackAt = world.time + 100;
+  commander.railway.nextTrainInteractionAt = 0;
+  builder.job = null;
+  builder.state = 'idle';
+
+  forceCommanderThink(commander);
+
+  assert.equal(commander.railway.state, RAILWAY_AI_STATES.INTERACT_WITH_TRAIN);
+  assert.equal(builder.job?.kind, 'railway_interact');
+});
+
+test('commander AI does not build railway forever after reaching the track cap', () => {
+  const { world, townCenter, builder } = makeRailWorld();
+  const commander = new Commander(world, 0, 'low');
+  const placed = placeBuilding(world, 0, STATION_CONSTRUCTOR_TYPE, stationSite(townCenter).x, stationSite(townCenter).y, [builder]);
+  completeConstructor(world, placed.building);
+  const station = world.buildings.find(building => building.type === STATION_TYPE);
+  commander.railway.inspectedStationIds.push(station.id);
+
+  while (world.buildings.filter(building => building.type === TRACK_TYPE).length < RAILWAY_AI_CONFIG.maxTracks) {
+    const index = world.buildings.filter(building => building.type === TRACK_TYPE).length;
+    const rail = createBuilding(0, TRACK_TYPE, townCenter.x + 900 + index * TRACK_LENGTH, townCenter.y + 720, true, {
+      rotation: 0,
+    });
+    world.buildings.push(rail);
+  }
+  const before = world.buildings.length;
+  commander.railway.nextTrainInteractionAt = world.time + 100;
+  builder.job = null;
+  builder.state = 'idle';
+
+  forceCommanderThink(commander);
+
+  assert.equal(world.buildings.length, before);
+  assert.equal(commander.railway.state, RAILWAY_AI_STATES.NORMAL_ROUTINE);
+});
+
+test('railway AI commander state survives save and resume', () => {
+  const { world, townCenter, builder } = makeRailWorld();
+  world.sides[1].nation = 'england';
+  world.sides[1].resources = { food: 1000, wood: 3000, gold: 3000, stone: 3000 };
+  const commander = new Commander(world, 1, 'low');
+  const enemyTownCenter = world.buildings.find(building => building.side === 1 && building.type === 'town_center');
+  const enemyBuilder = spawnUnit(world, 1, 'villager', enemyTownCenter.x - 95, enemyTownCenter.y + 25);
+  const placed = placeBuilding(
+    world,
+    1,
+    STATION_CONSTRUCTOR_TYPE,
+    enemyTownCenter.x - 220,
+    enemyTownCenter.y + 20,
+    [enemyBuilder],
+    { rotation: Math.PI },
+  );
+  completeConstructor(world, placed.building);
+  const station = world.buildings.find(building => building.type === STATION_TYPE);
+  commander.railway.state = RAILWAY_AI_STATES.INSPECT_STATION;
+  commander.railway.inspectedStationIds.push(station.id);
+  commander.railway.nextTrackAt = 123;
+
+  const restored = restoreGameSnapshot(createGameSnapshot(
+    world,
+    commander,
+    { x: townCenter.x, y: townCenter.y, zoom: 1, rotation: 0 },
+  )).commander;
+
+  assert.equal(restored.railway.state, RAILWAY_AI_STATES.INSPECT_STATION);
+  assert.deepEqual(restored.railway.inspectedStationIds, [station.id]);
+  assert.equal(restored.railway.nextTrackAt, 123);
 });

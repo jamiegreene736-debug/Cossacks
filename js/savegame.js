@@ -14,6 +14,7 @@ import { createWorld, getUnitRuntimeStats, reserveUnitIds } from './sim.js';
 import { PLAYER_TEAM, RIVAL_TEAM } from './teams.js';
 import { initializeWitchFlight } from './witch-flight.js';
 import { normalizeRailwayState } from './railways.js';
+import { normalizeRailwayAiState } from './railway-ai.js';
 
 export const SAVE_KEY = 'empires1700.campaign.v1';
 export const SAVE_VERSION = 1;
@@ -93,6 +94,7 @@ function serializeCommander(commander) {
     committed: [...commander.committed],
     planCursor: clone(commander.planCursor),
     resourceCursor: commander.resourceCursor,
+    railway: clone(normalizeRailwayAiState(commander.railway)),
   };
 }
 
@@ -262,6 +264,7 @@ export function restoreGameSnapshot(snapshot) {
       commander.committed = new Set(saved?.committed || []);
       commander.planCursor = clone(saved?.planCursor || {});
       commander.resourceCursor = Math.max(0, Number(saved?.resourceCursor) || 0);
+      commander.railway = normalizeRailwayAiState(saved?.railway);
       return commander;
     })
     : [];

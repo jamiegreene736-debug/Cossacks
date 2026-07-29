@@ -1558,6 +1558,37 @@ function updateWorkers(world, dt) {
       continue;
     }
     if (worker.job.kind === 'repair') target.repairing = true;
+    if (worker.job.kind === 'railway_inspect' || worker.job.kind === 'railway_interact') {
+      const point = {
+        x: Number.isFinite(worker.job.x) ? worker.job.x : target.x,
+        y: Number.isFinite(worker.job.y) ? worker.job.y : target.y,
+      };
+      const distance = Math.hypot(point.x - worker.x, point.y - worker.y);
+      if (distance > 5.5) {
+        worker.orderX = point.x;
+        worker.orderY = point.y;
+        worker.state = 'move';
+        worker.workAction = null;
+        continue;
+      }
+      worker.orderX = NaN;
+      worker.orderY = NaN;
+      worker.state = 'work';
+      worker.workAction = null;
+      worker.animT += dt * 0.8;
+      if (Number.isFinite(worker.job.faceX) && Math.abs(worker.job.faceX - worker.x) > 0.5) {
+        worker.facing = worker.job.faceX > worker.x ? 1 : -1;
+      }
+      worker.job.remaining = Number.isFinite(worker.job.remaining)
+        ? worker.job.remaining - dt : (Number(worker.job.duration) || 3.5) - dt;
+      if (worker.job.remaining <= 0) {
+        worker.job = null;
+        worker.workAction = null;
+        worker.railwayAiState = null;
+        worker.state = 'idle';
+      }
+      continue;
+    }
     const point = nearestPoint(world, target, worker);
     // Movement stops within five pixels of its assigned slot, so the work
     // threshold includes that tolerance and avoids workers orbiting a site.

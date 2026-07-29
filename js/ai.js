@@ -15,6 +15,7 @@ import { isPeaceTime } from './truce.js';
 import {
   hostileUnits, nearestHostileTownCenter, sideFrontDirection,
 } from './teams.js';
+import { manageRailwayVillagers, normalizeRailwayAiState } from './railway-ai.js';
 
 function isMilitaryUnit(unit) {
   return Boolean(unit?.alive && !UNIT_TYPES[unit.unitType || unit.type]?.worker);
@@ -46,6 +47,7 @@ export class Commander {
     this.committed = new Set();
     this.planCursor = {};
     this.resourceCursor = 0;
+    this.railway = normalizeRailwayAiState();
   }
 
   update(dt) {
@@ -81,6 +83,8 @@ export class Commander {
       const unitType = workerRoster[rosterIndex] || 'villager';
       queueUnit(world, tc, unitType, 1);
     }
+
+    if (villagers.length >= 1 && manageRailwayVillagers(this, villagers)) return;
 
     const priorities = ['food', 'wood', 'food', 'gold', 'wood', 'stone'];
     for (const worker of villagers) {
