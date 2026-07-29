@@ -625,26 +625,31 @@ function getBuildingPavingLayout(rx, ry, seed) {
   const safeRx = Math.max(16, Number.isFinite(rx) ? rx : 16);
   const safeRy = Math.max(8, Number.isFinite(ry) ? ry : safeRx * bdSUN.squash);
   const rr = bdRnd(seed || ((safeRx * 71 + safeRy * 131) | 0));
-  const brickWidth = bdClamp(safeRx * 0.050, 3.45, 4.85);
+  const brickWidth = bdClamp(safeRx * 0.046, 3.55, 5.05);
   const brickLength = brickWidth * 2.08;
   const joint = bdClamp(brickWidth * 0.16, 0.54, 0.78);
-  const borderRadius = safeRx * 0.930;
+  const borderRadius = safeRx * 0.940;
   const borderWidth = brickWidth * 1.18;
   const borderCount = Math.max(28, Math.round(BD_TAU * borderRadius / (brickLength * 0.92)));
   const borderLength = BD_TAU * borderRadius / borderCount - joint * 0.55;
-  const fieldRadius = borderRadius - borderWidth * 0.78 - joint;
+  const innerBorderRadius = borderRadius - borderWidth * 1.18 - joint * 0.72;
+  const innerBorderCount = Math.max(24, Math.round(BD_TAU * innerBorderRadius / (brickLength * 0.98)));
+  const innerBorderLength = BD_TAU * innerBorderRadius / innerBorderCount - joint * 0.46;
+  const fieldRadius = innerBorderRadius - borderWidth * 0.68 - joint;
   const pavers = [];
 
-  function addPaver(kind, x, y, angle, length, width) {
+  function addPaver(kind, x, y, angle, length, width, ringIndex = 0) {
     const weather = rr(0, 1);
     pavers.push({
       kind,
+      ringIndex,
       x,
       y,
       angle: angle + rr(-0.018, 0.018),
       length,
       width,
       settle: rr(-0.22, 0.34),
+      height: rr(0.16, kind === 'field' ? 0.74 : 0.92),
       tone: Math.min(4, Math.floor(rr(0, 5))),
       chip: weather > 0.72 ? Math.floor(rr(0, 4)) : -1,
       moss: weather < (kind === 'border' ? 0.28 : 0.18),
@@ -686,11 +691,20 @@ function getBuildingPavingLayout(rx, ry, seed) {
   for (let index = 0; index < borderCount; index++) {
     const angle = index / borderCount * BD_TAU;
     addPaver('border', Math.cos(angle) * borderRadius, Math.sin(angle) * borderRadius,
-      angle + Math.PI / 2, borderLength, borderWidth);
+      angle + Math.PI / 2, borderLength, borderWidth, 0);
+  }
+
+  // A second locked soldier course closes the visual seam between the tangent
+  // header ring and herringbone field. Without it, shallow buildings could
+  // show a crescent of mortar/earth where the field grid happened not to land.
+  for (let index = 0; index < innerBorderCount; index++) {
+    const angle = (index + 0.5) / innerBorderCount * BD_TAU;
+    addPaver('border', Math.cos(angle) * innerBorderRadius, Math.sin(angle) * innerBorderRadius,
+      angle + Math.PI / 2, innerBorderLength, borderWidth * 0.92, 1);
   }
 
   const perimeter = [];
-  const perimeterPoints = 48;
+  const perimeterPoints = 72;
   const waveA = rr(0, BD_TAU);
   const waveB = rr(0, BD_TAU);
   for (let index = 0; index < perimeterPoints; index++) {
@@ -712,6 +726,8 @@ function getBuildingPavingLayout(rx, ry, seed) {
     fieldRadius,
     borderRadius,
     borderCount,
+    innerBorderRadius,
+    innerBorderCount,
     pavers,
     perimeter,
   };
@@ -772,6 +788,25 @@ const BD_PAVING_STYLES = Object.freeze({
       };
     },
   }),
+  hogwarts: Object.freeze({
+    key: 'hogwarts',
+    wornMix: 0.13,
+    mortar: () => bdLawful(bdMix('#4A3328', BT.EARTH, 0.48)),
+    palette: sideHex => {
+      const warmBrick = bdLawful(bdMix('#9B4D36', '#6B3D2F', 0.20));
+      return {
+        base: warmBrick,
+        sideTrace: bdLawful(bdMix(sideHex || '#7A3E50', '#8C6F54', 0.68)),
+        pavers: [
+          warmBrick,
+          bdLawful(bdMix('#7E3F31', BT.EARTH_LIGHT, 0.18)),
+          bdLawful(bdMix('#AA6545', '#5C3228', 0.20)),
+          bdLawful(bdMix('#6A3A2F', BT.EARTH_DARK, 0.18)),
+          bdLawful(bdMix('#B2764C', BT.STRAW, 0.12)),
+        ],
+      };
+    },
+  }),
   starwars: Object.freeze({
     key: 'starwars',
     wornMix: 0.06,
@@ -794,6 +829,7 @@ const BD_PAVING_STYLES = Object.freeze({
 });
 
 function bdPavingStyleForNation(nation) {
+  if (nation === 'hogwarts') return BD_PAVING_STYLES.hogwarts;
   return nation === 'starwars' ? BD_PAVING_STYLES.starwars : BD_PAVING_STYLES.brick;
 }
 
@@ -911,6 +947,15 @@ function bdPassGroundApron(g, cx, cy, rx, sideHex, options) {
         g.closePath();
         g.fill();
       }
+      const lift = paver.height || 0.3;
+      g.strokeStyle = bdRgba(jointShadow, 0.38 + lift * 0.18);
+      g.lineWidth = 0.32 + lift * 0.18;
+      g.beginPath();
+      g.moveTo(-halfLength + 0.78, halfWidth + lift * 0.55);
+      g.lineTo(halfLength - 0.78, halfWidth + lift * 0.55);
+      g.moveTo(halfLength + lift * 0.42, -halfWidth + 0.78);
+      g.lineTo(halfLength + lift * 0.42, halfWidth - 0.78);
+      g.stroke();
       g.strokeStyle = bdRgba(bevelLight, 0.62);
       g.lineWidth = 0.46;
       g.beginPath();
@@ -5903,12 +5948,23 @@ function getBuildingPresentation(type, def = BUILDING_TYPES[type], nation = null
   const artWidth = def.w * profile.artWidthScale;
   const minimumHumanHeights = BD_NATION_MINIMUM_HUMAN_HEIGHTS[nation]?.[type]
     ?? BD_MINIMUM_HUMAN_HEIGHTS[type] ?? 0;
-  const apronRx = nation === 'starwars'
-    ? Math.max(def.w * profile.apronWidthScale, artWidth * visualScale * 0.58)
-    : def.w * profile.apronWidthScale;
-  const apronRy = nation === 'starwars'
-    ? Math.max(def.h * profile.apronDepthScale, artWidth * visualScale * 0.36)
-    : def.h * profile.apronDepthScale;
+  const scaledArtWidth = artWidth * visualScale;
+  const plazaProfile = {
+    radiusW: nation === 'starwars' ? 0.62 : nation === 'hogwarts' ? 0.60 : 0.56,
+    radiusH: nation === 'starwars' ? 0.43 : nation === 'hogwarts' ? 0.39 : 0.36,
+    footprintW: nation === 'hogwarts' ? 1.28 : 1.20,
+    footprintH: nation === 'hogwarts' ? 0.82 : 0.76,
+  };
+  const apronRx = Math.max(
+    def.w * profile.apronWidthScale,
+    def.w * plazaProfile.footprintW,
+    scaledArtWidth * plazaProfile.radiusW,
+  );
+  const apronRy = Math.max(
+    def.h * profile.apronDepthScale,
+    def.h * plazaProfile.footprintH,
+    scaledArtWidth * plazaProfile.radiusH,
+  );
   return {
     visualScale,
     nation,

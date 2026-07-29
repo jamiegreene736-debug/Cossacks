@@ -16,17 +16,40 @@ test('building paving is deterministic and forms a complete herringbone courtyar
   assert.ok(first.pavers.length > 120, 'expected a dense field of individual pavers');
 
   const field = first.pavers.filter((paver) => paver.kind === 'field');
-  const border = first.pavers.filter((paver) => paver.kind === 'border');
-  assert.equal(border.length, first.borderCount);
+  const outerBorder = first.pavers.filter((paver) => paver.kind === 'border' && paver.ringIndex === 0);
+  const innerBorder = first.pavers.filter((paver) => paver.kind === 'border' && paver.ringIndex === 1);
+  assert.equal(outerBorder.length, first.borderCount);
+  assert.equal(innerBorder.length, first.innerBorderCount);
   assert.ok(field.some((paver) => paver.angle > 0.70 && paver.angle < 0.88));
   assert.ok(field.some((paver) => paver.angle < -0.70 && paver.angle > -0.88));
 
   // Tangent header pavers must occupy every quadrant; this is the regression
   // guard against returning to a small entrance patch beneath the building.
-  const occupiedQuadrants = new Set(border.map((paver) =>
+  const occupiedQuadrants = new Set(outerBorder.map((paver) =>
     `${paver.x < 0 ? 'left' : 'right'}-${paver.y < 0 ? 'rear' : 'front'}`));
   assert.deepEqual(occupiedQuadrants,
     new Set(['left-rear', 'right-rear', 'left-front', 'right-front']));
+});
+
+test('building paving has continuous outer and inner brick rings', () => {
+  const layout = getBuildingPavingLayout(118, 66, 9321);
+
+  for (const ringIndex of [0, 1]) {
+    const ring = layout.pavers
+      .filter((paver) => paver.kind === 'border' && paver.ringIndex === ringIndex)
+      .map((paver) => Math.atan2(paver.y, paver.x))
+      .sort((a, b) => a - b);
+    const gaps = ring.map((angle, index) => {
+      const next = ring[(index + 1) % ring.length] + (index === ring.length - 1 ? Math.PI * 2 : 0);
+      return next - angle;
+    });
+
+    assert.ok(ring.length >= 24, `ring ${ringIndex} should contain enough bricks for a full circle`);
+    assert.ok(Math.max(...gaps) < Math.PI / 7,
+      `ring ${ringIndex} should not have a missing arc`);
+  }
+
+  assert.ok(layout.perimeter.length >= 72, 'soft edge should be smooth enough to avoid clipped corners');
 });
 
 test('weathering remains detailed but moss is sparse', () => {
@@ -78,6 +101,7 @@ test('every courtyard shares the building selection footprint centre', () => {
 
 test('StarWars buildings use larger sci-fi paving under their full visual mass', () => {
   assert.equal(getBuildingPavingStyle('starwars'), 'starwars');
+  assert.equal(getBuildingPavingStyle('hogwarts'), 'hogwarts');
   assert.equal(getBuildingPavingStyle('england'), 'brick');
 
   for (const type of [
@@ -99,5 +123,31 @@ test('StarWars buildings use larger sci-fi paving under their full visual mass',
       starwars.apronRx >= starwars.displayArtWidth * 0.58 - 0.001,
       `${type} StarWars paving should reach under the broad rendered facade`,
     );
+  }
+});
+
+test('Hogwarts village plazas are broad enough for a complete Hogsmeade-style brick circle', () => {
+  for (const type of [
+    'town_center', 'house', 'mill', 'lumber_camp', 'mine',
+    'barracks', 'stable', 'foundry', 'tower', 'castle', 'school',
+  ]) {
+    const def = BUILDING_TYPES[type];
+    const presentation = getBuildingPresentation(type, def, 'hogwarts');
+    const layout = getBuildingPavingLayout(
+      presentation.apronRx,
+      presentation.apronRy,
+      type.length * 2713,
+    );
+
+    assert.ok(
+      presentation.apronRx >= presentation.displayArtWidth * 0.60 - 0.001,
+      `${type} plaza should surround the rendered Hogwarts building width`,
+    );
+    assert.ok(
+      layout.ry >= def.h * 0.82,
+      `${type} plaza should wrap visibly in front of and behind the footprint`,
+    );
+    assert.equal(layout.pavers.filter((paver) => paver.kind === 'border').length,
+      layout.borderCount + layout.innerBorderCount);
   }
 });

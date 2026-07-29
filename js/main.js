@@ -270,6 +270,7 @@ async function startBattle(opts) {
   setupLocalCharacterAnimationPreview(world);
   setupLocalObstacleNavigationPreview(world);
   setupLocalWallGatePreview(world);
+  setupLocalCobblestonePathPreview(world);
   setupLocalEnglandHousePreview(world);
   setupLocalThemedArchitecturePreview(world);
   setupLocalSettlementVarietyPreview(world);
@@ -656,6 +657,59 @@ function setupLocalWallGatePreview(activeWorld) {
     side: 0,
     tone: 'info',
     text: 'Wall/gate QA: snapped sockets, realistic masonry, curve, stairs and soldiers on the wall.',
+  });
+}
+
+function setupLocalCobblestonePathPreview(activeWorld) {
+  const debugName = new URLSearchParams(window.location.search).get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'cobblestone-paths') return;
+
+  activeWorld.sides[0].nation = 'hogwarts';
+  const previewBounds = { left: 1350, right: 3440, top: 900, bottom: 2340 };
+  activeWorld.resources = activeWorld.resources.filter(resource => (
+    resource.x < previewBounds.left || resource.x > previewBounds.right
+    || resource.y < previewBounds.top || resource.y > previewBounds.bottom
+  ));
+  activeWorld.buildings = activeWorld.buildings.filter(building => (
+    building.x < previewBounds.left || building.x > previewBounds.right
+    || building.y < previewBounds.top || building.y > previewBounds.bottom
+  ));
+  activeWorld.units = activeWorld.units.filter(unit => (
+    unit.x < previewBounds.left || unit.x > previewBounds.right
+    || unit.y < previewBounds.top || unit.y > previewBounds.bottom
+  ));
+
+  const village = [
+    ['town_center', 2350, 1510],
+    ['house', 1835, 1315],
+    ['house', 1985, 1815],
+    ['mill', 2585, 1175],
+    ['lumber_camp', 2945, 1440],
+    ['barracks', 2840, 1905],
+    ['stable', 2280, 2070],
+    ['foundry', 1685, 1660],
+  ];
+  for (const [type, x, y] of village) {
+    activeWorld.buildings.push(createBuilding(0, type, x, y, true));
+  }
+
+  for (let index = 0; index < 6; index++) {
+    const walker = spawnUnit(activeWorld, 0, index % 2 ? 'woman_villager' : 'villager',
+      2190 + index * 18, 1630 + (index % 3) * 18);
+    walker.state = 'move';
+    walker.facing = index % 2 ? -1 : 1;
+  }
+
+  camera.x = 2320;
+  camera.y = 1620;
+  camera.zoom = 0.76;
+  clampCamera();
+  activeWorld.events.push({
+    side: 0,
+    tone: 'info',
+    text: 'Cobblestone QA: every brick courtyard is linked by curved Hogsmeade-style footpaths.',
   });
 }
 
