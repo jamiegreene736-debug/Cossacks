@@ -13,6 +13,7 @@ import {
 import { createWorld, getUnitRuntimeStats, reserveUnitIds } from './sim.js';
 import { PLAYER_TEAM, RIVAL_TEAM } from './teams.js';
 import { initializeWitchFlight } from './witch-flight.js';
+import { normalizeRailwayState } from './railways.js';
 
 export const SAVE_KEY = 'empires1700.campaign.v1';
 export const SAVE_VERSION = 1;
@@ -20,7 +21,7 @@ export const SAVE_VERSION = 1;
 const NUMBER_TAG = '__empires1700_number__';
 const WORLD_ARRAYS = [
   'buildings', 'resources', 'particles', 'flags', 'destructions',
-  'pendingDecals', 'decals', 'printedModels', 'events',
+  'pendingDecals', 'decals', 'printedModels', 'trains', 'events',
 ];
 const WORLD_VALUES = [
   'time', 'winner', 'checkT', 'speed', 'killLog', 'sides', 'difficulty', 'navigationVersion',
@@ -212,6 +213,7 @@ export function restoreGameSnapshot(snapshot) {
   repairSideTeams(world);
   repairEconomyLedgers(world);
   repairFieldAttachments(world);
+  normalizeRailwayState(world);
 
   const entities = new Map();
   for (const entity of [...world.units, ...world.buildings, ...world.resources]) entities.set(entity.id, entity);
@@ -243,6 +245,7 @@ export function restoreGameSnapshot(snapshot) {
     ...world.buildings.map(building => building.id),
     ...world.resources.map(resource => resource.id),
     ...(world.printedModels || []).map(model => model.id),
+    ...(world.trains || []).map(train => train.id),
   ));
 
   const commanderSnapshots = Array.isArray(snapshot.commanders) && snapshot.commanders.length

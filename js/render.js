@@ -31,9 +31,11 @@ import { getWomanVillagerFrame, getWorkerFrame } from './worker-animation.js';
 import { getMilitaryFrame } from './military-animation.js';
 import { getCharacterMotion } from './character-animation.js';
 import { drawPrintedModel } from './gfx/printed-models.js';
+import { drawHogwartsTrain, drawRailwayEntity } from './gfx/railways.js';
 import {
   getWitchFlightFrame, getWitchFlightVisual, isBroomWitch,
 } from './witch-flight.js';
+import { STATION_CONSTRUCTOR_TYPE, STATION_TYPE, TRACK_TYPE } from './railways.js';
 import {
   chooseRenderDpr, circleIntersectsBounds, getVisibleWorldBounds,
 } from './render-performance.js';
@@ -78,6 +80,7 @@ const PRODUCTION_WORKER_ART = Object.freeze({
   england: 'englishVillager',
   ottoman: 'ottomanVillager',
 });
+const RAILWAY_BUILDING_TYPES = new Set([STATION_CONSTRUCTOR_TYPE, STATION_TYPE, TRACK_TYPE]);
 
 export const camera = { x: 660, y: WORLD.h / 2, zoom: 0.9, rotation: 0 };
 
@@ -1410,10 +1413,14 @@ export function draw(
   // behind the host wall in y-sort order. Paint fortifications first, then the
   // attached stair volume so the individual treads and landing stay visible.
   for (const building of buildingSortBuf) {
-    if (building.type !== 'wall_stairs') drawBuilding(building, world);
+    if (RAILWAY_BUILDING_TYPES.has(building.type)) drawRailwayEntity(ctx, building, world.time);
+    else if (building.type !== 'wall_stairs') drawBuilding(building, world);
   }
   for (const building of buildingSortBuf) {
     if (building.type === 'wall_stairs') drawBuilding(building, world);
+  }
+  for (const train of world.trains || []) {
+    if (circleIntersectsBounds(train, visibleWorld, 180)) drawHogwartsTrain(ctx, train, world.time);
   }
   for (const model of world.printedModels || []) {
     if (circleIntersectsBounds(model, visibleWorld, 48)) drawPrintedModel(ctx, model, world.time);

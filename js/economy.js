@@ -26,6 +26,9 @@ import { assignVillagerPath, clearVillagerPath, pointBlocksVillager } from './na
 import { isPeaceTime } from './truce.js';
 import { areHostileSides, sideFrontDirection } from './teams.js';
 import { isBroomWitch, isWitchGrounded } from './witch-flight.js';
+import {
+  STATION_CONSTRUCTOR_TYPE, TRACK_TYPE, completeGeneratedStations, validateTrackPlacement,
+} from './railways.js';
 
 let nextEntityId = 100000;
 
@@ -455,6 +458,10 @@ export function validatePlacement(world, side, type, x, y, options = {}) {
     const nationName = NATIONS[world.sides[side]?.nation]?.name || 'this nation';
     return { ok: false, message: `${def.label} is not available to ${nationName}.` };
   }
+  if (type === TRACK_TYPE) {
+    const snappedTrack = validateTrackPlacement(world, side, x, y, options);
+    return snappedTrack.ok ? { ...snappedTrack, message: '' } : snappedTrack;
+  }
   const fortification = isFortificationType(type);
   const wallAttachment = Boolean(def.wallAttachment);
   const fieldAttachment = type === 'farm' ? resolveFieldAttachment(world, side, x, y) : null;
@@ -841,6 +848,10 @@ export function placeBuilding(world, sideIndex, type, x, y, builders, options = 
   assignBuilders(world, validBuilders, building);
   const message = type === 'farm'
     ? `Field attached to Mill · plot ${building.fieldSlot + 1} of ${MILL_FIELD_OFFSETS.length}.`
+    : type === TRACK_TYPE
+      ? 'Rail segment placed and snapped to the Hogwarts line.'
+      : type === STATION_CONSTRUCTOR_TYPE
+        ? 'Hogwarts Station Blueprint placed. Villagers will assemble the station constructor.'
     : `${def.label} foundation placed.`;
   return { ok: true, building, message };
 }
@@ -1858,6 +1869,7 @@ function updateCastles(world, dt) {
 
 export function stepEconomy(world, dt) {
   updateWorkers(world, dt);
+  completeGeneratedStations(world, createBuilding);
   updateIncomeTelemetry(world, dt);
   updateQueues(world, dt);
   updatePrintQueues(world, dt);

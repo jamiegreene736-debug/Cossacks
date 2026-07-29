@@ -741,6 +741,7 @@ function buildingIcon(type) {
     english_mansion: '▣', spooky_house: '☾',
     farm: '≋', mill: '✣', lumber_camp: '♣', mine: '◆', marketplace: '⚖',
     barracks: '⚔', stable: '♞', foundry: '◉', printer_shop: '⬡', tower: '♜', castle: '♛',
+    hogwarts_station_constructor: '▣', hogwarts_station: '⚑', hogwarts_track: '═',
     school: '⌘', pool: '≈', beach: '≋', park: '♧', playground: '☆',
     wall: '▥', wall_short: '▤', gate: '∩', wall_stairs: '▰',
   }[type] || '▦';

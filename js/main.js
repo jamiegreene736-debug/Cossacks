@@ -33,6 +33,9 @@ import {
   makeInviteUrl, readInviteFromLocation, restoreMultiplayerSnapshot,
 } from './multiplayer.js';
 import { getNextIdleVillager, getVillagerStatus } from './villager-status.js';
+import {
+  generateHogwartsStation, STATION_CONSTRUCTOR_TYPE, TRACK_LENGTH, TRACK_TYPE,
+} from './railways.js';
 
 let world = null;
 let commanders = [];
@@ -250,6 +253,7 @@ async function startBattle(opts) {
   resetForBattle();
   startBattleRender(world);
   setupLocalPrintingShopPreview(world);
+  setupLocalHogwartsStationPreview(world);
   setupLocalBuildingFirePreview(world);
   setupLocalAutoEngagePreview(world);
   setupLocalCurvedWallPreview(world);
@@ -329,6 +333,60 @@ function setupLocalPrintingShopPreview(activeWorld) {
   camera.x = 1160;
   camera.y = 1510;
   camera.zoom = 1.9;
+  clampCamera();
+}
+
+function setupLocalHogwartsStationPreview(activeWorld) {
+  const debugName = new URLSearchParams(window.location.search).get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'hogwarts-station') return;
+
+  const previewBounds = { left: 760, right: 1900, top: 1020, bottom: 1900 };
+  activeWorld.buildings = activeWorld.buildings.filter(building => (
+    building.x < previewBounds.left || building.x > previewBounds.right
+    || building.y < previewBounds.top || building.y > previewBounds.bottom
+  ));
+  activeWorld.resources = activeWorld.resources.filter(resource => (
+    resource.x < previewBounds.left || resource.x > previewBounds.right
+    || resource.y < previewBounds.top || resource.y > previewBounds.bottom
+  ));
+  activeWorld.units = activeWorld.units.filter(unit => (
+    unit.x < previewBounds.left || unit.x > previewBounds.right
+    || unit.y < previewBounds.top || unit.y > previewBounds.bottom
+  ));
+  activeWorld.trains = [];
+
+  const rotation = 0;
+  const constructor = createBuilding(0, STATION_CONSTRUCTOR_TYPE, 1280, 1460, true, {
+    rotation,
+    team: activeWorld.sides[0]?.team,
+    nation: activeWorld.sides[0]?.nation,
+  });
+  constructor.buildingFactory = { createBuilding };
+  activeWorld.buildings.push(constructor);
+  const generated = generateHogwartsStation(activeWorld, constructor);
+  const starterTrack = activeWorld.buildings
+    .filter(building => building.type === TRACK_TYPE && building.stationId === generated?.station?.id)
+    .sort((a, b) => a.x - b.x)
+    .at(-1);
+  for (let index = 1; index <= 3; index += 1) {
+    const track = createBuilding(
+      0,
+      TRACK_TYPE,
+      starterTrack.x + TRACK_LENGTH * index,
+      starterTrack.y,
+      true,
+      { rotation, team: activeWorld.sides[0]?.team, nation: activeWorld.sides[0]?.nation },
+    );
+    track.snappedToId = index === 1 ? starterTrack.id : activeWorld.buildings.at(-1)?.id;
+    activeWorld.buildings.push(track);
+  }
+
+  selectEntitiesById(generated?.station ? [generated.station.id] : []);
+  camera.x = 1360;
+  camera.y = 1510;
+  camera.zoom = 1.25;
   clampCamera();
 }
 

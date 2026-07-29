@@ -473,6 +473,25 @@ export const BUILDING_TYPES = {
     cost: { wood: 260, gold: 140, stone: 60 },
     printable: true, peacefulCivic: true, hotkey: 'I',
   },
+  hogwarts_station_constructor: {
+    label: 'Hogwarts Station Blueprint',
+    description: 'A villager-placed constructor that unfolds into a complete Hogwarts Express station.',
+    w: 64, h: 48, radius: 38, visualScale: 1.12, hp: 520, buildTime: 9,
+    cost: { wood: 120, gold: 80, stone: 50 },
+    stationConstructor: true, peacefulCivic: true, buildNations: ['england', 'hogwarts'], hotkey: 'E',
+  },
+  hogwarts_station: {
+    label: 'Hogwarts Express Station',
+    description: 'Red-brick Victorian station with platform, canopy, lamps, signage, and a train ready to depart.',
+    w: 292, h: 150, radius: 152, visualScale: 1.08, hp: 3200, buildTime: 0,
+    cost: {}, station: true, peacefulCivic: true, generatedOnly: true,
+  },
+  hogwarts_track: {
+    label: 'Hogwarts Rail Segment',
+    description: 'Modular rail bed that snaps to the station or another completed rail segment.',
+    w: 96, h: 22, radius: 50, visualScale: 1, hp: 430, buildTime: 5,
+    cost: { wood: 30, stone: 20 }, rail: true, peacefulCivic: true, hotkey: 'T',
+  },
   tower: {
     label: 'Watch Tower', description: 'A garrisoned defensive gun position.',
     w: 52, h: 52, radius: 29, visualScale: 1.28, hp: 1400, buildTime: 14,
@@ -549,6 +568,7 @@ export const BUILDING_TYPES = {
 export function canNationBuildBuilding(nation, buildingType) {
   const def = BUILDING_TYPES[buildingType];
   if (!def) return false;
+  if (def.generatedOnly) return false;
   if (!def.buildNations) return true;
   return def.buildNations.includes(nation);
 }
