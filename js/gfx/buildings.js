@@ -69,7 +69,6 @@ function setBuildingRefs(refs) {
 const BD_SCALE     = 4;
 const BD_RES_SCALE = 4;
 const BD_MILL_FRAMES = 8;
-const BD_FORTIFICATION_ANGLE_BINS = 64;
 let bdFortificationMaterialKey = 'englishFortificationMasonry';
 
 const bdSUN = {
@@ -5273,6 +5272,7 @@ function bdPaintFortification(
   const isGate = type === 'gate';
   const nominalHalfLength = BUILDING_TYPES[type].w * 0.5;
   const connectedWall = !isGate && joinedEnds.some(Boolean);
+  const stampLayers = getFortificationStampLayerProfile(type, joinedEnds);
   const detail = getFortificationMasonryDetailProfile(type, joinedEnds, topology);
   // Keep the solid curtain at the true module length. Extending the whole body
   // by WALL_KIT_SEAM_OVERLAP painted two opaque curtains into every joint and
@@ -5289,12 +5289,17 @@ function bdPaintFortification(
   // Damp / moss intensifies on the settlement-facing side and at inner corners.
   const faceMossBias = detail.mossBias * (interiorSide === 1 ? 1.15 : 0.8);
 
-  // Fitted cobble + deep contact shade seat the curtain into the turf so
-  // joined stamps read as one continuous work, not floating grey cards.
-  bdCobblePatch(g, 0, normal.y * 3, halfLength * 1.14,
-    isGate ? halfThickness * 0.95 : halfThickness * 0.78, seed ^ 0x7712, construction);
-  bdContactShadow(g, 0, normal.y * halfThickness + 4,
-    halfLength * 0.92, isGate ? 58 : 42, 0.96);
+  // A connected curtain is assembled from separately depth-sorted stamps.
+  // Broad grounding baked into each stamp would therefore paint over the
+  // previously drawn neighbour and expose every module as a dark card. Keep
+  // that underlay on standalone pieces and gates; connected stone retains its
+  // own face, plinth and side shading without crossing a shared socket.
+  if (stampLayers.drawGrounding) {
+    bdCobblePatch(g, 0, normal.y * 3, halfLength * 1.14,
+      isGate ? halfThickness * 0.95 : halfThickness * 0.78, seed ^ 0x7712, construction);
+    bdContactShadow(g, 0, normal.y * halfThickness + 4,
+      halfLength * 0.92, isGate ? 58 : 42, 0.96);
+  }
   // Loose footings / fallen chips along the base break the laser-cut silhouette.
   if (!construction) {
     const footing = bdRamp(ottoman ? '#5A564C' : '#2E342F');
@@ -6224,11 +6229,20 @@ export function getFortificationRenderProfile(building, world) {
 export function quantizeFortificationVisualOrientation(orientation) {
   const normalized = normalizeFortificationOrientation(orientation);
   if (!Number.isFinite(normalized)) return normalized;
-  // Fine bins keep freehand runs visually collinear with their gameplay axis.
-  // Coarse 64-step snapping made neighbouring modules paint at different angles
-  // and stack into the cascading-card look along diagonal curtains.
-  const step = Math.PI * 2 / (BD_FORTIFICATION_ANGLE_BINS * 4);
-  return Math.round(normalized / step) * step;
+  // A connected curtain must paint on the exact axis used by its gameplay
+  // sockets. Even fine angle bins move the two rendered ends to opposite sides
+  // of their shared endpoint, which becomes a bright slit at close zoom.
+  // Six decimals keeps cache keys stable while limiting endpoint drift to far
+  // below one source pixel at the longest fortification module length.
+  return Math.round(normalized * 1e6) / 1e6;
+}
+
+export function getFortificationStampLayerProfile(type, joinedEnds = [false, false]) {
+  const connectedWall = isWallSegmentType(type) && joinedEnds.some(Boolean);
+  return {
+    drawGrounding: !connectedWall,
+    drawSilhouetteLining: !connectedWall,
+  };
 }
 
 /**
@@ -6878,6 +6892,7 @@ function bdFortificationSprite(
   const def = BUILDING_TYPES[type];
   const normalized = normalizeFortificationOrientation(building.orientation);
   const orientation = quantizeFortificationVisualOrientation(normalized);
+  const stampLayers = getFortificationStampLayerProfile(type, joinedEnds);
   const variant = ((building.id % 3) + 3) % 3;
   const joinMask = joinedEnds.map(joined => Number(Boolean(joined))).join('');
   const gateFrame = type === 'gate' ? Math.round(bdClamp(gateOpenProgress, 0, 1) * 10) : 10;
@@ -6885,7 +6900,7 @@ function bdFortificationSprite(
   // Quantize world UV so the cache stays bounded while neighbouring modules
   // that share an endpoint still sample continuous rubble texture.
   const uvBin = Math.round(worldUvAlong / 4);
-  const key = `fort-v7|${nation}|${type}|${pieceId}|${building.side}|${orientation}|${variant}|${damageStage}|${joinMask}|${interiorSide}|${gateFrame}|${uvBin}`;
+  const key = `fort-v8|${nation}|${type}|${pieceId}|${building.side}|${orientation}|${variant}|${damageStage}|${joinMask}|${interiorSide}|${gateFrame}|${uvBin}`;
   let sprite = bdBuildingCache.get(key);
   if (sprite) return sprite;
   const box = bdBoxFor(type, def);
@@ -6903,7 +6918,9 @@ function bdFortificationSprite(
       // recess shading and matte stone response. Whole-stamp gallery/varnish
       // passes averaged that authored microcontrast back into a flat beige card.
       // Retain the source relief and add only the silhouette lining below.
-      bdPassLining(g, scale, bdRamp(BMAT.STONE_ROUGH).line);
+      if (stampLayers.drawSilhouetteLining) {
+        bdPassLining(g, scale, bdRamp(BMAT.STONE_ROUGH).line);
+      }
 
       const axis = structure.axis, normal = structure.normal;
       const corners = [

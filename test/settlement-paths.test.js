@@ -4,6 +4,7 @@ import test from 'node:test';
 import { createBuilding } from '../js/economy.js';
 import {
   buildSettlementPathNetwork,
+  buildSettlementLanterns,
   getSettlementPathNodes,
 } from '../js/gfx/settlement-paths.js';
 
@@ -85,4 +86,49 @@ test('organic path control points are deterministic and bend around intervening 
     Math.abs(control.y - ((first.nodes.find(node => node.id === link.a).y
       + first.nodes.find(node => node.id === link.b).y) * 0.5)) > 20
   ))), 'at least one generated path should have a visible organic bend');
+});
+
+test('lantern posts are generated for every path segment and alternate off the walking surface', () => {
+  const buildings = [
+    createBuilding(0, 'town_center', 1200, 1200, true),
+    createBuilding(0, 'house', 1540, 1100, true),
+    createBuilding(0, 'mill', 1810, 1320, true),
+    createBuilding(0, 'barracks', 1460, 1660, true),
+    createBuilding(0, 'stable', 2050, 1680, true),
+  ];
+
+  const network = buildSettlementPathNetwork(buildings);
+  const lanterns = buildSettlementLanterns(network);
+  const litLinks = new Set(lanterns.map(lantern => lantern.linkKey));
+
+  assert.ok(lanterns.length >= network.links.length);
+  assert.equal(litLinks.size, network.links.length);
+  assert.ok(lanterns.every(lantern => Math.hypot(lantern.x - lantern.baseX, lantern.y - lantern.baseY) > 58));
+  assert.ok(lanterns.some(lantern => lantern.side > 0));
+  assert.ok(lanterns.some(lantern => lantern.side < 0));
+});
+
+test('lantern posts avoid brick foundation circles and remain deterministic', () => {
+  const buildings = [
+    createBuilding(0, 'town_center', 1600, 1500, true),
+    createBuilding(0, 'house', 1900, 1500, true),
+    createBuilding(0, 'foundry', 2200, 1510, true),
+    createBuilding(0, 'stable', 1900, 1830, true),
+  ];
+  const network = buildSettlementPathNetwork(buildings);
+  const first = buildSettlementLanterns(network);
+  const second = buildSettlementLanterns(network);
+
+  assert.deepEqual(second, first);
+  assert.ok(first.length > 0);
+  for (const lantern of first) {
+    for (const node of network.nodes) {
+      const dx = lantern.x - node.x;
+      const dy = lantern.y - node.y;
+      const rx = node.rx + 12;
+      const ry = node.ry + 7;
+      assert.ok((dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) > 1,
+        `${lantern.key} should not sit inside ${node.type} brick circle`);
+    }
+  }
 });

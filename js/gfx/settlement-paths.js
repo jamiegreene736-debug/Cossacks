@@ -14,10 +14,13 @@ const MIN_PATH_RADIUS = 42;
 const BASE_PATH_WIDTH = 46;
 const MAX_LINK_DISTANCE = 760;
 const MAX_NEIGHBORS = 3;
+const LANTERN_INTERVAL = 178;
+const LANTERN_EDGE_OFFSET = 42;
 
 let pathCanvas = null;
 let pathCtx = null;
 let cachedSignature = '';
+let cachedLanterns = [];
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -231,6 +234,111 @@ function sampleCubic(start, c1, c2, end, t) {
   };
 }
 
+function cubicTangent(start, c1, c2, end, t) {
+  const u = 1 - t;
+  const x = 3 * u * u * (c1.x - start.x)
+    + 6 * u * t * (c2.x - c1.x)
+    + 3 * t * t * (end.x - c2.x);
+  const y = 3 * u * u * (c1.y - start.y)
+    + 6 * u * t * (c2.y - c1.y)
+    + 3 * t * t * (end.y - c2.y);
+  const len = Math.hypot(x, y) || 1;
+  return { x: x / len, y: y / len };
+}
+
+function linkPolyline(link, samples = 36) {
+  const [c1, c2] = link.controls;
+  const points = [];
+  let length = 0;
+  for (let index = 0; index <= samples; index++) {
+    const t = index / samples;
+    const point = sampleCubic(link.start, c1, c2, link.end, t);
+    if (points.length) {
+      const previous = points[points.length - 1];
+      length += Math.hypot(point.x - previous.x, point.y - previous.y);
+    }
+    points.push({ ...point, t, length });
+  }
+  return { points, length };
+}
+
+function tAtDistance(polyline, distanceAlong) {
+  if (distanceAlong <= 0) return 0;
+  for (let index = 1; index < polyline.points.length; index++) {
+    const previous = polyline.points[index - 1];
+    const current = polyline.points[index];
+    if (current.length < distanceAlong) continue;
+    const segment = Math.max(1e-6, current.length - previous.length);
+    return previous.t + (current.t - previous.t) * clamp((distanceAlong - previous.length) / segment, 0, 1);
+  }
+  return 1;
+}
+
+function isInsideNodeApron(x, y, node, margin = 16) {
+  const dx = x - node.x;
+  const dy = y - node.y;
+  const rx = node.rx + margin;
+  const ry = node.ry + margin * 0.58;
+  return (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) <= 1;
+}
+
+function isTooCloseToStructure(x, y, node, margin = 22) {
+  const radius = Math.max(node.rx, node.obstacleRadius * 0.62) + margin;
+  return Math.hypot(x - node.obstacleX, y - node.obstacleY) <= radius;
+}
+
+function lanternCandidate(link, nodes, t, side, index) {
+  const [c1, c2] = link.controls;
+  const point = sampleCubic(link.start, c1, c2, link.end, t);
+  const tangent = cubicTangent(link.start, c1, c2, link.end, t);
+  const normal = { x: -tangent.y, y: tangent.x };
+  const offset = (link.width * 0.5 + LANTERN_EDGE_OFFSET) * side;
+  const x = point.x + normal.x * offset;
+  const y = point.y + normal.y * offset;
+  const tooClose = nodes.some(node => isInsideNodeApron(x, y, node, 20)
+    || isTooCloseToStructure(x, y, node, 8));
+  return {
+    key: `${link.key}:lantern:${index}`,
+    linkKey: link.key,
+    x,
+    y,
+    baseX: point.x,
+    baseY: point.y,
+    tangent,
+    side,
+    t,
+    tooClose,
+  };
+}
+
+export function buildSettlementLanterns(network) {
+  const nodes = network?.nodes || [];
+  const lanterns = [];
+  for (const link of network?.links || []) {
+    const polyline = linkPolyline(link);
+    const count = Math.max(1, Math.floor((polyline.length - 72) / LANTERN_INTERVAL));
+    const spacing = polyline.length / (count + 1);
+    const startSide = hashString(link.key) % 2 === 0 ? 1 : -1;
+    for (let index = 0; index < count; index++) {
+      const t = clamp(tAtDistance(polyline, spacing * (index + 1)), 0.14, 0.86);
+      const primarySide = startSide * (index % 2 === 0 ? 1 : -1);
+      let candidate = lanternCandidate(link, nodes, t, primarySide, index);
+      if (candidate.tooClose) {
+        const flipped = lanternCandidate(link, nodes, t, -primarySide, index);
+        if (!flipped.tooClose) candidate = flipped;
+      }
+      if (candidate.tooClose) continue;
+      lanterns.push({
+        ...candidate,
+        tooClose: undefined,
+        height: 49 + (hashString(`${candidate.key}:height`) % 7),
+        glowRadius: 74 + (hashString(`${candidate.key}:glow`) % 19),
+      });
+    }
+  }
+  return lanterns;
+}
+
 function drawPathStroke(g, link, width) {
   const [c1, c2] = link.controls;
   g.beginPath();
@@ -240,6 +348,23 @@ function drawPathStroke(g, link, width) {
   g.lineCap = 'round';
   g.lineJoin = 'round';
   g.stroke();
+}
+
+function drawLanternLightPool(g, lantern) {
+  g.save();
+  g.globalCompositeOperation = 'screen';
+  const glow = g.createRadialGradient(lantern.baseX, lantern.baseY, 1, lantern.baseX, lantern.baseY,
+    lantern.glowRadius);
+  glow.addColorStop(0, 'rgba(255,204,118,.24)');
+  glow.addColorStop(0.34, 'rgba(234,154,63,.15)');
+  glow.addColorStop(0.72, 'rgba(171,93,35,.055)');
+  glow.addColorStop(1, 'rgba(110,54,18,0)');
+  g.fillStyle = glow;
+  g.beginPath();
+  g.ellipse(lantern.baseX, lantern.baseY, lantern.glowRadius * 1.08, lantern.glowRadius * 0.58,
+    Math.atan2(lantern.tangent.y, lantern.tangent.x), 0, Math.PI * 2);
+  g.fill();
+  g.restore();
 }
 
 function drawCobblestonePath(g, link) {
@@ -335,15 +460,125 @@ function drawCobblestonePath(g, link) {
   g.restore();
 }
 
+function drawLanternPost(g, lantern, time = 0) {
+  const sway = Math.sin(time * 1.7 + hashString(lantern.key) * 0.001) * 0.45;
+  const postTopY = lantern.y - lantern.height;
+  const armDir = lantern.side > 0 ? -1 : 1;
+  const lanternX = lantern.x + armDir * 12;
+  const lanternY = postTopY + 7 + sway;
+  g.save();
+  g.translate(lantern.x, lantern.y);
+  g.shadowColor = 'rgba(22,17,12,.32)';
+  g.shadowBlur = 5;
+  g.shadowOffsetY = 4;
+  g.fillStyle = 'rgba(28,23,18,.28)';
+  g.beginPath();
+  g.ellipse(0, 4, 7.5, 3.2, -0.08, 0, Math.PI * 2);
+  g.fill();
+  g.shadowColor = 'transparent';
+
+  const wood = '#2D241B';
+  const iron = '#191817';
+  const ironLit = '#4A4034';
+  g.lineCap = 'round';
+  g.strokeStyle = 'rgba(10,9,8,.72)';
+  g.lineWidth = 5.2;
+  g.beginPath();
+  g.moveTo(0, 1);
+  g.lineTo(0, -lantern.height);
+  g.stroke();
+  g.strokeStyle = wood;
+  g.lineWidth = 3.3;
+  g.beginPath();
+  g.moveTo(-0.4, 0);
+  g.lineTo(0.4, -lantern.height + 1);
+  g.stroke();
+  g.strokeStyle = 'rgba(113,89,56,.42)';
+  g.lineWidth = 0.9;
+  g.beginPath();
+  g.moveTo(-1.4, -5);
+  g.lineTo(-0.8, -lantern.height + 7);
+  g.stroke();
+
+  g.strokeStyle = iron;
+  g.lineWidth = 2.2;
+  g.beginPath();
+  g.moveTo(0, -lantern.height + 10);
+  g.quadraticCurveTo(armDir * 7, -lantern.height + 1, armDir * 14, -lantern.height + 8);
+  g.stroke();
+  g.fillStyle = ironLit;
+  g.beginPath();
+  g.arc(0, -lantern.height, 2.4, 0, Math.PI * 2);
+  g.fill();
+  g.restore();
+
+  g.save();
+  g.translate(lanternX, lanternY);
+  const aura = g.createRadialGradient(0, 0, 0, 0, 0, 24);
+  aura.addColorStop(0, 'rgba(255,221,137,.48)');
+  aura.addColorStop(0.42, 'rgba(246,160,68,.20)');
+  aura.addColorStop(1, 'rgba(177,79,22,0)');
+  g.globalCompositeOperation = 'screen';
+  g.fillStyle = aura;
+  g.beginPath();
+  g.ellipse(0, 1, 23, 18, 0, 0, Math.PI * 2);
+  g.fill();
+  g.globalCompositeOperation = 'source-over';
+
+  g.fillStyle = 'rgba(20,18,16,.92)';
+  g.strokeStyle = 'rgba(6,5,4,.75)';
+  g.lineWidth = 1;
+  g.beginPath();
+  g.moveTo(-6, -8);
+  g.lineTo(6, -8);
+  g.lineTo(8, 2);
+  g.lineTo(4, 10);
+  g.lineTo(-4, 10);
+  g.lineTo(-8, 2);
+  g.closePath();
+  g.fill();
+  g.stroke();
+  g.fillStyle = 'rgba(255,209,117,.82)';
+  g.beginPath();
+  g.moveTo(-4.2, -5.3);
+  g.lineTo(4.2, -5.3);
+  g.lineTo(5.4, 2.2);
+  g.lineTo(2.7, 6.8);
+  g.lineTo(-2.7, 6.8);
+  g.lineTo(-5.4, 2.2);
+  g.closePath();
+  g.fill();
+  g.strokeStyle = 'rgba(80,43,20,.42)';
+  g.beginPath();
+  g.moveTo(0, -5.2);
+  g.lineTo(0, 6.5);
+  g.moveTo(-4.8, 0.7);
+  g.lineTo(4.8, 0.7);
+  g.stroke();
+  g.fillStyle = 'rgba(255,245,178,.92)';
+  g.beginPath();
+  g.ellipse(0, 1.8, 2.3, 4.2, 0, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = 'rgba(255,255,210,.72)';
+  g.beginPath();
+  g.ellipse(-1.6, -2.4, 1.2, 2.1, -0.4, 0, Math.PI * 2);
+  g.fill();
+  g.restore();
+}
+
 function redrawPathCanvas(world) {
   ensureCanvas();
   pathCtx.clearRect(0, 0, WORLD.w, WORLD.h);
   const network = buildSettlementPathNetwork(world?.buildings || []);
+  cachedLanterns = buildSettlementLanterns(network);
+  for (const lantern of cachedLanterns) drawLanternLightPool(pathCtx, lantern);
   for (const link of network.links) drawCobblestonePath(pathCtx, link);
+  for (const lantern of cachedLanterns) drawLanternLightPool(pathCtx, lantern);
 }
 
 export function resetSettlementPathCache() {
   cachedSignature = '';
+  cachedLanterns = [];
   if (pathCtx) pathCtx.clearRect(0, 0, WORLD.w, WORLD.h);
 }
 
@@ -362,4 +597,23 @@ export function drawSettlementPaths(ctx, world, visibleWorld) {
   const width = Math.max(1, right - left);
   const height = Math.max(1, bottom - top);
   ctx.drawImage(pathCanvas, left, top, width, height, left, top, width, height);
+}
+
+export function drawSettlementLanterns(ctx, world, visibleWorld, time = 0) {
+  if (!ctx || !world) return;
+  ensureCanvas();
+  const signature = networkSignature(world);
+  if (signature !== cachedSignature) {
+    cachedSignature = signature;
+    redrawPathCanvas(world);
+  }
+  const left = visibleWorld?.left ?? 0;
+  const right = visibleWorld?.right ?? WORLD.w;
+  const top = visibleWorld?.top ?? 0;
+  const bottom = visibleWorld?.bottom ?? WORLD.h;
+  const visibleLanterns = cachedLanterns
+    .filter(lantern => lantern.x >= left - 64 && lantern.x <= right + 64
+      && lantern.y >= top - 86 && lantern.y <= bottom + 24)
+    .sort((a, b) => a.y - b.y);
+  for (const lantern of visibleLanterns) drawLanternPost(ctx, lantern, time);
 }
