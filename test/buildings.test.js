@@ -7,7 +7,8 @@ import {
   bdConstructionArtFrame, BUILDING_HUMAN_REFERENCE_HEIGHT,
   getBuildingConstructionArtWidth, getBuildingPresentation, getFortificationConstructionStage,
   getFortificationMasonryDetailProfile, getFortificationRenderProfile,
-  getProductionBuildingVisibleSize, quantizeFortificationVisualOrientation,
+  getProductionBuildingVisibleSize, getFortificationStampLayerProfile,
+  quantizeFortificationVisualOrientation,
   usesFixedFortificationFrameArt,
 } from '../js/gfx/buildings.js';
 import { MILITARY_ART_SPECS } from '../js/gfx/art-assets.js';
@@ -310,17 +311,29 @@ test('connected wall frames expose only the two ends of the complete run', () =>
   assert.equal(ottomanProfile.nation, 'ottoman');
 });
 
-test('fortification cache orientations stay bounded without flattening curved runs', () => {
-  const bins = new Set();
-  for (let angle = -Math.PI; angle <= Math.PI; angle += 0.001) {
-    bins.add(quantizeFortificationVisualOrientation(angle));
+test('fortification visuals preserve the gameplay socket axis', () => {
+  for (const angle of [-2.7319274, -0.52, -0.04, 0.413, 2.4181237]) {
+    assert.ok(Math.abs(quantizeFortificationVisualOrientation(angle) - angle) <= 0.0000005);
   }
-  // Fine bins (256 around the circle) keep freehand curtains collinear while
-  // still bounding the sprite cache.
-  assert.ok(bins.size <= 260);
-  assert.ok(bins.size >= 200);
-  const angle = 0.413;
-  assert.ok(Math.abs(quantizeFortificationVisualOrientation(angle) - angle) < 0.02);
+});
+
+test('connected wall stamps cannot overpaint neighboring modules with background layers', () => {
+  assert.deepEqual(getFortificationStampLayerProfile('wall', [false, false]), {
+    drawGrounding: true,
+    drawSilhouetteLining: true,
+  });
+  assert.deepEqual(getFortificationStampLayerProfile('wall', [false, true]), {
+    drawGrounding: false,
+    drawSilhouetteLining: false,
+  });
+  assert.deepEqual(getFortificationStampLayerProfile('wall_short', [true, true]), {
+    drawGrounding: false,
+    drawSilhouetteLining: false,
+  });
+  assert.deepEqual(getFortificationStampLayerProfile('gate', [true, true]), {
+    drawGrounding: true,
+    drawSilhouetteLining: true,
+  });
 });
 
 test('connected wall bodies keep nominal length so joints do not double-paint', async () => {
