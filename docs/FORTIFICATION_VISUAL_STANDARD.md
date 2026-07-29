@@ -9,11 +9,16 @@ outside faces required by the rotatable battlefield.
    individual stones become visible. Human figures remain the scale reference.
 2. **Rendering:** fortifications use the connected Canvas model for every
    faction and orientation. Legacy fixed-angle sheets must not replace a saved
-   or newly built section.
-3. **Masonry:** English walls use dark, irregular fieldstone rubble with thick
-   lime mortar. Ottoman walls use warm limestone rubble (dressed ashlar only at
-   corners, gate surrounds and the coping). Both carry recessed mortar, chipped
-   edges, tool marks, moss, lichen and damp staining — never brick-like courses.
+   or newly built section. Stamps are painted in VIEW space: each module's
+   world axis is rotated by the camera before painting, elevation stays
+   screen-vertical, and only camera-facing planes receive face detail. A
+   camera turn to East, North or West therefore keeps every socket, gate jamb
+   and stair landing seam-coincident instead of billboarding modules apart.
+3. **Masonry:** English walls use warm grey-buff limestone laid as coursed
+   squared rubble with thin lime joints — tone varies, hue does not. Ottoman
+   walls use warmer sandy ashlar. Dressed stone appears only at corners, gate
+   surrounds, exposed ends and the coping. Weathering (damp bases, thin water
+   stains, dusty lichen) stays restrained; no confetti noise, no neon moss.
 4. **Assembly:** the modular kit in `js/wall-kit.js` / `docs/MODULAR_WALL_KIT.md`
    guarantees zero-seam sockets. Joined sections overlap beneath their finish,
    suppress internal end caps, share world-space UVs and retain exposed dressed
@@ -37,8 +42,9 @@ outside faces required by the rotatable battlefield.
     straight wall, free-angle bend, staircase with climbing troops, open/closed
     gate and critical-damage wall in the actual game renderer.
 11. **Performance:** completed pieces bake to one runtime blit. Cache keys
-    include nation, type, damage, join mask, inside face, gate frame and a
-    bounded orientation bin.
+    include nation, type, damage, join mask, inside face, gate frame and the
+    quantised VIEW orientation (world angle plus camera turn), so each of the
+    four camera directions bakes its own stamp exactly once.
 12. **Release:** syntax checks, deterministic fortification/save tests, fresh
     and resumed browser playtests, and production deployment verification are
     required before the feature is considered delivered.

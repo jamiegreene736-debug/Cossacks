@@ -2065,3 +2065,58 @@ window.__state = () => {
 
 window.__audioState = () => sfx.getDiagnostics();
 window.__frameMetrics = () => JSON.parse(canvas.dataset.frameMetrics || 'null');
+
+// Console/QA hook: direct world access for rendering QA sessions.
+window.__world = () => world;
+
+// Console/QA hook: instantly raise a representative fortification set — a
+// straight run, a corner, a gatehouse and a staircase — so wall rendering can
+// be inspected from every camera direction without minutes of manual building.
+window.__fortQA = (originX = null, originY = null) => {
+  if (!world) return 'no battle running';
+  const townCenter = world.buildings.find(b => b.alive && b.side === 0 && b.type === 'town_center');
+  const ox = originX ?? (townCenter ? townCenter.x + 240 : 600);
+  const oy = originY ?? (townCenter ? townCenter.y + 40 : 600);
+  const wallW = BUILDING_TYPES.wall.w;
+  const gateW = BUILDING_TYPES.gate.w;
+  const placed = [];
+  const raise = (type, x, y, orientation, extra = {}) => {
+    const building = createBuilding(0, type, x, y, true, {
+      orientation, team: world.sides[0].team, nation: world.sides[0].nation, ...extra,
+    });
+    world.buildings.push(building);
+    placed.push(building);
+    return building;
+  };
+  // Straight run west→east: wall, wall, gate, wall, then a 90° corner south.
+  let x = ox;
+  raise('wall', x, oy, 0); x += wallW * 0.5 + gateW * 0.5;
+  raise('gate', x, oy, 0); x += gateW * 0.5 + wallW * 0.5;
+  raise('wall', x, oy, 0); x += wallW * 0.5;
+  const cornerX = x;
+  raise('wall', cornerX, oy + wallW * 0.5, Math.PI / 2);
+  raise('wall', cornerX, oy + wallW * 1.5, Math.PI / 2);
+  // Staircase on the settlement side of the first wall.
+  const host = placed[0];
+  const stairDef = BUILDING_TYPES.wall_stairs;
+  const interior = fortificationInteriorSide(world, host);
+  raise('wall_stairs', host.x, host.y + interior * (host.h * 0.5 + stairDef.h * 0.5 - 3), 0, {
+    wallId: host.id, stairSide: interior, stairAlong: 0,
+  });
+  // A freehand curved run: five modules turning 15° each, chained socket to
+  // socket exactly as planCurvedWallRun places them.
+  let px = ox - wallW * 0.5 - 40;
+  let py = oy + 60;
+  for (let index = 0; index < 5; index++) {
+    const angle = Math.PI * 0.78 + index * (Math.PI / 12);
+    const ax = Math.cos(angle), ay = Math.sin(angle);
+    raise('wall', px + ax * wallW * 0.5, py + ay * wallW * 0.5, angle);
+    px += ax * wallW; py += ay * wallW;
+  }
+  // A second, closed gate south of the run to exercise the barred state.
+  const closed = raise('gate', ox, oy + 170, 0);
+  closed.gateOpen = false;
+  world.navigationVersion = (world.navigationVersion || 0) + 1;
+  window.__tick(0.05);
+  return `${placed.length} fortification pieces raised at (${ox | 0},${oy | 0})`;
+};
