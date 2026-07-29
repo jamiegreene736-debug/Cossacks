@@ -3,6 +3,25 @@ import {
 } from '../railways.js';
 
 const TAU = Math.PI * 2;
+const FOG_STEP_COUNT = 11;
+const HOGWARTS_FOG_PROFILE = Object.freeze({
+  day: Object.freeze({
+    density: 0.34,
+    heightFalloff: 0.018,
+    groundBias: 0.72,
+    scattering: Object.freeze({ r: 192, g: 211, b: 220 }),
+    anisotropy: 0.28,
+    magic: 0.18,
+  }),
+  night: Object.freeze({
+    density: 0.72,
+    heightFalloff: 0.026,
+    groundBias: 1,
+    scattering: Object.freeze({ r: 170, g: 198, b: 226 }),
+    anisotropy: 0.62,
+    magic: 0.42,
+  }),
+});
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
@@ -14,6 +33,33 @@ function hashUnit(seed) {
 
 function nightAmount(worldTime = 0) {
   return clamp01(0.48 + Math.sin((worldTime || 0) * 0.035 - 1.15) * 0.42);
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function mixFogProfile(worldTime = 0) {
+  const night = nightAmount(worldTime);
+  const day = HOGWARTS_FOG_PROFILE.day;
+  const dark = HOGWARTS_FOG_PROFILE.night;
+  return {
+    night,
+    density: lerp(day.density, dark.density, night),
+    heightFalloff: lerp(day.heightFalloff, dark.heightFalloff, night),
+    groundBias: lerp(day.groundBias, dark.groundBias, night),
+    anisotropy: lerp(day.anisotropy, dark.anisotropy, night),
+    magic: lerp(day.magic, dark.magic, night),
+    scattering: {
+      r: lerp(day.scattering.r, dark.scattering.r, night),
+      g: lerp(day.scattering.g, dark.scattering.g, night),
+      b: lerp(day.scattering.b, dark.scattering.b, night),
+    },
+  };
+}
+
+function fogRgba(color, alpha) {
+  return `rgba(${Math.round(color.r)},${Math.round(color.g)},${Math.round(color.b)},${alpha})`;
 }
 
 function ellipse(ctx, x, y, rx, ry, fill, stroke = null, width = 1) {
@@ -161,6 +207,101 @@ function drawCanopyRay(ctx, x0, y0, x1, y1, width, phase, alpha) {
   ctx.fill();
 }
 
+function drawVolumetricFogVolume(ctx, volume, worldTime, profile = mixFogProfile(worldTime)) {
+  const {
+    x, y, w, h, density = 1, heightFalloff = profile.heightFalloff,
+    color = profile.scattering, anisotropy = profile.anisotropy, seed = 1,
+    drift = 1, magic = 0, stepCount = FOG_STEP_COUNT,
+  } = volume;
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  for (let i = 0; i < stepCount; i += 1) {
+    const t = i / Math.max(1, stepCount - 1);
+    const heightDensity = Math.exp(-t * h * heightFalloff) * (1 - t * 0.42);
+    const forwardScatter = 0.62 + anisotropy * (1 - Math.abs(t - 0.34));
+    const turbulence = 0.72 + hashUnit(seed + i * 17.1) * 0.48;
+    const phase = worldTime * (0.17 + hashUnit(seed + i * 2.7) * 0.08) + i * 1.83;
+    const dx = Math.sin(phase) * 9 * drift + (hashUnit(seed + i * 3.7) - 0.5) * 14;
+    const dy = -t * h * 0.72 + Math.cos(phase * 0.7) * 3.5;
+    const alpha = clamp01(density * profile.density * heightDensity * forwardScatter * turbulence * 0.16);
+    ellipse(ctx, x + dx, y + dy, w * (0.42 + t * 0.34), h * (0.06 + t * 0.025), fogRgba(color, alpha));
+    if (magic > 0) {
+      ellipse(ctx, x + dx * 0.7, y + dy - 2, w * (0.22 + t * 0.18), h * 0.026,
+        `rgba(255,211,110,${alpha * magic * profile.magic})`);
+    }
+  }
+  ctx.restore();
+}
+
+function drawExponentialTrackFog(ctx, seed, worldTime, length, width, profile = mixFogProfile(worldTime)) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  for (let i = 0; i < 13; i += 1) {
+    const t = i / 12;
+    const x = -length * 0.5 + length * t;
+    const ground = profile.groundBias * Math.exp(-Math.abs(t - 0.5) * 1.4);
+    const drift = Math.sin(worldTime * 0.22 + seed + i * 1.7) * 11;
+    const alpha = (0.025 + profile.night * 0.025) * ground;
+    ellipse(ctx, x + drift, 12 + Math.sin(seed + i) * 4, width * (0.18 + hashUnit(seed + i) * 0.09),
+      6 + hashUnit(seed + i * 2) * 5, fogRgba(profile.scattering, alpha));
+  }
+  ctx.restore();
+}
+
+function drawVolumetricLightShaft(ctx, shaft, worldTime, profile = mixFogProfile(worldTime)) {
+  const {
+    x0, y0, x1, y1, width = 22, color = { r: 255, g: 218, b: 142 },
+    density = 1, anisotropy = profile.anisotropy, seed = 0,
+  } = shaft;
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  for (let i = 0; i < 8; i += 1) {
+    const t0 = i / 8;
+    const t1 = (i + 1) / 8;
+    const w0 = width * (0.2 + t0 * (1.15 + anisotropy * 0.45));
+    const w1 = width * (0.2 + t1 * (1.15 + anisotropy * 0.45));
+    const haze = 0.045 * density * profile.density * (1 - t0 * 0.62)
+      * (0.82 + Math.sin(worldTime * 0.75 + seed + i) * 0.1);
+    const ax0 = lerp(x0, x1, t0);
+    const ay0 = lerp(y0, y1, t0);
+    const ax1 = lerp(x0, x1, t1) + Math.sin(worldTime * 0.23 + seed + i) * 2.6;
+    const ay1 = lerp(y0, y1, t1);
+    const grad = ctx.createLinearGradient(ax0, ay0, ax1, ay1);
+    grad.addColorStop(0, `rgba(${color.r},${color.g},${color.b},${haze})`);
+    grad.addColorStop(1, `rgba(${color.r},${color.g},${color.b},${haze * 0.18})`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(ax0 - w0 * 0.22, ay0);
+    ctx.lineTo(ax0 + w0 * 0.22, ay0);
+    ctx.lineTo(ax1 + w1, ay1);
+    ctx.lineTo(ax1 - w1, ay1);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawHeadlampVolumetricFog(ctx, train, locomotiveOffset, worldTime, profile = mixFogProfile(worldTime)) {
+  const speed = Math.max(0, train.visualSpeed || 0);
+  const beamLength = 230 + Math.min(60, speed * 0.7);
+  const strength = 0.8 + profile.night * 0.85 + Math.min(0.25, speed / 150);
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  for (let i = 0; i < 13; i += 1) {
+    const t = i / 12;
+    const x = locomotiveOffset + 58 + beamLength * t;
+    const cone = 7 + t * 55;
+    const axialDensity = Math.exp(-t * 1.55) * strength;
+    const alpha = 0.032 * profile.density * axialDensity * (0.9 + profile.anisotropy * 0.55);
+    const drift = Math.sin(worldTime * 0.5 + i * 1.6 + train.id) * (1 + t * 6);
+    ellipse(ctx, x, -13 + drift * 0.24, cone, 5 + cone * 0.21,
+      `rgba(255,231,166,${alpha})`);
+    ellipse(ctx, x - 7, -13 - cone * 0.16 + drift * 0.18, cone * 0.42, 2.8 + cone * 0.065,
+      fogRgba(profile.scattering, alpha * 0.52));
+  }
+  ctx.restore();
+}
+
 function drawWeatheredPanel(ctx, x, y, w, h, color) {
   roundedRect(ctx, x, y, w, h, 3, color, 'rgba(28,13,10,.72)', 1.1);
   const grime = ctx.createLinearGradient(x, y, x, y + h);
@@ -261,6 +402,7 @@ export function drawRailSegment(ctx, track, worldTime = 0) {
   const complete = track.complete !== false;
   const progress = complete ? 1 : clamp01(track.progress || 0.08);
   const night = nightAmount(worldTime);
+  const fogProfile = mixFogProfile(worldTime);
 
   ctx.fillStyle = `rgba(8,6,6,${0.24 + night * 0.16})`;
   ctx.beginPath();
@@ -278,6 +420,7 @@ export function drawRailSegment(ctx, track, worldTime = 0) {
     [1, 'rgba(74,99,128,0)'],
   ], 0.24);
   ctx.globalCompositeOperation = 'source-over';
+  drawExponentialTrackFog(ctx, (track.id || 0) * 13, worldTime, TRACK_LENGTH * progress, 58, fogProfile);
 
   const ballast = ctx.createLinearGradient(0, -18, 0, 18);
   ballast.addColorStop(0, '#8c8170');
@@ -371,7 +514,20 @@ export function drawHogwartsStation(ctx, station, worldTime = 0) {
   ctx.translate(station.x, station.y);
   ctx.rotate(station.rotation || 0);
   const night = nightAmount(worldTime);
+  const fogProfile = mixFogProfile(worldTime);
   ellipse(ctx, 8, 68, 191, 49, `rgba(10,8,8,${0.28 + night * 0.15})`);
+  drawVolumetricFogVolume(ctx, {
+    x: 15, y: 65, w: 388, h: 118, density: 0.92, seed: (station.id || 0) * 5,
+    color: fogProfile.scattering, anisotropy: fogProfile.anisotropy, magic: 0.12,
+  }, worldTime, fogProfile);
+  drawVolumetricFogVolume(ctx, {
+    x: -105, y: 24, w: 168, h: 82, density: 0.52, seed: (station.id || 0) * 7 + 2,
+    color: { r: 255, g: 210, b: 126 }, anisotropy: 0.78, magic: 0.25,
+  }, worldTime, fogProfile);
+  drawVolumetricFogVolume(ctx, {
+    x: 112, y: 28, w: 158, h: 78, density: 0.48, seed: (station.id || 0) * 11 + 4,
+    color: { r: 255, g: 205, b: 118 }, anisotropy: 0.76, magic: 0.22,
+  }, worldTime, fogProfile);
   ctx.save();
   ctx.globalCompositeOperation = 'screen';
   fillRadial(ctx, 15, -34, 12, 260, [
@@ -414,6 +570,13 @@ export function drawHogwartsStation(ctx, station, worldTime = 0) {
       (0.022 + night * 0.047) * (0.8 + Math.sin(worldTime + i) * 0.16));
   }
   ctx.restore();
+  for (const [i, x] of [-128, -76, -17, 44, 102, 145].entries()) {
+    drawVolumetricLightShaft(ctx, {
+      x0: x, y0: -31, x1: x + 28, y1: 73, width: 17 + i,
+      color: { r: 255, g: 222, b: 151 }, density: 0.84 + night * 0.58,
+      anisotropy: fogProfile.anisotropy, seed: (station.id || 0) * 19 + i,
+    }, worldTime, fogProfile);
+  }
   drawCanopy(ctx, -155, -20, 326, 52);
 
   roundedRect(ctx, -33, -80, 91, 20, 2, '#221f1b', '#d6b45c', 1.2);
@@ -453,6 +616,11 @@ export function drawHogwartsStation(ctx, station, worldTime = 0) {
   line(ctx, 128, 44, 151, 40, '#2c2925', 1.2);
   ellipse(ctx, 126, 47, 3, 3, '#1b1714');
   ellipse(ctx, 152, 42, 3, 3, '#1b1714');
+  drawVolumetricFogVolume(ctx, {
+    x: 2, y: 73, w: 336, h: 54, density: 0.44 + night * 0.24,
+    seed: (station.id || 0) * 23 + 1, color: fogProfile.scattering,
+    anisotropy: fogProfile.anisotropy * 0.82, magic: 0.08,
+  }, worldTime, fogProfile);
   ctx.restore();
 }
 
@@ -662,15 +830,22 @@ export function drawHogwartsTrain(ctx, train, worldTime = 0) {
   ctx.rotate(train.rotation || 0);
   const phase = (Number(train.distanceTravelled) || 0) / 9.4;
   const night = nightAmount(worldTime);
+  const fogProfile = mixFogProfile(worldTime);
   ellipse(ctx, 4, 18, 169, 23, `rgba(5,4,4,${0.3 + night * 0.16})`);
   const carriages = train.carriages || [];
   const locomotive = carriages.find(carriage => carriage.role === 'locomotive');
   const locomotiveOffset = locomotive?.offset ?? 94;
+  drawVolumetricFogVolume(ctx, {
+    x: 10, y: 20, w: 305, h: 72, density: 0.58 + night * 0.34,
+    seed: (train.id || 0) * 29, color: fogProfile.scattering,
+    anisotropy: fogProfile.anisotropy, magic: 0.05, drift: 1.35,
+  }, worldTime, fogProfile);
   ctx.save();
   ctx.globalCompositeOperation = 'screen';
   ellipse(ctx, -5, -14, 168, 33, `rgba(93,133,174,${0.028 + night * 0.04})`);
   ellipse(ctx, 23, -35, 116, 22, `rgba(255,193,88,${0.022 + night * 0.028})`);
   ctx.restore();
+  drawHeadlampVolumetricFog(ctx, train, locomotiveOffset, worldTime, fogProfile);
   drawHeadlampBeam(ctx, train, locomotiveOffset, worldTime);
   drawWheelAshAndSparks(ctx, train, worldTime, locomotiveOffset);
   drawCylinderSteam(ctx, train, worldTime, locomotiveOffset);
@@ -687,6 +862,11 @@ export function drawHogwartsTrain(ctx, train, worldTime = 0) {
   line(ctx, -126, -39, locomotiveOffset + 56, -20, `rgba(178,215,255,${0.09 + night * 0.1})`, 1.3);
   line(ctx, -124, -28, locomotiveOffset + 44, -4, `rgba(255,215,128,${0.045 + night * 0.055})`, 0.9);
   ctx.restore();
+  drawVolumetricFogVolume(ctx, {
+    x: locomotiveOffset + 10, y: 9, w: 128, h: 52, density: 0.35 + Math.min(0.34, (train.visualSpeed || 0) / 180),
+    seed: (train.id || 0) * 37 + 3, color: { r: 226, g: 229, b: 218 },
+    anisotropy: fogProfile.anisotropy * 0.95, magic: 0.03, drift: 1.7, stepCount: 8,
+  }, worldTime, fogProfile);
   ctx.restore();
 }
 
