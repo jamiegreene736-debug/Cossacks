@@ -86,6 +86,38 @@ test('turning produces a bounded bank and braking returns it to level flight', (
   assert.equal(witch.flightState, 'hover');
 });
 
+test('broom travel bends into a graceful course instead of a rigid straight line', () => {
+  const witch = {
+    id: 122, unitType: 'witch_duelist', type: 'witch_duelist',
+    speed: 70, facing: 1, x: 100, y: 100, moving: false, fireT: 0, state: 'move',
+    flightHeight: WITCH_FLIGHT_HEIGHT, pFlightHeight: WITCH_FLIGHT_HEIGHT,
+  };
+  for (let tick = 0; tick < 45; tick++) {
+    moveBroomWitch(witch, 1, 0, witch.speed, 640 - tick * 3, 5, 1 / 30);
+    stepWitchFlight(witch, 1 / 30);
+  }
+  assert.ok(Math.abs(witch.y - 100) > 3.5, 'curved broom course gains visible lateral grace');
+  assert.ok(Math.abs(witch.flightCurve) > 0.03);
+  assert.ok(['cruise', 'bank'].includes(witch.flightState));
+});
+
+test('broom steering anticipates nearby village obstacles before collision resolution snaps it', () => {
+  const world = {
+    buildings: [{ alive: true, x: 180, y: 100, radius: 58 }],
+    resources: [],
+  };
+  const witch = {
+    id: 123, unitType: 'broom_rider', type: 'cav',
+    speed: 108, facing: 1, x: 120, y: 100, moving: false, fireT: 0, state: 'move',
+    radius: 7, flightHeight: WITCH_FLIGHT_HEIGHT, pFlightHeight: WITCH_FLIGHT_HEIGHT,
+  };
+  moveBroomWitch(witch, 1, 0, witch.speed, 400, 5, 1 / 30, { world });
+  stepWitchFlight(witch, 1 / 30);
+
+  assert.ok(witch.flightAvoidance > 0.15);
+  assert.notEqual(Math.sign(witch.flightVy), 0, 'avoidance introduces a vertical dodge instead of piercing the building');
+});
+
 test('airborne witches expose a readable wake, hover, and scale visual contract', () => {
   const witch = {
     id: 77,
@@ -104,6 +136,8 @@ test('airborne witches expose a readable wake, hover, and scale visual contract'
     flightVy: 0,
     flightBank: WITCH_BANK_LIMIT * 0.7,
     pFlightBank: WITCH_BANK_LIMIT * 0.6,
+    flightPitch: 0.12,
+    pFlightPitch: 0.1,
     flightTime: 0.8,
   };
   const visual = getWitchFlightVisual(witch, 0.5);
@@ -115,6 +149,10 @@ test('airborne witches expose a readable wake, hover, and scale visual contract'
   assert.ok(Math.abs(visual.motion.rotation) > WITCH_BANK_LIMIT * 0.65);
   assert.ok(visual.motion.scaleX > 1.02);
   assert.ok(visual.motion.scaleY < 0.99);
+  assert.ok(Math.abs(visual.pitch) > 0.08);
+  assert.equal(visual.motion.broomPitch, visual.pitch);
+  assert.ok(Math.abs(visual.robeFlutter) > 0.01);
+  assert.ok('wakeCurl' in visual.motion);
 });
 
 test('witch workers land before beginning an assigned economic action', () => {
@@ -168,6 +206,12 @@ test('flight height, velocity, bank, and transition survive save and resume', ()
     flightBank: 0.08,
     pFlightBank: 0.06,
     flightBankVelocity: -0.2,
+    flightPitch: 0.11,
+    pFlightPitch: 0.09,
+    flightPitchVelocity: 0.04,
+    flightCourseHeading: 0.42,
+    flightCourseDistance: 390,
+    flightCourse: { sign: -1, curvature: 0.3, phase: 1.2, startedAt: 7 },
     flightState: 'bank',
   });
   const commanders = world.sides.slice(1).map((_side, side) => new Commander(world, side + 1));
@@ -180,6 +224,8 @@ test('flight height, velocity, bank, and transition survive save and resume', ()
   assert.equal(restored.flightVx, 37);
   assert.equal(restored.flightVy, -12);
   assert.equal(restored.flightBank, 0.08);
+  assert.equal(restored.flightPitch, 0.11);
+  assert.equal(restored.flightCourse.curvature, 0.3);
   assert.equal(restored.flightState, 'bank');
 });
 

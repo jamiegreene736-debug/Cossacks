@@ -669,7 +669,7 @@ function updateUnit(world, u, dt) {
     if (isBroomWitch(u)) {
       const driftY = u.fleeYDrift * 0.42;
       const length = Math.hypot(dirX, driftY) || 1;
-      moveBroomWitch(u, dirX / length, driftY / length, u.speed * 1.2, Infinity, 0, dt);
+      moveBroomWitch(u, dirX / length, driftY / length, u.speed * 1.2, Infinity, 0, dt, { world });
     } else {
       u.x += dirX * u.speed * 1.2 * dt;
       u.y += u.fleeYDrift * u.speed * 0.5 * dt;
@@ -841,7 +841,7 @@ function updateUnit(world, u, dt) {
       const nx = mx / md, ny = my / md;
       const oldX = u.x, oldY = u.y;
       if (isBroomWitch(u)) {
-        moveBroomWitch(u, nx, ny, sp, md, stopAt, dt);
+        moveBroomWitch(u, nx, ny, sp, md, stopAt, dt, { world });
       } else {
         u.x += nx * sp * dt;
         u.y += ny * sp * dt;

@@ -1033,6 +1033,7 @@ function drawWitchFlightAtmospherics(context, sprite, visual, visualFacing) {
   const facing = visualFacing >= 0 ? 1 : -1;
   const wakeAlpha = Math.max(0, Math.min(0.72, visual.trailAlpha || 0));
   const wakeLength = Math.max(0, visual.trailLength || 0);
+  const wakeCurl = Math.max(-0.65, Math.min(0.65, visual.motion?.wakeCurl || 0));
   const broomY = -sprite.ay + sprite.h * 0.66;
   const trailX = -facing * (sprite.w * 0.28);
   const glowX = facing * (sprite.w * 0.12);
@@ -1059,9 +1060,9 @@ function drawWitchFlightAtmospherics(context, sprite, visual, visualFacing) {
       context.moveTo(trailX - facing * wakeLength, bandY + Math.sin(band) * 1.3);
       context.bezierCurveTo(
         trailX - facing * wakeLength * 0.56,
-        bandY - 4 + band * 1.8,
+        bandY - 4 + band * 1.8 + wakeCurl * 11,
         trailX - facing * wakeLength * 0.18,
-        bandY + 3 - band,
+        bandY + 3 - band - wakeCurl * 8,
         trailX + facing * 9,
         bandY,
       );
@@ -1101,6 +1102,9 @@ function drawWitchFlightDetailOverlay(context, sprite, visual, visualFacing) {
   if (alpha <= 0.03) return;
   const broomY = -sprite.ay + sprite.h * 0.66;
   const motion = visual.motion;
+  const pitch = Math.max(-0.22, Math.min(0.24, motion.broomPitch || 0));
+  const flutter = Math.max(-1, Math.min(1, motion.robeFlutter || 0));
+  const noseLift = pitch * 16;
 
   context.save();
   context.translate(motion.shiftX, motion.shiftY);
@@ -1114,8 +1118,12 @@ function drawWitchFlightDetailOverlay(context, sprite, visual, visualFacing) {
   context.strokeStyle = 'rgba(12, 10, 16, 0.92)';
   context.lineWidth = 7.8;
   context.beginPath();
-  context.moveTo(-facing * 35, broomY + 2);
-  context.bezierCurveTo(-facing * 13, broomY - 3, facing * 11, broomY - 4, facing * 35, broomY - 8);
+  context.moveTo(-facing * 35, broomY + 2 + noseLift * 0.35);
+  context.bezierCurveTo(
+    -facing * 13, broomY - 3 + noseLift * 0.1,
+    facing * 11, broomY - 4 - noseLift * 0.22,
+    facing * 35, broomY - 8 - noseLift,
+  );
   context.stroke();
 
   const broomGlow = context.createLinearGradient(-facing * 34, broomY, facing * 36, broomY - 9);
@@ -1126,8 +1134,12 @@ function drawWitchFlightDetailOverlay(context, sprite, visual, visualFacing) {
   context.strokeStyle = broomGlow;
   context.lineWidth = 2.65;
   context.beginPath();
-  context.moveTo(-facing * 35, broomY + 2);
-  context.bezierCurveTo(-facing * 13, broomY - 3, facing * 11, broomY - 4, facing * 35, broomY - 8);
+  context.moveTo(-facing * 35, broomY + 2 + noseLift * 0.35);
+  context.bezierCurveTo(
+    -facing * 13, broomY - 3 + noseLift * 0.1,
+    facing * 11, broomY - 4 - noseLift * 0.22,
+    facing * 35, broomY - 8 - noseLift,
+  );
   context.stroke();
 
   context.globalAlpha = alpha;
@@ -1135,8 +1147,8 @@ function drawWitchFlightDetailOverlay(context, sprite, visual, visualFacing) {
   context.lineWidth = 1.15;
   for (let strand = -2; strand <= 2; strand++) {
     context.beginPath();
-    context.moveTo(-facing * (35 + Math.abs(strand) * 1.4), broomY + strand * 1.7);
-    context.lineTo(-facing * (47 + Math.abs(strand) * 1.8), broomY + 2 + strand * 2.9);
+    context.moveTo(-facing * (35 + Math.abs(strand) * 1.4), broomY + strand * 1.7 + noseLift * 0.35);
+    context.lineTo(-facing * (47 + Math.abs(strand) * 1.8), broomY + 2 + strand * 2.9 + flutter * 2.1);
     context.stroke();
   }
 
@@ -1148,10 +1160,18 @@ function drawWitchFlightDetailOverlay(context, sprite, visual, visualFacing) {
   context.strokeStyle = `rgba(219, 198, 139, ${0.28 * alpha})`;
   context.lineWidth = 1;
   context.beginPath();
-  context.moveTo(facing * 14, broomY - 34);
-  context.bezierCurveTo(facing * 5, broomY - 37, -facing * 11, broomY - 31, -facing * 25, broomY - 17);
-  context.bezierCurveTo(-facing * 13, broomY - 9, facing * 7, broomY - 8, facing * 22, broomY - 15);
-  context.bezierCurveTo(facing * 25, broomY - 24, facing * 21, broomY - 31, facing * 14, broomY - 34);
+  context.moveTo(facing * 14, broomY - 34 - pitch * 5);
+  context.bezierCurveTo(
+    facing * 5, broomY - 37 - pitch * 4,
+    -facing * (11 + flutter * 1.4), broomY - 31 + flutter * 2,
+    -facing * (25 + flutter * 4.5), broomY - 17 + flutter * 3.2,
+  );
+  context.bezierCurveTo(
+    -facing * (13 + flutter * 2), broomY - 9 + flutter * 1.7,
+    facing * 7, broomY - 8 - pitch * 2,
+    facing * 22, broomY - 15 - pitch * 5,
+  );
+  context.bezierCurveTo(facing * 25, broomY - 24 - pitch * 6, facing * 21, broomY - 31 - pitch * 6, facing * 14, broomY - 34 - pitch * 5);
   context.fill();
   context.stroke();
 
