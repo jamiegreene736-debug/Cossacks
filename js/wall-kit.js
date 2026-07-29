@@ -185,10 +185,12 @@ export function classifyWallKitTopology(building, world, { includeIncomplete = f
     const neighborsByEnd = endpointNeighbors(building, world, { includeIncomplete });
     const neighborCounts = neighborsByEnd.map(list => list.length);
     const joinedEnds = neighborCounts.map(count => count > 0);
+    const gateJoinedEnds = [false, false];
     return {
       pieceId: 'gate',
       piece: WALL_KIT_PIECES.gate,
       joinedEnds,
+      gateJoinedEnds,
       neighborCounts,
       bendRadians: [0, 0],
       isOuterCorner: false,
@@ -202,6 +204,7 @@ export function classifyWallKitTopology(building, world, { includeIncomplete = f
       pieceId: 'ramp',
       piece: WALL_KIT_PIECES.ramp,
       joinedEnds: [false, false],
+      gateJoinedEnds: [false, false],
       neighborCounts: [0, 0],
       bendRadians: [0, 0],
       isOuterCorner: false,
@@ -215,6 +218,7 @@ export function classifyWallKitTopology(building, world, { includeIncomplete = f
   const neighborsByEnd = endpointNeighbors(building, world, { includeIncomplete });
   const neighborCounts = neighborsByEnd.map(list => list.length);
   const joinedEnds = neighborCounts.map(count => count > 0);
+  const gateJoinedEnds = neighborsByEnd.map(list => list.some(neighbor => neighbor.type === 'gate'));
   const selfAxis = fortificationAxis(building.orientation);
   const bendRadians = neighborsByEnd.map((list, endIndex) => {
     if (!list.length) return 0;
@@ -245,6 +249,7 @@ export function classifyWallKitTopology(building, world, { includeIncomplete = f
     pieceId,
     piece: WALL_KIT_PIECES[pieceId],
     joinedEnds,
+    gateJoinedEnds,
     neighborCounts,
     bendRadians,
     isOuterCorner,

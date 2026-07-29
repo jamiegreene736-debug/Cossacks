@@ -4060,12 +4060,13 @@ function bdFortStoneFace(g, axis, normal, along, across, halfLength,
   const faceWidth = Math.max(1, right - left);
   const lite = Boolean(o.lite);
   const ottoman = bdFortificationMaterialKey === 'ottomanFortificationMasonry';
-  const mortarFill = bdRgba(ottoman ? '#A9A291' : '#6A7068', ottoman ? 0.62 : 0.58);
-  const darkMortar = bdRgba(ottoman ? '#2A2924' : '#0E120F', 0.90);
-  const limeMortar = bdRgba(ottoman ? '#C7C0AE' : '#8B9187', 0.38);
+  const mortarFill = bdRgba(ottoman ? '#9B9587' : '#6D746B', ottoman ? 0.66 : 0.62);
+  const darkMortar = bdRgba(ottoman ? '#29271F' : '#252B25', 0.78);
+  const limeMortar = bdRgba(ottoman ? '#D3CAB5' : '#B8BBB0', 0.34);
+  const dampJoint = bdRgba(ottoman ? '#373B2C' : '#2D372B', 0.36);
   const stones = (ottoman
-    ? ['#7A7468', '#6A655A', '#8C8578', '#58564F', '#746F63', '#635E54', '#504E47', '#817A6C']
-    : ['#3A423C', '#2C342E', '#4A524B', '#232B26', '#353D37', '#414943', '#1C241F', '#485048'])
+    ? ['#847E70', '#6A655A', '#988F7D', '#5A574D', '#776F61', '#625D52', '#514F47', '#8C836F', '#A39B8A']
+    : ['#626960', '#4F574F', '#747B70', '#3F4740', '#586158', '#687066', '#363F38', '#7F857A', '#8F9488'])
     .map(colour => bdRamp(colour));
 
   // Recessed lime bed — visible thick mortar between every irregular stone.
@@ -4083,16 +4084,16 @@ function bdFortStoneFace(g, axis, normal, along, across, halfLength,
   g.fill();
 
   // Discretized skyline: each column stores how high it is already filled.
-  const colStep = lite ? (coarse ? 3.4 : 2.6) : (coarse ? 2.4 : 1.85);
-  const cols = Math.max(6, Math.min(48, Math.round(faceWidth / colStep)));
+  const colStep = lite ? (coarse ? 3.2 : 2.4) : (coarse ? 2.0 : 1.55);
+  const cols = Math.max(8, Math.min(64, Math.round(faceWidth / colStep)));
   const colW = faceWidth / cols;
   const skyline = new Float32Array(cols);
   for (let i = 0; i < cols; i++) skyline[i] = baseElevation + rr(0, 0.35);
 
   const minStoneW = coarse || lite ? 2 : 2;
-  const maxStoneW = coarse || lite ? 5 : 6;
-  const minStoneH = coarse || lite ? 3.2 : 2.4;
-  const maxStoneH = coarse || lite ? 9.5 : 7.4;
+  const maxStoneW = coarse || lite ? 5 : 7;
+  const minStoneH = coarse || lite ? 2.8 : 2.0;
+  const maxStoneH = coarse || lite ? 8.4 : 6.3;
   let placed = 0;
   // Hard cap — construction paints this path every frame until cached.
   const maxStones = Math.min(
@@ -4137,6 +4138,7 @@ function bdFortStoneFace(g, axis, normal, along, across, halfLength,
     const e1 = e0 + stoneH;
     const overhang = rr(-0.15, 0.55);
     const material = stones[Math.floor(rr(0, stones.length)) % stones.length];
+    const sunLift = rr(0.0, 0.18);
     // Irregular quad — no shared horizontal edge with neighbours.
     const p0 = bdFortPoint(axis, normal, lo + rr(0, 0.35), across + 0.10, e0 + rr(0, 0.35));
     const p1 = bdFortPoint(axis, normal, hi - rr(0, 0.35), across + 0.10 + overhang * 0.05, e0);
@@ -4145,17 +4147,25 @@ function bdFortStoneFace(g, axis, normal, along, across, halfLength,
     bdPoly(g, bdFortFlat([p0, p1, p2, p3]), material, {
       line: false, lit: false, shade: false,
     });
-    g.strokeStyle = bdRgba(material.lit, rr(0.20, 0.40));
-    g.lineWidth = 0.48;
+    // Simulated normal map: bright upper-left arris, dark lower bed joint and
+    // short side occlusion. The wall remains a canvas sprite, but the eye gets
+    // the same cues as albedo + normal + AO + roughness in a PBR material.
+    g.strokeStyle = bdRgba(material.lit, rr(0.22 + sunLift, 0.40 + sunLift));
+    g.lineWidth = rr(0.32, 0.58);
     g.beginPath(); g.moveTo(p3.x, p3.y); g.lineTo(p2.x, p2.y); g.stroke();
     g.strokeStyle = darkMortar;
-    g.lineWidth = rr(0.65, 1.15);
+    g.lineWidth = rr(0.56, 1.02);
     g.beginPath(); g.moveTo(p0.x, p0.y); g.lineTo(p1.x, p1.y); g.stroke();
     if (!lite) {
       g.strokeStyle = placed % 3 ? darkMortar : limeMortar;
-      g.lineWidth = rr(0.75, 1.25);
+      g.lineWidth = rr(0.52, 1.05);
       g.beginPath(); g.moveTo(p0.x, p0.y); g.lineTo(p3.x, p3.y); g.stroke();
       g.beginPath(); g.moveTo(p1.x, p1.y); g.lineTo(p2.x, p2.y); g.stroke();
+      if (placed % 4 === 0) {
+        g.strokeStyle = dampJoint;
+        g.lineWidth = rr(0.45, 0.80);
+        g.beginPath(); g.moveTo(p0.x, p0.y); g.lineTo(p3.x, p3.y); g.stroke();
+      }
     }
 
     if (!lite && placed % 3 === 0) {
@@ -4169,12 +4179,42 @@ function bdFortStoneFace(g, axis, normal, along, across, halfLength,
       g.lineTo(chip.x + axis.x * 1.0, chip.y + axis.y * 1.0);
       g.stroke();
     }
+    if (!lite && placed % 5 === 1) {
+      const grit = bdFortPoint(axis, normal,
+        lo + rr(0.5, Math.max(0.6, hi - lo - 0.5)), across + 0.34 + overhang,
+        e0 + rr(0.5, Math.max(0.6, stoneH - 0.5)));
+      g.fillStyle = bdRgba(material.edge, rr(0.20, 0.34));
+      g.beginPath();
+      g.ellipse(grit.x, grit.y, rr(0.18, 0.45), rr(0.12, 0.32), rr(0, BD_TAU), 0, BD_TAU);
+      g.fill();
+    }
 
     const lift = stoneH + rr(0.45, 1.15);
     for (let c = minCol; c < minCol + span; c++) {
       skyline[c] = Math.min(top, skyline[c] + lift * rr(0.92, 1.08));
     }
     placed++;
+  }
+
+  if (!lite) {
+    const shadeA = bdFortPoint(axis, normal, left, across + 0.55, baseElevation + 0.8);
+    const shadeB = bdFortPoint(axis, normal, right, across + 0.55, baseElevation + 0.8);
+    g.strokeStyle = bdRgba('#161A16', 0.24);
+    g.lineWidth = 1.35;
+    g.beginPath(); g.moveTo(shadeA.x, shadeA.y); g.lineTo(shadeB.x, shadeB.y); g.stroke();
+
+    const roughRnd = bdRnd((seed || 1) ^ 0x3a7f21);
+    for (let i = 0; i < 16; i++) {
+      const point = bdFortPoint(axis, normal,
+        roughRnd(left, right), across + 0.46,
+        roughRnd(baseElevation + height * 0.16, top - 0.8));
+      g.fillStyle = bdRgba(roughRnd(0, 1) > 0.45 ? '#B7B9AE' : '#111512',
+        roughRnd(0.06, 0.14));
+      g.beginPath();
+      g.ellipse(point.x, point.y, roughRnd(0.45, 1.2), roughRnd(0.18, 0.62),
+        roughRnd(-0.8, 0.8), 0, BD_TAU);
+      g.fill();
+    }
   }
 
   // Dressed quoins only on truly exposed ends / corner topology.
@@ -4201,17 +4241,21 @@ export function getFortificationMasonryDetailProfile(type = 'wall', joinedEnds =
     faceCourses: gate ? 8 : shortWall ? 6 : 7,
     plinthCourses: gate ? 3 : 2,
     capSpacing: gate ? 8.5 : shortWall ? 8 : 9,
-    reliefBlocks: gate ? 18 : shortWall ? 9 : 14,
+    reliefBlocks: gate ? 24 : shortWall ? 14 : 22,
     exposedEnds: joinedEnds.map(joined => !joined),
+    gateJoinedEnds: topology?.gateJoinedEnds || [false, false],
     hasBatteredPlinth: !gate,
     supportsCurvedRuns: true,
     supportsGateAttachment: true,
     supportsStairAttachment: isWallSegmentType(type),
+    hasPbrLayering: true,
+    jointOcclusion: gate ? 0.82 : 0.94,
+    stoneVariation: gate ? 0.78 : 1,
     pieceId: topology?.pieceId || (gate ? 'gate' : shortWall ? 'straight_2m' : 'straight_4m'),
     isOuterCorner: Boolean(topology?.isOuterCorner),
     isInnerCorner: Boolean(topology?.isInnerCorner),
     isTJunction: Boolean(topology?.isTJunction),
-    mossBias: topology?.isInnerCorner ? 1.25 : topology?.isTerminal ? 0.85 : 1,
+    mossBias: topology?.isInnerCorner ? 1.30 : topology?.isTerminal ? 0.90 : 1.08,
   });
 }
 
@@ -4325,6 +4369,47 @@ function bdFortDressedEndCap(g, axis, normal, along, halfThickness, height, seed
     g.lineWidth = 0.46;
     g.beginPath(); g.moveTo(jointA.x, jointA.y); g.lineTo(jointB.x, jointB.y); g.stroke();
   }
+}
+
+function bdFortGateSocketSleeve(g, axis, normal, endSign, halfLength, halfThickness, height, seed) {
+  if (height <= 10) return;
+  const along = endSign * (halfLength - 1.35);
+  const rr = bdRnd(seed ^ (endSign < 0 ? 0x7429 : 0x29b7));
+  const sleeve = bdRamp('#686B63');
+  const cap = bdRamp('#85877D');
+  const shadow = bdRamp('#30342F');
+  const sleeveHeight = Math.min(38, Math.max(18, height + 6));
+
+  // The sleeve is the visual socket: it occupies the exact wall endpoint and
+  // rises toward the gate post height, hiding grass slivers without changing
+  // collision or snap coordinates.
+  bdFortBlock(g, axis, normal, along, 0,
+    2.7, halfThickness + 2.1, sleeveHeight, 0, sleeve, {
+      lineW: 0.52, litW: 0.44, endPlane: false, topMaterial: cap,
+    });
+  bdFortBlock(g, axis, normal, along - endSign * 1.4, halfThickness + 1.85,
+    1.25, 2.6, Math.max(12, sleeveHeight - 3), 0, shadow, {
+      lineW: 0.28, litW: 0.22, endPlane: false, topMaterial: bdRamp('#555851'),
+    });
+
+  const rows = Math.max(4, Math.floor(sleeveHeight / 6));
+  for (let row = 0; row < rows; row++) {
+    const e0 = row * sleeveHeight / rows + 0.15;
+    const e1 = Math.min(sleeveHeight - 0.3, (row + 1) * sleeveHeight / rows - 0.2);
+    const width = 2.0 + rr(-0.18, 0.26);
+    const across = halfThickness + 3.0 + rr(-0.08, 0.16);
+    bdFortBlock(g, axis, normal, along + endSign * rr(-0.18, 0.28), across,
+      width, 0.92, Math.max(0.8, e1 - e0), e0,
+      bdRamp(row & 1 ? '#77796F' : '#5D615A'), {
+        lineW: 0.34, litW: 0.30, endPlane: false,
+      });
+  }
+
+  const lintelA = bdFortPoint(axis, normal, along - endSign * 3.2, halfThickness + 3.75, sleeveHeight - 1);
+  const lintelB = bdFortPoint(axis, normal, along + endSign * 2.8, halfThickness + 3.75, sleeveHeight - 1);
+  g.strokeStyle = bdRgba('#BBBBAF', 0.26);
+  g.lineWidth = 0.72;
+  g.beginPath(); g.moveTo(lintelA.x, lintelA.y); g.lineTo(lintelB.x, lintelB.y); g.stroke();
 }
 
 function bdFortMasonryRelief(g, axis, normal, halfLength, halfThickness, height, seed, detail) {
@@ -5248,6 +5333,16 @@ function bdPaintFortification(
       if (detail.exposedEnds[1]) {
         bdFortDressedEndCap(g, axis, normal, masonryHalfLength - 0.4,
           halfThickness, builtHeight, seed ^ 0x9ad3);
+      }
+      if (!construction && builtHeight > 12) {
+        if (detail.gateJoinedEnds[0]) {
+          bdFortGateSocketSleeve(g, axis, normal, -1,
+            nominalHalfLength, halfThickness, builtHeight, seed ^ 0x5e17);
+        }
+        if (detail.gateJoinedEnds[1]) {
+          bdFortGateSocketSleeve(g, axis, normal, 1,
+            nominalHalfLength, halfThickness, builtHeight, seed ^ 0x17e5);
+        }
       }
       // Corner quoins stay flush inside the overlap — never a separate pier
       // that reintroduces a module break.
@@ -6734,7 +6829,7 @@ function bdFortificationSprite(
   // Quantize world UV so the cache stays bounded while neighbouring modules
   // that share an endpoint still sample continuous rubble texture.
   const uvBin = Math.round(worldUvAlong / 4);
-  const key = `fort-v6|${nation}|${type}|${pieceId}|${building.side}|${orientation}|${variant}|${damageStage}|${joinMask}|${interiorSide}|${gateFrame}|${uvBin}`;
+  const key = `fort-v7|${nation}|${type}|${pieceId}|${building.side}|${orientation}|${variant}|${damageStage}|${joinMask}|${interiorSide}|${gateFrame}|${uvBin}`;
   let sprite = bdBuildingCache.get(key);
   if (sprite) return sprite;
   const box = bdBoxFor(type, def);

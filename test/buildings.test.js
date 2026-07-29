@@ -344,8 +344,10 @@ test('detailed wall masonry keeps curved, gate and stair attachment contracts ex
   assert.equal(openRun.supportsStairAttachment, true);
   assert.deepEqual(openRun.exposedEnds, [true, true]);
   assert.deepEqual(connectedRun.exposedEnds, [false, true]);
-  assert.ok(openRun.reliefBlocks >= 12);
+  assert.ok(openRun.reliefBlocks >= 20);
   assert.equal(openRun.hasBatteredPlinth, true);
+  assert.equal(openRun.hasPbrLayering, true);
+  assert.ok(openRun.jointOcclusion > 0.9);
 
   assert.equal(gate.supportsGateAttachment, true);
   assert.equal(gate.supportsStairAttachment, false);
