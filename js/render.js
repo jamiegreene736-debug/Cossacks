@@ -32,7 +32,9 @@ import { getMilitaryFrame } from './military-animation.js';
 import { getCharacterMotion } from './character-animation.js';
 import { drawPrintedModel } from './gfx/printed-models.js';
 import { drawHogwartsTrain, drawRailwayEntity } from './gfx/railways.js';
-import { drawSettlementPaths, resetSettlementPathCache } from './gfx/settlement-paths.js';
+import {
+  drawSettlementLanterns, drawSettlementPaths, resetSettlementPathCache,
+} from './gfx/settlement-paths.js';
 import {
   getWitchFlightFrame, getWitchFlightVisual, isBroomWitch,
 } from './witch-flight.js';
@@ -1442,6 +1444,7 @@ export function draw(
   for (const building of buildingSortBuf) {
     if (building.type === 'wall_stairs') drawBuilding(building, world);
   }
+  drawSettlementLanterns(ctx, world, visibleWorld, world.time);
   for (const train of world.trains || []) {
     if (circleIntersectsBounds(train, visibleWorld, 180)) drawHogwartsTrain(ctx, train, world.time);
   }
