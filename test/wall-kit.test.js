@@ -47,6 +47,22 @@ test('socket snap seats a short wall with zero endpoint gap', () => {
   assert.equal(short.w, 44);
 });
 
+test('wall-to-gate sockets classify as gate joins with zero endpoint gap', () => {
+  const gate = createBuilding(0, 'gate', 900, 1600, true, { orientation: 'horizontal' });
+  const gatePos = wallKitSockets(gate).find(socket => socket.id === 'pos');
+  const placement = snapWallKitPieceToSocket('wall', 'horizontal', gatePos, 'neg');
+  const wall = createBuilding(0, 'wall', placement.x, placement.y, true, {
+    orientation: placement.orientation,
+  });
+  const world = makeWorld([gate, wall]);
+  const wallStart = fortificationEndpoints(wall)[0];
+
+  assert.ok(Math.hypot(wallStart.x - gatePos.x, wallStart.y - gatePos.y) < 0.001);
+  assert.deepEqual(classifyWallKitTopology(wall, world).joinedEnds, [true, false]);
+  assert.deepEqual(classifyWallKitTopology(wall, world).gateJoinedEnds, [true, false]);
+  assert.deepEqual(classifyWallKitTopology(gate, world).joinedEnds, [false, true]);
+});
+
 test('topology classifies ends, straights, corners and T-junctions', () => {
   const a = createBuilding(0, 'wall', 800, 1800, true, { orientation: 'horizontal' });
   const b = createBuilding(0, 'wall', 888, 1800, true, { orientation: 'horizontal' });
@@ -123,9 +139,10 @@ test('masonry detail profile marks dressed zones for terminals and gates', () =>
 
   const short = getFortificationMasonryDetailProfile('wall_short', [true, true]);
   assert.equal(short.pieceId, 'straight_2m');
-  assert.ok(short.reliefBlocks < 14);
+  assert.ok(short.reliefBlocks < terminal.reliefBlocks);
 
   const gate = getFortificationMasonryDetailProfile('gate', [true, true]);
   assert.equal(gate.pieceId, 'gate');
   assert.equal(gate.hasBatteredPlinth, false);
+  assert.equal(gate.hasPbrLayering, true);
 });

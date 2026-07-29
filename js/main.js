@@ -265,6 +265,7 @@ async function startBattle(opts) {
   setupLocalWizardChildrenPreview(world);
   setupLocalCharacterAnimationPreview(world);
   setupLocalObstacleNavigationPreview(world);
+  setupLocalWallGatePreview(world);
   setupLocalEnglandHousePreview(world);
   setupLocalThemedArchitecturePreview(world);
   setupLocalSettlementVarietyPreview(world);
@@ -520,6 +521,83 @@ function setupLocalObstacleNavigationPreview(activeWorld) {
     side: 0,
     tone: 'info',
     text: 'Obstacle inspection: troops route around solid buildings and wall masonry.',
+  });
+}
+
+function setupLocalWallGatePreview(activeWorld) {
+  const debugName = new URLSearchParams(window.location.search).get('debug');
+  const localHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1';
+  if (!localHost || debugName !== 'wall-gate') return;
+
+  const previewBounds = { left: 1660, right: 3220, top: 980, bottom: 2180 };
+  activeWorld.resources = activeWorld.resources.filter(resource => (
+    resource.x < previewBounds.left || resource.x > previewBounds.right
+    || resource.y < previewBounds.top || resource.y > previewBounds.bottom
+  ));
+  activeWorld.buildings = activeWorld.buildings.filter(building => (
+    building.x < previewBounds.left || building.x > previewBounds.right
+    || building.y < previewBounds.top || building.y > previewBounds.bottom
+  ));
+  activeWorld.units = activeWorld.units.filter(unit => (
+    unit.x < previewBounds.left || unit.x > previewBounds.right
+    || unit.y < previewBounds.top || unit.y > previewBounds.bottom
+  ));
+
+  const gate = createBuilding(0, 'gate', 2440, 1550, true, {
+    orientation: 'horizontal',
+    gateOpen: false,
+  });
+  const leftWall = createBuilding(
+    0, 'wall',
+    gate.x - (BUILDING_TYPES.gate.w + BUILDING_TYPES.wall.w) * 0.5,
+    gate.y,
+    true,
+    { orientation: 'horizontal' },
+  );
+  const rightWall = createBuilding(
+    0, 'wall',
+    gate.x + (BUILDING_TYPES.gate.w + BUILDING_TYPES.wall.w) * 0.5,
+    gate.y,
+    true,
+    { orientation: 'horizontal' },
+  );
+  const curveA = createBuilding(0, 'wall', rightWall.x + 82, rightWall.y + 28,
+    true, { orientation: Math.atan2(28, 82) });
+  const curveB = createBuilding(0, 'wall', curveA.x + 75, curveA.y + 47,
+    true, { orientation: Math.atan2(47, 75) });
+  const stairs = createBuilding(0, 'wall_stairs', leftWall.x + 12, leftWall.y + 36, true, {
+    orientation: 'horizontal',
+    wallId: leftWall.id,
+    stairSide: 1,
+    stairAlong: 12,
+  });
+  activeWorld.buildings.push(leftWall, gate, rightWall, curveA, curveB, stairs);
+
+  for (const [slotIndex, offset] of [-46, -18, 18, 46].entries()) {
+    const musketeer = spawnUnit(activeWorld, 0, 'musk', gate.x + offset, gate.y);
+    musketeer.wallMount = {
+      wallId: gate.id,
+      stairId: stairs.id,
+      slotIndex,
+      x: musketeer.x,
+      y: musketeer.y,
+      elevation: 57,
+    };
+    musketeer.wallElevation = 57;
+    musketeer.state = 'wall';
+  }
+
+  activeWorld.time = 0;
+  camera.x = 2440;
+  camera.y = 1515;
+  camera.zoom = 1.35;
+  clampCamera();
+  selectEntitiesById(activeWorld, [gate.id]);
+  activeWorld.events.push({
+    side: 0,
+    tone: 'info',
+    text: 'Wall/gate QA: snapped sockets, realistic masonry, curve, stairs and soldiers on the wall.',
   });
 }
 
