@@ -114,6 +114,19 @@ function buildingFootprintClear(world, side, candidate) {
     const combined = (def.radius || 0) + (building.radius || 0);
     if (Math.hypot(candidate.x - building.x, candidate.y - building.y) < combined * 0.54) return false;
   }
+  const endpoints = trackEndpoints(candidate);
+  for (const resource of world.resources || []) {
+    if (!resource.alive || resource.amount <= 0) continue;
+    const distance = pointSegmentDistance(
+      resource.x,
+      resource.y,
+      endpoints[0].x,
+      endpoints[0].y,
+      endpoints[1].x,
+      endpoints[1].y,
+    );
+    if (distance < resource.radius + 10) return false;
+  }
   return true;
 }
 
