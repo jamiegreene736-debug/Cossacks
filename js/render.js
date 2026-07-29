@@ -1434,15 +1434,13 @@ export function draw(
     ctx.restore();
   }
 
-  // Inner-wall stairs must remain legible even when their ground anchor is
-  // behind the host wall in y-sort order. Paint fortifications first, then the
-  // attached stair volume so the individual treads and landing stay visible.
+  // Stairs draw in the same depth-sorted pass as their host wall: the stair
+  // painter is two-sided and its centre sits offset from the wall, so the sort
+  // puts it in front of the curtain when its side faces the camera and behind
+  // it otherwise — correct occlusion in all four view rotations.
   for (const building of buildingSortBuf) {
     if (RAILWAY_BUILDING_TYPES.has(building.type)) drawRailwayEntity(ctx, building, world.time);
-    else if (building.type !== 'wall_stairs') drawBuilding(building, world);
-  }
-  for (const building of buildingSortBuf) {
-    if (building.type === 'wall_stairs') drawBuilding(building, world);
+    else drawBuilding(building, world);
   }
   drawSettlementLanterns(ctx, world, visibleWorld, world.time);
   for (const train of world.trains || []) {
