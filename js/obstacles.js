@@ -90,8 +90,13 @@ export function nearestPointOutsideStructure(building, fromX, fromY, clearance =
     Math.abs(local.across) / frame.halfThickness,
     1e-6,
   );
-  const along = local.along / ratio;
-  const across = local.across / ratio;
+  let along = local.along / ratio;
+  let across = local.across / ratio;
+  if (Math.abs(along) / frame.halfLength >= Math.abs(across) / frame.halfThickness) {
+    along += (Math.sign(along) || ((building.id || 0) % 2 ? 1 : -1)) * COLLISION_EPSILON;
+  } else {
+    across += (Math.sign(across) || ((building.id || 0) % 2 ? -1 : 1)) * COLLISION_EPSILON;
+  }
   return {
     x: frame.x + frame.axis.x * along + frame.normal.x * across,
     y: frame.y + frame.axis.y * along + frame.normal.y * across,

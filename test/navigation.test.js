@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { BUILDING_TYPES } from '../js/config.js';
 import { createBuilding, validatePlacement } from '../js/economy.js';
+import { applyAttackOrder } from '../js/formations.js';
 import { pointInsideFortification, toggleGate } from '../js/fortifications.js';
 import {
   assignVillagerPath, findUnitPath, findVillagerPath,
@@ -40,11 +41,13 @@ test('villager navigation goes around walls while treating a stone gate as an op
   assert.deepEqual(findVillagerPath(world, 876, 1500, 876, 1700, 7), [{ x: 876, y: 1700 }]);
 
   toggleGate(world, gate);
+  world.time += 1;
   const barred = findVillagerPath(world, 876, 1500, 876, 1700, 7);
   assert.ok(barred.length >= 3);
   assert.ok(barred.some(waypoint => waypoint.x > 936 || waypoint.x < 816));
 
   toggleGate(world, gate);
+  world.time += 1;
   assert.deepEqual(findVillagerPath(world, 876, 1500, 876, 1700, 7), [{ x: 876, y: 1700 }]);
 });
 
@@ -194,6 +197,28 @@ test('soldiers receive obstacle routes and never cross a completed building', ()
 
   assert.equal(musketeer.state, 'idle');
   assert.ok(Math.hypot(musketeer.x - 1720, musketeer.y - 1600) < 7);
+});
+
+test('melee attackers ordered onto a building stay outside the solid footprint', () => {
+  const world = navigationWorld();
+  world.buildings = [];
+  world.units = [];
+  const house = createBuilding(1, 'house', 1500, 1600, true);
+  world.buildings.push(house);
+  world.time = 601;
+  const pike = spawnUnit(world, 0, 'pike', house.x - 260, house.y);
+  pike.acquire = 0;
+  applyAttackOrder([pike], house);
+
+  for (let tick = 0; tick < 400; tick++) {
+    step(world, 1 / 30);
+    assert.equal(
+      pointInsideStructure(house, pike.x, pike.y, pike.radius),
+      false,
+    );
+  }
+
+  assert.equal(pointInsideStructure(house, pike.x, pike.y, pike.radius), false);
 });
 
 test('legacy or separated units embedded in a building recover to legal ground', () => {
