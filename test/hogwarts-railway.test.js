@@ -128,11 +128,14 @@ test('the Hogwarts Express travels from station rails onto villager-built rails'
 
   const train = world.trains[0];
   const startTrackId = train.trackId;
+  const startDistance = train.distanceTravelled;
   for (let tick = 0; tick < 260; tick++) step(world, 1 / 30);
 
   assert.notEqual(train.trackId, startTrackId);
   assert.equal(train.paused, false);
   assert.ok(train.x > sortedTracks[0].x);
+  assert.ok(train.distanceTravelled > startDistance);
+  assert.ok(train.visualSpeed > 0);
 });
 
 test('station, rails, and train survive campaign save and resume', () => {
