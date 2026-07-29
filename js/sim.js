@@ -34,6 +34,7 @@ import {
   RIVAL_TEAM, areAlliedSides, areHostileEntities, areHostileSides,
   sideFrontDirection, sidePossessiveLabel, teamVictory,
 } from './teams.js';
+import { stepTrains } from './railways.js';
 
 const PARTICLE_CAP = 900;
 const blockingFortifications = [];
@@ -226,7 +227,7 @@ export function createWorld(opts) {
   const world = {
     units: [], active: [],
     projectiles: [], particles: [], flags: [], destructions: [],
-    pendingDecals: [], decals: [], printedModels: [],
+    pendingDecals: [], decals: [], printedModels: [], trains: [],
     time: 0, state: 'running', winner: -1, checkT: 1,
     speed: 1, killLog: {},
     difficulty: normalizeCpuDifficulty(opts?.difficulty),
@@ -940,6 +941,7 @@ export function step(world, dt) {
   world.tgtGrid.build(active);
 
   stepEconomy(world, dt);
+  stepTrains(world, dt);
   stepBuildingFires(world, dt);
 
   blockingFortifications.length = 0;
