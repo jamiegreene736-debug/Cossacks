@@ -16,10 +16,10 @@ const STATION_TRACK_OFFSETS = Object.freeze([
 ]);
 
 const TRAIN_CARRIAGES = Object.freeze([
-  Object.freeze({ role: 'locomotive', offset: -82 }),
-  Object.freeze({ role: 'tender', offset: -34 }),
-  Object.freeze({ role: 'coach', offset: 24 }),
-  Object.freeze({ role: 'coach', offset: 86 }),
+  Object.freeze({ role: 'coach', offset: -88 }),
+  Object.freeze({ role: 'coach', offset: -24 }),
+  Object.freeze({ role: 'tender', offset: 38 }),
+  Object.freeze({ role: 'locomotive', offset: 94 }),
 ]);
 
 function normAngle(angle = 0) {
@@ -193,6 +193,8 @@ export function normalizeRailwayState(world) {
       train.rotation = Number.isFinite(train.rotation) ? train.rotation : track.rotation;
     }
     train.progress = Math.max(0, Math.min(1, Number(train.progress) || 0.5));
+    train.distanceTravelled = Math.max(0, Number(train.distanceTravelled) || 0);
+    train.visualSpeed = Math.max(0, Number(train.visualSpeed) || 0);
   }
 }
 
@@ -242,6 +244,8 @@ export function generateHogwartsStation(world, constructor) {
     rotation,
     progress: 0.5,
     speed: TRAIN_SPEED,
+    distanceTravelled: 0,
+    visualSpeed: 0,
     paused: false,
     carriages: TRAIN_CARRIAGES.map(carriage => ({ ...carriage })),
   };
@@ -274,19 +278,27 @@ function chooseNextTrack(world, train, current) {
 export function stepTrains(world, dt) {
   normalizeRailwayState(world);
   for (const train of world.trains) {
-    if (train.paused) continue;
+    if (train.paused) {
+      train.visualSpeed = 0;
+      continue;
+    }
     let track = world.buildings.find(building => building.id === train.trackId && isRailBuilding(building));
     if (!track) {
       track = findTrackAt(world, train.x, train.y, train.side);
       if (!track) continue;
       train.trackId = track.id;
     }
-    train.progress += (train.speed || TRAIN_SPEED) * dt / TRACK_LENGTH;
+    const speed = train.speed || TRAIN_SPEED;
+    let moved = speed * dt;
+    train.visualSpeed = speed;
+    train.progress += moved / TRACK_LENGTH;
     while (train.progress > 1) {
       const next = chooseNextTrack(world, train, track);
       if (!next) {
         train.progress = 1;
         train.paused = true;
+        moved = 0;
+        train.visualSpeed = 0;
         break;
       }
       train.previousTrackId = track.id;
@@ -298,6 +310,7 @@ export function stepTrains(world, dt) {
     train.x = a.x + (b.x - a.x) * train.progress;
     train.y = a.y + (b.y - a.y) * train.progress;
     train.rotation = track.rotation;
+    train.distanceTravelled += moved;
   }
 }
 
