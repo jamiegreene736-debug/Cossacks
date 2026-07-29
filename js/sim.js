@@ -24,10 +24,11 @@ import {
   isGatePassable, updateWallAssignment,
 } from './fortifications.js';
 import {
-  assignUnitPath, clearUnitPath, segmentBlocksGround,
+  assignUnitPath, clearUnitPath, pointBlocksGround, segmentBlocksGround,
 } from './navigation.js';
 import {
-  resolveUnitStructureCollision, structureBlocksGround,
+  distanceToStructure, nearestPointOutsideStructure, resolveUnitStructureCollision,
+  structureBlocksGround,
 } from './obstacles.js';
 import { isHostilePair, isPeaceTime } from './truce.js';
 import {
@@ -739,9 +740,16 @@ function updateUnit(world, u, dt) {
 
   const t = u.target;
   let d = Infinity, meleeReach = 0;
+  let targetBlocksGround = false;
   if (t) {
-    d = Math.hypot(t.x - u.x, t.y - u.y);
-    meleeReach = u.radius + t.radius + 3;
+    targetBlocksGround = t.entityKind === 'building' && structureBlocksGround(t, world.time);
+    if (targetBlocksGround) {
+      d = distanceToStructure(t, u.x, u.y);
+      meleeReach = u.radius + 8;
+    } else {
+      d = Math.hypot(t.x - u.x, t.y - u.y);
+      meleeReach = u.radius + t.radius + 3;
+    }
   }
 
   const isRanged = u.range > 0;
@@ -798,9 +806,23 @@ function updateUnit(world, u, dt) {
     destX = u.x + (u.x - t.x) / safeDistance * 40;
     destY = u.y + (u.y - t.y) / safeDistance * 40;
   } else if (t && !isRanged && shouldEngageTarget) {
-    destX = t.x; destY = t.y; stopAt = meleeReach - 1;
+    if (targetBlocksGround) {
+      const approach = nearestPointOutsideStructure(t, u.x, u.y, u.radius + 7);
+      destX = approach?.x ?? t.x;
+      destY = approach?.y ?? t.y;
+      stopAt = 4;
+    } else {
+      destX = t.x; destY = t.y; stopAt = meleeReach - 1;
+    }
   } else if (t && isRanged && shouldEngageTarget) {
-    destX = t.x; destY = t.y; stopAt = Math.max(u.range * 0.85, u.minRange + 20);
+    if (targetBlocksGround) {
+      const approach = nearestPointOutsideStructure(t, u.x, u.y, u.radius + 12);
+      destX = approach?.x ?? t.x;
+      destY = approach?.y ?? t.y;
+      stopAt = 5;
+    } else {
+      destX = t.x; destY = t.y; stopAt = Math.max(u.range * 0.85, u.minRange + 20);
+    }
   } else if (!Number.isNaN(u.orderX)) {
     const routeAlreadyFailed = u.navigationFailedVersion === (world.navigationVersion || 0)
       && Math.abs(u.navigationFailedX - u.orderX) < 0.01
@@ -840,16 +862,48 @@ function updateUnit(world, u, dt) {
       else if (u.formation === 'square') sp *= 0.8;
       const nx = mx / md, ny = my / md;
       const oldX = u.x, oldY = u.y;
+      let movedDistance = 0;
       if (isBroomWitch(u)) {
         moveBroomWitch(u, nx, ny, sp, md, stopAt, dt, { world });
       } else {
-        u.x += nx * sp * dt;
-        u.y += ny * sp * dt;
+        const travel = sp * dt;
+        let nextX = oldX + nx * travel;
+        let nextY = oldY + ny * travel;
+        const clearance = u.radius + 2;
+        const startsBlocked = pointBlocksGround(world, oldX, oldY, clearance);
+        if (!startsBlocked && (
+          pointBlocksGround(world, nextX, nextY, clearance)
+          || segmentBlocksGround(world, oldX, oldY, nextX, nextY, clearance)
+        )) {
+          const routeX = Number.isFinite(u.orderX) ? u.orderX : destX;
+          const routeY = Number.isFinite(u.orderY) ? u.orderY : destY;
+          const routed = assignUnitPath(world, u, routeX, routeY);
+          const waypoint = routed && u.navigationPath?.[u.navigationIndex || 0];
+          if (waypoint) {
+            const wx = waypoint.x - oldX;
+            const wy = waypoint.y - oldY;
+            const wd = Math.hypot(wx, wy);
+            if (wd > 0.001) {
+              const rerouteTravel = Math.min(travel, wd);
+              nextX = oldX + wx / wd * rerouteTravel;
+              nextY = oldY + wy / wd * rerouteTravel;
+            }
+          }
+          if (!waypoint || pointBlocksGround(world, nextX, nextY, clearance)
+            || segmentBlocksGround(world, oldX, oldY, nextX, nextY, clearance)) {
+            nextX = oldX;
+            nextY = oldY;
+          }
+        }
+        u.x = nextX;
+        u.y = nextY;
+        movedDistance = Math.hypot(u.x - oldX, u.y - oldY);
       }
       clampPos(u);
-      if (!isBroomWitch(u)) advanceCharacterGait(u, Math.hypot(u.x - oldX, u.y - oldY));
-      u.moving = true;
-      u.animT += dt;
+      if (isBroomWitch(u)) movedDistance = Math.hypot(u.x - oldX, u.y - oldY);
+      if (!isBroomWitch(u)) advanceCharacterGait(u, movedDistance);
+      u.moving = movedDistance > 0.001;
+      if (u.moving) u.animT += dt;
       setMovementFacing(u, nx, dt);
       if (u.type === 'cav') u.charge = Math.min(1, u.charge + dt / 1.4);
     } else if (!Number.isNaN(u.orderX)) {

@@ -1119,7 +1119,7 @@ export function getRallyTarget(world, building) {
 function rallyDestination(unit, target, x, y) {
   if (!target) return { x, y };
   if (target.entityKind === 'building' && structureBlocksGround(target)) {
-    const point = nearestPointOutsideStructure(target, unit.x, unit.y, unit.radius + 6);
+    const point = nearestPointOutsideStructure(target, unit.x, unit.y, unit.radius + 12);
     if (point) return point;
   }
   const dx = unit.x - target.x;
