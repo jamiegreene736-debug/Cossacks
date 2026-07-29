@@ -32,6 +32,7 @@ import { getMilitaryFrame } from './military-animation.js';
 import { getCharacterMotion } from './character-animation.js';
 import { drawPrintedModel } from './gfx/printed-models.js';
 import { drawHogwartsTrain, drawRailwayEntity } from './gfx/railways.js';
+import { drawSettlementPaths, resetSettlementPathCache } from './gfx/settlement-paths.js';
 import {
   getWitchFlightFrame, getWitchFlightVisual, isBroomWitch,
 } from './witch-flight.js';
@@ -350,6 +351,7 @@ export function minimapToWorld(mx, my) {
 
 export function startBattle(world) {
   bdResetCaches();   // drop baked building stamps from the previous battle
+  resetSettlementPathCache();
   buildTerrain();
   decalCanvas = document.createElement('canvas');
   decalCanvas.width = WORLD.w;
@@ -1380,6 +1382,7 @@ export function draw(
   const decalW = Math.max(1, Math.ceil(decalView.right) - decalX);
   const decalH = Math.max(1, Math.ceil(decalView.bottom) - decalY);
   ctx.drawImage(decalCanvas, decalX, decalY, decalW, decalH, decalX, decalY, decalW, decalH);
+  drawSettlementPaths(ctx, world, decalView);
 
   // Ground-hugging powder bank, blood and debris litter, and projectile ground
   // shadows. These lie flat on the board, so they are drawn before anything
